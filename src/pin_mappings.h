@@ -20,19 +20,16 @@
 #define X_STEP PD6
 #define Y_STEP PD3
 #define BUZZER PE0
-#define TILTSTOP PB1
-#define PANSTOP PB2
+#define TILT_STOP PB1
+#define PAN_STOP PB2
 
+#define BT_TX_PIN PD0 //Bluetooth HC-05
+#define BT_RX_PIN PD1
 #define SCL PC5
 #define SDA PC4
 
 #define LASER2 PE3
 #define FAN PE1
-
-// MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.  
-// These values, 0xD2 and 0xD3, are for version 6.13  Ref sub Initgyro() in BASCOM code.
-#define MPU6050_W_PIN 0xD2
-#define MPU6050_R_PIN 0xD3
 
 //Setup pins that are not used on the board. Each pin has a 10k (for safety)resistor tied to VCC
 #define PINC_3 PC3

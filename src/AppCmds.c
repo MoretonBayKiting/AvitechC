@@ -1,50 +1,11 @@
-#include "shared_vars.h"
-#include "pin_mappings.h"
-#include <avr/io.h>
-#include <avr/interrupt.h>
 
-uint16_t Instruction;
-uint8_t Command;
-// Function prototypes
-void Cmd1(void);
-void Cmd2(void);
-void Cmd3(void);
-void Cmd4(void);
-void Cmd5(void);
-void Cmd6(void);
-void Cmd7(void);
-void Cmd8(void);
-void Cmd9(void);
-void Cmd10(void);
-void Cmd11(void);
-void Cmd12(void);
-void Cmd13(void);
-void Cmd14(void);
-void Cmd15(void);
-void cmdSpeedZone(uint8_t i);
-void Cmd16(void);
-void Cmd17(void);
-void Cmd18(void);
-void Cmd19(void);
-void Cmd20(void);
-void Cmd21(void);
-void Cmd22(void);
-void Cmd23(void);
-void Cmd24(void);
-void Cmd25(void);
-void Cmd26(void);
-void Cmd27(void);
-void Cmd28(void);
-void Cmd29(void);
-void Cmd30(void);
-void Cmd31(void);
-void Cmd32(void);
-void Cmd33(void);
-void Cmd34(void);
-void Cmd35(void);
-void Cmd36(void);
-void Cmd37(void);
-void Cmd38(void);
+#include "shared_Vars.h"
+#include "pin_mappings.h"
+#include "AppCmds.h"
+#include <util/delay.h>
+#include <stdio.h>
+// uint8_t Command;
+// uint16_t Instruction;
 
 void DecodeCommsData() {
     switch (Command) {
@@ -55,7 +16,7 @@ void DecodeCommsData() {
         case 5: Cmd5(); break;
         case 6: Cmd6(); break;
         case 7: Cmd7(); break;
-        case 8: Cmd8(); break;
+        // case 8: Cmd8(); break;  //Not used
         case 9: Cmd9(); break;
         case 10: Cmd10(); break;
         case 11: Cmd11(); break;
@@ -69,14 +30,14 @@ void DecodeCommsData() {
         case 19: Cmd18(); break;
         case 20: Cmd20(); break;
         case 21: Cmd21(); break;
-        case 22: Cmd22(); break;
-        case 23: Cmd23(); break;
-        case 24: Cmd24(); break;
-        case 25: Cmd25(); break;
-        case 26: Cmd26(); break;
-        case 27: Cmd27(); break;
-        case 28: Cmd28(); break;
-        case 29: Cmd29(); break;
+        // case 22: Cmd22(); break;
+        // case 23: Cmd23(); break;
+        // case 24: Cmd24(); break;
+        // case 25: Cmd25(); break;
+        // case 26: Cmd26(); break;
+        // case 27: Cmd27(); break;
+        // case 28: Cmd28(); break;
+        // case 29: Cmd29(); break;
         case 30: Cmd30(); break;
         case 31: Cmd31(); break;
         case 32: Cmd32(); break;
@@ -97,7 +58,7 @@ void Cmd1() {
     GetLaserTemperature();
     ThrottleLaser();
     Audio(1);
-    waitms(100);
+    _delay_ms(100);
 }
 
 void Cmd2() {
@@ -173,7 +134,7 @@ void Cmd4() {
 }
 
 void Cmd5() {
-    eeprom_update_byte(&EramLaserID, Instruction);
+    eeprom_update_word(&EramLaserID, Instruction);
     LaserID = Instruction;
     Audio(1);
 }
@@ -242,8 +203,10 @@ void Cmd9() {
     EramMapTotalPoints = MapPointNumber;
     MapTotalPoints = MapPointNumber; // Store to RAM variable
 
-    EramPositions[MapTotalPoints].EramX = X;
-    EramPositions[MapTotalPoints].EramY = Result;
+    uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramX;
+    eeprom_update_word((uint16_t*)eepromAddress, X);
+    eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramY;
+    eeprom_update_word((uint16_t*)eepromAddress, Y);
 
     Audio(1);
 
@@ -253,11 +216,11 @@ void Cmd9() {
 
     // Decode the binary data
     switch (Result) {
-        case 1: printf("<22:0001>\n"); break;
-        case 2: printf("<22:0002>\n"); break;
-        case 4: printf("<22:0003>\n"); break;
-        case 8: printf("<22:0004>\n"); break;
-        default: printf("<22:0099>\n"); break;
+        case 1: uartPrint("<22:0001>\n"); break;
+        case 2: uartPrint("<22:0002>\n"); break;
+        case 4: uartPrint("<22:0003>\n"); break;
+        case 8: uartPrint("<22:0004>\n"); break;
+        default: uartPrint("<22:0099>\n"); break;
     }
 
     // StartTimer3();
@@ -265,7 +228,7 @@ void Cmd9() {
 }
 
 void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
-    uint8_t Mask;
+    // uint8_t Mask;
     uint8_t A;
 
     A = Instruction;
@@ -273,7 +236,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     if (A == 0b00000000) {   //Run mode
         WarnLaserOnOnce = 1; //Enable laser warning when Run Mode button is pressed
         SetupModeFlag = 0;
-        BUZZER = 0;
+        PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
         // LoadPositionMap();  //20240409    Does something else need to be used to replace this?  LoadZoneMap is called from RunSweep.
         // LoadActiveMapZones();
     }
@@ -286,22 +249,22 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
 
     if (A == 0b00000100) {  //Full cold restart of device <10:4>
         Audio(1);
-        SetupWatchdog();
-        Wait(1);
+        setupWatchdog();
+        _delay_ms(1000);
     }
 
     if (A == 0b00001000) {  //Setup light sensor mode    <10:8>
         Audio(1);
         SetupModeFlag = 2;
-        Wait(1);
+        _delay_ms(1000);
     }
     // --Setup light sensor mode---
     if (A == 0b00010000) {                              //Store current value to default light trigger value    <10:16>
         if (SetupModeFlag == 2 && LightLevel < 100) {
-            EramFactoryLightTripLevel = LightLevel;
+            eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
             FactoryLightTripLevel = LightLevel;
             Audio(1);
-            Wait(1);
+            _delay_ms(1);
         }
     }
 
@@ -328,31 +291,33 @@ void Cmd11() {
 
     // Process the full reset flag on next restart
     if (Instruction == 0b00000010) {
-        EramFirstTimeOn = 255;
+        eeprom_update_byte(&EramFirstTimeOn, 255);
         Audio(1);
     }
 }
 
 void Cmd12() {
     // Store the accelerometer trip point
-    EramAccelTripPoint = Instruction;
+    eeprom_update_word(&EramAccelTripPoint, Instruction);
     AccelTripPoint = Instruction;
     Audio(1);
 }
 
 void Cmd13() {
-    EramOperationMode = Instruction;
+    eeprom_update_byte(&EramOperationMode, Instruction);
     OperationMode = Instruction;
     Audio(1);
 }
 
 void Cmd14() {    // 20240522: Delete a map point.  It's always the last map point.  
     // Note that with C arrays being zero based, the point to be deleted is MapTotalPoints -1 
-    EramPosition PosType;
+    EramPos PosType;
     uint16_t OpZone; // Operation zone number from the Y encoded data
 
     // Read the map location from EEPROM into Mytype
-    eeprom_read_block(&PosType, &EramPositions[MapTotalPoints - 1], sizeof(EramPosition));
+    uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints - 1];
+    eeprom_read_block(&PosType, (const void*)eepromAddress, sizeof(EramPos));
+    // eeprom_read_block(&PosType, &EramPositions[MapTotalPoints - 1], sizeof(EramPos));
     // Get the Y map location and operation data
     OpZone = PosType.EramY;
     OpZone >>= 12; // Bit shift the data to the correct format with a value of 1 to 4 Operating Zones
@@ -364,9 +329,10 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
         case 4: OpZone = 3; break;
         case 8: OpZone = 4; break;
     }
-    printf("<19:%X>", OpZone); // Tell App what point on what map was deleted
+    // uartPrint("<19:%X>", OpZone); // Tell App what point on what map was deleted
+    printToBT(19, OpZone);
     MapTotalPoints -= 1;
-    EramMapTotalPoints = MapTotalPoints;
+    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
     Audio(1);
 }
 
@@ -379,7 +345,7 @@ void Cmd15() {
 
 void cmdSpeedZone(uint8_t i){
     // Adjust Zone i X & Y speed
-    EramSpeedZone[i] = Instruction;
+    eeprom_update_byte(&EramSpeedZone[i], Instruction);
     SpeedZone[i] = Instruction;
     CalcSpeedZone();
     DSS_preload = CalcSpeed(); // Calculate speed from Y tilt value
@@ -406,51 +372,50 @@ void Cmd20() {
 }
 
 void Cmd21() {
-    EramActiveMapZones = Instruction;
+    eeprom_update_byte(&EramActiveMapZones, Instruction);
     ActiveMapZones = Instruction;
     // LoadActiveMapZones(); //Does this need to be run?
     Audio(1);
 }
 
 void Cmd30() {
-    EramResetSeconds = Instruction;
+    eeprom_update_word(&EramResetSeconds, Instruction);
     ResetSeconds = Instruction;
     Audio(1);
 }
 
 void Cmd31() {
-    EramMapTotalPoints = 0;
+    eeprom_update_byte(&EramMapTotalPoints, 0);
     // MapTotalPoints = 0;
-    // LoadPositionMap();
     Audio(4);
 }
 
 void Cmd32() {
-    EramLaser2OperateFlag = Instruction;
+    eeprom_update_byte(&EramLaser2OperateFlag, Instruction);
     Laser2OperateFlag = Instruction;
     Audio(1);
 }
 
 void Cmd33() {
-    EramLaser2BattTrip = Instruction;
+    eeprom_update_byte(&EramLaser2BattTrip, Instruction);
     Laser2BattTrip = Instruction;
     Audio(1);
 }
 
 void Cmd34() {
-    EramLaser2TempTrip = Instruction;
+    eeprom_update_byte(&EramLaser2TempTrip, Instruction);
     Laser2TempTrip = Instruction;
     Audio(1);
 }
 
 void Cmd35() {
-    EramUserLightTripLevel = Instruction;
+    eeprom_update_byte(&EramUserLightTripLevel, Instruction);
     UserLightTripLevel = Instruction;
     Audio(1);
 }
 
 void Cmd36() {
-    EramLightTriggerOperation = Instruction;
+    eeprom_update_byte(&EramLightTriggerOperation, Instruction);
     LightTriggerOperation = Instruction;
     Audio(1);
 }
@@ -465,14 +430,14 @@ void Cmd37() {
     GetLightLevel();
     HexResult = LightLevel;
     sprintf(Result, "%X", HexResult);
-    printf("<26:%s>", Result);
+    printToBT(26, HexResult);
     _delay_ms(50);
     // Clear serial input buffer
     Audio(1);
 }
 
 void Cmd38() {
-    EramFactoryLightTripLevel = Instruction;
+    eeprom_update_byte(&EramFactoryLightTripLevel, Instruction);
     FactoryLightTripLevel = Instruction;
     Audio(1);
 }

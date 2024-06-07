@@ -1,0 +1,128 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+#define X_ENABLEPIN PD5
+#define X_DIR PD7
+#define X_STEP PD6
+#define PAN_STOP PB2
+#define MYUBRR F_CPU/16/BAUD-1 
+#define DEBUG_MSG_LENGTH 100
+#define BAUD 9600 
+uint8_t n = 0;
+char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
+
+void uartPutChar(char c) {
+    while (!(UCSR0A & (1 << UDRE0)));  // Wait for empty transmit buffer
+    UDR0 = c;  // Put data into buffer, sends the data
+}
+
+void uartPrint(const char* str) {
+    if (strlen(str) >= DEBUG_MSG_LENGTH) {
+        const char* errorMsg = "Error: Debug message too long\n";
+        while (*errorMsg) {
+            uartPutChar(*errorMsg++);
+        }
+    } else {
+        while (*str) {
+            uartPutChar(*str++);
+        }
+        uartPutChar('\n');
+    }
+}
+
+void uart_init(uint16_t ubrr) {
+    // Set baud rate
+    UBRR0H = (unsigned char)(ubrr>>8);
+    UBRR0L = (unsigned char)ubrr;
+    // Enable receiver and transmitter
+    UCSR0B = (1<<RXEN0)|(1<<TXEN0);
+    // Set frame format: 8 data bits, 1 stop bit
+    UCSR0C = (1<<UCSZ01)|(1<<UCSZ00);
+    // Add a small delay before sending AT commands
+    _delay_ms(2000);
+    // Put HC-05 into AT command mode
+    uartPrint("AT\r");
+    _delay_ms(1000);  // Wait for HC-05 to respond
+    // Set HC-05 to master role
+    uartPrint("AT+ROLE=1\r");
+    _delay_ms(1000);  // Wait for HC-05 to respond
+}
+
+void setupTimer1() {
+    // Set CTC mode
+    TCCR1B |= (1 << WGM12);
+
+    // Set prescaler to 1024
+    TCCR1B |= (1 << CS12) | (1 << CS10);
+
+    // Set compare value to 15624 for 1Hz at 16MHz. Changed to 100 (=HOMING_SPEED) => ~156Hz.
+    OCR1A = 100; //15624; 
+
+    // Enable Timer1 compare interrupt
+    TIMSK1 |= (1 << OCIE1A);
+}
+
+void setupMotor() {
+    // Set X_ENABLEPIN, X_DIR, X_STEP as outputs
+    DDRD |= (1 << X_ENABLEPIN) | (1 << X_DIR) | (1 << X_STEP);
+    // Set X_ENABLEPIN low to enable the driver
+    PORTD &= ~(1 << X_ENABLEPIN);
+    // Set X_DIR high or low here depending on the desired direction
+    PORTD |= (1 << X_DIR);
+}
+
+void setupLimitSwitch() {
+    // Set PAN_STOP as input
+    DDRB &= ~(1 << PAN_STOP);
+
+    // Enable pull-up resistor on PAN_STOP
+    PORTB |= (1 << PAN_STOP);
+}
+
+ISR(TIMER1_COMPA_vect) {  
+    n++;
+    // Check if limit switch is pressed
+    // if (~(PINB & (1 << PAN_STOP))) {
+    if(n==150) {
+        PORTD ^= (1 << X_DIR);
+        sprintf(debugMsg,"Pre pan_stop condition. PIND, PINB: %d, %d", PIND, PINB);
+        uartPrint(debugMsg);
+    }
+
+    if (!(PINB & (1 << PAN_STOP))) {
+    //     // If limit switch is pressed (PAN_STOP pin low), disable the motor  (active low)
+        PORTD |= (1 << X_ENABLEPIN);
+    } else {
+        // If limit switch is not closed, step the motor
+        PORTD &= ~(1 << X_ENABLEPIN);
+        if(n==150) {
+            sprintf(debugMsg,"Pre pulse. PIND, PINB: %d, %d", PIND, PINB);
+            uartPrint(debugMsg);
+        }
+        PORTD |= (1 << X_STEP);
+        _delay_us(10);
+        if(n==150) {
+            sprintf(debugMsg,"In pulse. PIND, PINB: %d, %d", PIND, PINB);
+            uartPrint(debugMsg);
+            n=0;
+        }
+        PORTD &= ~(1 << X_STEP);
+    }
+}
+
+int main(void) {
+    setupMotor();
+    setupLimitSwitch();
+    setupTimer1();
+    uart_init(MYUBRR);
+
+    // Enable global interrupts
+    sei();
+
+    while (1) {
+        // Main loop
+    }
+
+    return 0;
+}

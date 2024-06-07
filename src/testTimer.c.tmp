@@ -1,0 +1,69 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <stdio.h>
+
+#define BAUD 9600
+#define MYUBRR F_CPU/16/BAUD-1
+
+void uart_transmit(unsigned char data) {
+    while (!(UCSR0A & (1<<UDRE0)));
+    UDR0 = data;
+}
+
+void uart_print(const char* str) {
+    for (size_t i = 0; str[i]; i++) {
+        uart_transmit(str[i]);
+    }
+}
+void uart_init(uint16_t ubrr) {
+    // Set baud rate
+    UBRR0H = (unsigned char)(ubrr>>8);
+    UBRR0L = (unsigned char)ubrr;
+    // Enable receiver and transmitter
+    UCSR0B = (1<<RXEN0)|(1<<TXEN0);
+    // Set frame format: 8 data bits, 1 stop bit
+    UCSR0C = (1<<UCSZ01)|(1<<UCSZ00);
+    // Add a small delay before sending AT commands
+    _delay_ms(2000);
+    // Put HC-05 into AT command mode
+    uart_print("AT\r");
+    _delay_ms(1000);  // Wait for HC-05 to respond
+    // Set HC-05 to master role
+    uart_print("AT+ROLE=1\r");
+    _delay_ms(1000);  // Wait for HC-05 to respond
+}
+
+void setupTimer1() {
+    TCCR1B |= (1 << WGM12);  // Configure timer 1 for CTC mode
+    TCCR1B |= (1 << CS12) | (1 << CS10);  // Start timer at Fcpu/1024
+    OCR1A   = 2*7812;  // Set CTC compare value to 1Hz at 8MHz AVR clock, with a prescaler of 1024.  *2 for 16MHz
+    TIMSK1 |= (1 << OCIE1A);  // Enable CTC interrupt
+}
+
+void setupTimer3() {
+    TCCR3B |= (1 << WGM32);  // Configure timer 1 for CTC mode
+    TCCR3B |= (1 << CS32) | (1 << CS30);  // Start timer at Fcpu/1024
+    OCR3A   = 2*7812;
+    TIMSK3 |= (1 << OCIE3A);  // Enable CTC interrupt
+}
+
+ISR(TIMER1_COMPA_vect) {
+    uart_print("T1 \r\n");
+}
+ISR(TIMER3_COMPA_vect) {
+    uart_print("T3 \r\n");
+}
+
+int main(void) {
+    uart_init(MYUBRR);
+    sei();  // Enable global interrupts
+    setupTimer1();
+    setupTimer3();
+
+    while (1) {
+        // Main loop
+    }
+
+    return 0;
+}

@@ -15,7 +15,7 @@ extern uint8_t EramMaxLaserPower;
 extern uint8_t MaxLaserPower;
 extern uint16_t EramLaserID;
 extern uint16_t LaserID;
-extern bool SteppingStatus;
+extern volatile bool SteppingStatus;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
 extern uint8_t PanSpeed;

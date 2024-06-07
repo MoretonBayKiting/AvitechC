@@ -233,7 +233,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
 
     A = Instruction;
 
-    if (A == 0b00000000) {   //Run mode
+    if (A == 0b00000000) {   //Run mode   <10:0>
         WarnLaserOnOnce = 1; //Enable laser warning when Run Mode button is pressed
         SetupModeFlag = 0;
         PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
@@ -241,7 +241,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
         // LoadActiveMapZones();
     }
 
-    if (A == 0b00000001) {   //Program Mode
+    if (A == 0b00000001) {   //Program Mode  <10:1>
         WarnLaserOnOnce = 1; //Enable laser warning when Program Mode button is pressed
         SetupModeFlag = 1;
         ProgrammingMode();   //Home machine ready for programming in points

@@ -57,8 +57,12 @@
 // MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.  
 // These values, 0xD2 and 0xD3, are for version 6.13  Ref sub Initgyro() in BASCOM code.
 // These are not physical pins (and not MCU addresses) but addresses in the relevant I2C devices (MPU and laser power controller)
-#define MPU6050_W_PIN 0xD2
+#define MPU6050_W_PIN 0xD2 //These are 8 bit addesses which already include the r/w bit in each.
 #define MPU6050_R_PIN 0xD3
 // MCP4725 is DAC to control laser power.  Comms is via I2C.
 // #define LASER_W_PIN 0xD2 //This value is made up.  Needs to be found.
-#define MCP4725 0x60 // I2C address of MCP4725
+#define MCP4725 (0x60 << 1) // I2C address of MCP4725.  This is the 7 bit address (0x60) left shifted to get the write address.
+
+#define BAUD 9600 //57600  //Baud rate for HC-05
+#define MYUBRR F_CPU/16/BAUD-1 // The formula for calculating the UBRR value is given in the AVR datasheet:
+#define DEBUG_MSG_LENGTH 100

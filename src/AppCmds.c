@@ -9,27 +9,27 @@
 
 void DecodeCommsData() {
     switch (Command) {
-        case 1: Cmd1(); break;
-        case 2: Cmd2(); break;
-        case 3: Cmd3(); break;
-        case 4: Cmd4(); break;
-        case 5: Cmd5(); break;
-        case 6: Cmd6(); break;
-        case 7: Cmd7(); break;
+        case 1: Cmd1(); break; //Laser power
+        case 2: Cmd2(); break; //Pan registers (stop/start, speed, dir)
+        case 3: Cmd3(); break; //Tilt registers
+        case 4: Cmd4(); break; //Update MaxLaserPower (in EEPROM)
+        case 5: Cmd5(); break; //Update LaserID (in EEPROM)
+        case 6: Cmd6(); break; // X = Instruction;  Start timer1.
+        case 7: Cmd7(); break; // Y = Instruction;  Start timer1.
         // case 8: Cmd8(); break;  //Not used
-        case 9: Cmd9(); break;
-        case 10: Cmd10(); break;
-        case 11: Cmd11(); break;
-        case 12: Cmd12(); break;
-        case 13: Cmd13(); break;
-        case 14: Cmd14(); break;
-        case 15: Cmd15(); break;
-        case 16: Cmd16(); break;
-        case 17: Cmd17(); break;
-        case 18: Cmd18(); break;
-        case 19: Cmd18(); break;
-        case 20: Cmd20(); break;
-        case 21: Cmd21(); break;
+        case 9: Cmd9(); break;  //Store way point
+        case 10: Cmd10(); break; //Setup/Run mode selection. Delete all map points. Cold restart
+        case 11: Cmd11(); break;  // Process the Send Diagnostic Data register or Process the full reset flag on next restart
+        case 12: Cmd12(); break;  // Store the accelerometer trip point
+        case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
+        case 14: Cmd14(); break;  //Delete last way point
+        case 15: Cmd15(); break;  //Nothing
+        case 16: Cmd16(); break;  //cmdSpeedZone(0);
+        case 17: Cmd17(); break;  //cmdSpeedZone(1);    
+        case 18: Cmd18(); break;  //cmdSpeedZone(2);
+        case 19: Cmd18(); break;  //cmdSpeedZone(3);
+        case 20: Cmd20(); break;  //cmdSpeedZone(4);
+        case 21: Cmd21(); break;  //Update ActiveMapZones (in EEPROM)
         // case 22: Cmd22(); break;
         // case 23: Cmd23(); break;
         // case 24: Cmd24(); break;
@@ -38,15 +38,15 @@ void DecodeCommsData() {
         // case 27: Cmd27(); break;
         // case 28: Cmd28(); break;
         // case 29: Cmd29(); break;
-        case 30: Cmd30(); break;
-        case 31: Cmd31(); break;
-        case 32: Cmd32(); break;
-        case 33: Cmd33(); break;
-        case 34: Cmd34(); break;
-        case 35: Cmd35(); break;
-        case 36: Cmd36(); break;
-        case 37: Cmd37(); break;
-        case 38: Cmd38(); break;
+        case 30: Cmd30(); break;  //Update ResetSeconds (in EEPROM)
+        case 31: Cmd31(); break;  //Update MapTotalPoints (in EEPROM)
+        case 32: Cmd32(); break;  //Update Laser2OperateFlag (in EEPROM)
+        case 33: Cmd33(); break;  //Update Laser2BattTrip (in EEPROM) 
+        case 34: Cmd34(); break;  //Update Laser2TempTrip (in EEPROM)
+        case 35: Cmd35(); break;  //Update UserLightTripLevel (in EEPROM)
+        case 36: Cmd36(); break;  //Update LightTriggerOperation (in EEPROM)
+        case 37: Cmd37(); break;  //getLightLevel()
+        case 38: Cmd38(); break;  //Update FactoryLightTripLevel (in EEPROM)
     }
 }
 
@@ -127,10 +127,17 @@ void Cmd3() {
 
 void Cmd4() {
     eeprom_update_byte(&EramMaxLaserPower, Instruction);
-    MaxLaserPower = Instruction;
+    MaxLaserPower = Instruction;  //#define DEF_MAX_LASER_POWER 120
     GetLaserTemperature();
     ThrottleLaser();
     Audio(1);
+
+    //20240609: Following added for debugging/development
+    // uint8_t updatedValue = eeprom_read_byte(&EramMaxLaserPower);
+    // // Print the updated EEPROM value
+    // char buffer[20];
+    // sprintf(buffer, "Updated EEPROM: %d", updatedValue);
+    // uartPrint(buffer);
 }
 
 void Cmd5() {
@@ -230,7 +237,8 @@ void Cmd9() {
 void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     // uint8_t Mask;
     uint8_t A;
-
+    sprintf(debugMsg,"Entered cmd10.  Cmd, Inst, %d, %d", Command, Instruction);
+    uartPrint(debugMsg);
     A = Instruction;
 
     if (A == 0b00000000) {   //Run mode   <10:0>

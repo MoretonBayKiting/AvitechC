@@ -74,7 +74,7 @@ extern EramPos EEMEM EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
 
 extern uint16_t Instruction;
 extern uint8_t Command;
-
+extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 // Functions
 void GetLaserTemperature();
 void ThrottleLaser();
@@ -91,6 +91,5 @@ void DecodeCommsData();
 void ReadEramVars();
 void LoadEramDefaults();
 void uartPrint(const char* str);
-void printToBT(uint8_t PrintCode, uint8_t Res);
-
+void printToBT(uint8_t cmd, uint16_t inst);
 #endif // SHARED_VARS_H

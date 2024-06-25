@@ -46,6 +46,7 @@ void Cmd35(void);
 void Cmd36(void);
 void Cmd37(void);
 void Cmd38(void);
+void Cmd39(void);
 
 void DecodeCommsData(void);
 #endif // APPCMDS_H

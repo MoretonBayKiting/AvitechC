@@ -13,6 +13,7 @@ extern uint8_t EramUserLaserPower;
 extern uint8_t UserLaserPower;
 extern uint8_t EramMaxLaserPower;
 extern uint8_t MaxLaserPower;
+extern uint8_t LaserPower;
 extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
@@ -26,6 +27,10 @@ extern uint8_t EramMapTotalPoints;
 extern uint8_t MapTotalPoints;
 extern int X;
 extern int Y;
+extern int Dx;
+extern int Dy;
+extern int AbsX;
+extern int AbsY;
 extern uint8_t WarnLaserOnOnce;
 extern uint8_t SetupModeFlag;
 extern uint8_t EramFactoryLightTripLevel;
@@ -63,6 +68,10 @@ extern uint8_t FactoryLightTripLevel;
 extern float VoltPerStep;
 extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
+
+extern uint32_t JM_n; 
+extern uint32_t MM_n;
+
 // Declare the EramPos struct
 
 typedef struct {
@@ -74,6 +83,7 @@ extern EramPos EEMEM EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
 
 extern uint16_t Instruction;
 extern uint8_t Command;
+extern bool received39;
 extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 // Functions
 void GetLaserTemperature();
@@ -92,4 +102,5 @@ void ReadEramVars();
 void LoadEramDefaults();
 void uartPrint(const char* str);
 void printToBT(uint8_t cmd, uint16_t inst);
+void stopTimer1();
 #endif // SHARED_VARS_H

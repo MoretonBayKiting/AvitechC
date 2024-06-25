@@ -31,6 +31,9 @@
 #define TILT_SEP  10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 #define LASER_HT  5//Height of laser in metres.  Used for polar:cartesian conversions.
+#define BUFFER_SIZE 100 //Length of buffer to use for income serial messages.
+#define HIGH_JOG_POS 40 //These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 10
 
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
@@ -61,8 +64,15 @@
 #define MPU6050_R_PIN 0xD3
 // MCP4725 is DAC to control laser power.  Comms is via I2C.
 // #define LASER_W_PIN 0xD2 //This value is made up.  Needs to be found.
-#define MCP4725 (0x60 << 1) // I2C address of MCP4725.  This is the 7 bit address (0x60) left shifted to get the write address.
+#define MCP4725ADD (0x60 << 1) // I2C address of MCP4725.  This is the 7 bit address (0x60) left shifted to get the write address.
 
 #define BAUD 9600 //57600  //Baud rate for HC-05
 #define MYUBRR F_CPU/16/BAUD-1 // The formula for calculating the UBRR value is given in the AVR datasheet:
-#define DEBUG_MSG_LENGTH 100
+#define DEBUG_MSG_LENGTH 120
+// 20240624 Constants to be used for i2c (MCP4725 DAC)
+#define TW_START_TRANSMITTED 0x08
+#define TW_REP_START_TRANSMITTED 0x10
+#define TW_MT_SLA_ACK 0x18
+#define TW_MT_DATA_ACK 0x28
+#define TW_MR_SLA_ACK 0x40
+#define TW_MR_DATA_ACK 0x50

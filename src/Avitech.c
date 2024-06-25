@@ -13,7 +13,8 @@
     #include <math.h>
     #include <compat/twi.h>
     #include <string.h>
-
+    #include <MCP4725.h> //20240625 https://github.com/RobTillaart/MCP4725
+    #include <Wire.h>
     // #include <wiringPiI2C.h>
     // #include "i2cmaster.h"
     // #include "vars_main.h"
@@ -29,21 +30,23 @@
 
 #pragma endregion Include files
 #pragma region Variable definitions
+MCP4725 MCP(0x60);// (MCP4725ADD>>1);
 uint8_t printCnter = 0;
 uint16_t eeprom_address = 0;
 
-uint16_t n = 0;
+// volatile uint16_t n = 0;  //Counter used in debugging.
 uint16_t Boardrevision;                                   // Board that program will be deployed to
 int X = 0;                                            // X position requested to move EG X=100   .Move X 100 steps
 int Y = 0;                                            // Y position requested to move EG X=100   .Move X 100 steps
+int AbsX = 0;  // Can this be negative?                // X absolute position from home position
+int AbsY = 0;                                         // Y absolute position from home position
+int Dy;                                              // Used to calulate how many steps required on Y axis from last position
+int Dx;                                              // Used to calulate how many steps required on X axis from last position
 
 bool rndLadBit;                                        // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
 uint8_t maxYind;
 uint8_t RndNbr, PrevRndNbr, AltRndNbr;
-
-int AbsX = 0;                                         // X absolute position from home position
-int AbsY = 0;                                         // Y absolute position from home position
 
 volatile uint16_t StepCount;                                       // How many steps to be executed
 uint16_t DSS_preload = STEP_RATE_MAX;                                     // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
@@ -56,8 +59,6 @@ char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 char OpModeTxt[12];
 int StepOverRatio;                                // Step over ratio between Pan And tilt
 uint16_t Remainder;                                       // Used for Step Over Ratio calculation
-int Dy;                                              // Used to calulate how many steps required on Y axis from last position
-int Dx;                                              // Used to calulate how many steps required on X axis from last position
 bool Master_dir;                                       // Which motor need to step the most X or Y
 uint8_t Tick;                                            // Tick flag. 2Hz update time
 uint8_t AccelTick;                                       // Tick flag. 2Hz update time
@@ -104,9 +105,10 @@ uint8_t EEMEM EramUserLaserPower;
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
 uint8_t EEMEM firstTimeOn;
-uint8_t LaserPower; // Final calculated value send to the DAC laser driver
+uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver
 
-float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step
+float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro constant.  
+// Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
 
 uint8_t LaserOverTempFlag; // Laser over temp error flag
 uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
@@ -134,7 +136,7 @@ uint8_t Laser2BattTripFlag;
 //----------Communication Variables--------------------
 uint8_t A;
 char S[10];//20240607: This should only need to be char[4] // Variables to decode data coming in from the RS232 data stream from the phone Commands
-uint8_t DataInBufferFlag; // Flag for there is data in the RS232 comms buffer
+bool DataInBufferFlag; // Flag for there is data in the RS232 comms buffer
 
 //----------Speed Zone Variables--------------------
 uint8_t SpeedZone[5];
@@ -173,7 +175,7 @@ uint8_t OperationMode;
 uint8_t EramActiveMapZones;
 uint8_t ActiveMapZones;
 
-uint8_t SendDataFlag;                                      // Diagnostic mode send data back to user
+uint8_t SendDataFlag = 0;                                      // Diagnostic mode send data back to user
 uint8_t SendSetupDataFlag;                                 // Send config data back to user.  20240522: Not used 
 
 uint8_t FirstTimeLaserOn;
@@ -197,6 +199,9 @@ uint16_t CurrentSpeedZone;
 uint16_t MapRunning;
 
 uint8_t Counter50ms;
+//Counters to use for periodic printing while debugging.
+uint32_t JM_n=0; 
+uint32_t MM_n=0;
 
 //---------MPU6050 IMU  & Temperature, then HC-05 bluetooth module-----------------
 union { // Accel_Z to be used to access any of Z_accel, int or the subcomponents
@@ -228,23 +233,25 @@ union {
 // Sw_stack = 1;
 uint16_t Frame_size;
 uint16_t ResetSeconds;
-
+bool received39;
 int Vertices[3][MAX_NBR_VERTICES];
 int Perimeter[2][MAX_NBR_PERIMETER_PTS];
 uint8_t NbrPerimeterPts;
 int res[2];  //Global variables to be used in cartesian/polar conversions:Input and results.
-volatile char ReceivedData[100];
+volatile char ReceivedData[BUFFER_SIZE];
 volatile int DataCount = 0;
+volatile uint8_t CommandLength = 0;
 // uint8_t cnter = 0;
 
 #pragma endregion Variable Definitions
 #pragma region Function Declarations
 void HomeAxis();
 void DoHouseKeeping();
+void StopTimer1();
 #pragma endregion Function Declarations
 #pragma region Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
 void setupPeripherals(){
-    // Set relevant pits as output
+    // Set relevant pins as output
     DDRD |= (1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN) | (1 << X_DIR) | (1 << Y_DIR) | (1 << X_STEP) | (1 << Y_STEP);
     DDRE |= (1 << BUZZER) | (1 << LASER2) | (1 << FAN);
     // Input pins
@@ -257,6 +264,7 @@ void setupPeripherals(){
 void setupWatchdog(){
     wdt_enable(WDTO_2S);  // Set the watchdog timeout to approximately 2 second
     WDTCSR |= (1 << WDIE); // Enable the watchdog interrupt
+    // wdt_disable();
 }
 
 uint8_t IsCharWaiting() {
@@ -363,47 +371,79 @@ char uartGetChar(void) {
     return UDR0;  /* Get and return received data from buffer */
 }
 
-ISR(USART0_RX_vect) {  //20240607 ISR added for reading.
+// ISR(USART0_RX_vect) {
+//     char c = UDR0;
+//     ReceivedData[DataCount] = c;
+//     DataCount++;
+//     if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
+//         DataCount = 0;
+//     }
+//     if (c == '\n' || c == '>') { // Set the flag when a complete command is received
+//         ReceivedData[DataCount] = '\0'; // Add null terminator
+//         DataInBufferFlag = true;
+//         CommandLength = DataCount; // Store the length of the command
+//         DataCount = 0;
+//     }
+// }
+ISR(USART0_RX_vect) {
     char c = UDR0;
-    // uartPutChar(c); // Debugging line
-    // uartPutChar('\n'); // Debugging line
-    if (c == '\n') { //// Use '\n' as the terminator. 
-        ReceivedData[DataCount] = '\0'; // Null terminator
-        DataInBufferFlag = 1; // Set the flag
-        DataCount = 0; // Reset the counter
+    if (c == '\r' || c == '\n') {
+        // Do nothing
     } else {
-        ReceivedData[DataCount] = c;
-        DataCount++;
+        if (DataCount == 0 && c != '<') {
+            // Do nothing
+        } else {
+            ReceivedData[DataCount] = c;
+            DataCount++;
+            if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
+                DataCount = 0;
+            }
+            if (c == '>') { // Set the flag when a complete command is received
+                ReceivedData[DataCount] = '\0'; // Add null terminator
+                DataInBufferFlag = true;
+                CommandLength = DataCount; // Store the length of the command
+                DataCount = 0;
+            }
+        }
     }
 }
 
-void CheckBluetooth() {
-    if (DataInBufferFlag == 1) { // We have got something
+void processReceivedData() {
+    if (ReceivedData[CommandLength] == '\0') {
+        uartPrint(ReceivedData);
+    }
+}
+void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
+    
+    if (DataInBufferFlag == true) { // We have got something
+        // processReceivedData();
         char *token;
+        // uartPrint("In CheckBlueTooth() body."); // Debugging line
+        // uartPrint(ReceivedData); // Debugging line
         token = strchr(ReceivedData, '<');  // Find the start of the command
         if (token != NULL) {
+            // sprintf(debugMsg,"Token: %s\n", token);
+            // uartPrint(debugMsg);
             Command = atoi(token + 1);// Convert the command to an integer
-            // token = strchr(ReceivedData, ':');  // Find the start of the instruction
             token = strchr(token, ':');  // Find the start of the instruction
+
             if (token != NULL) {
                 char *end = strchr(token, '>');
                 if (end != NULL) {
                     *end = '\0'; // Replace '>' with '\0' to end the string
+                    Instruction = atoi(token + 1);
+                    // _delay_ms(50); //Perhaps this should be removed.
+                    DecodeCommsData();  // Process the command and instruction
                 }
-                Instruction = atoi(token + 1);
-                // Print the command and instruction for debugging
-                sprintf(debugMsg, "Command: %d, Instruction: %d", Command, Instruction);
-                uartPrint(debugMsg);
-                DecodeCommsData();  // Process the command and instruction
             }
         }
         // Reset the buffer and the flag
         memset(ReceivedData, 0, sizeof(ReceivedData));
-        DataInBufferFlag = 0;
+        DataInBufferFlag = false;
     }
 }
 
-void uartRead(char* buffer, int length) {
+void uartRead(char* buffer, int length) { //20240618.  This is not called.  ISR used instead.
     int i = 0;
     while (uartAvailable() && i < length - 1) {
         char c = uartGetChar();
@@ -419,53 +459,76 @@ void uartRead(char* buffer, int length) {
     buffer[i] = '\0';
 }
 
-void testLoopUart(char* testString) {
-    char c; // Character to hold incoming data
-    // if(false){  //Keep this (and the closing brace) if this is to be disabled.
-    for (int i = 0; i < 1000; i++) {  // Replace 1000 with the number of iterations you want
-        sprintf(debugMsg, "%s: DM:  %d", testString, i);
-        uartPrint(debugMsg);
-        while (uartAvailable()) { // Check if data is available to read
-            c = uartGetChar(); //Read a single character
-            _delay_ms(1);
-            uartPutChar('z');
-            uartPutChar(c);
-            if (c == 'C'){
+void testLoopUart(char* testString) {//Use this during development only.  
+    if(false){ //Put this if (false) in, with associated closing bracket, when this is not to be run.
+        for (int i = 0; i < 1000; i++) {  // Replace 1000 with the number of iterations you want
+            sprintf(debugMsg, "%s: DM:  %d", testString, i);
+            uartPrint(debugMsg);
+            CheckBlueTooth();
+            if (received39){
+                // if (c == 'C'){
                     uartPrint("Have read C ");
-                    ClearSerial();
+                    received39 = false;
                     return; // Break the loop
                 }
+            _delay_ms(1000);  // Delay for 1 second. Adjust as needed.
             }
-        _delay_ms(1000);  // Delay for 1 second. Adjust as needed.
-        }
-    // }
+    }
 }
 
 void printToBT(uint8_t cmd, uint16_t inst){
     char printToBTMsg[20];
     sprintf(printToBTMsg, "<%02d:%04x>", cmd,  inst);
+    // sprintf(printToBTMsg, "<%02x:%04x>", cmd,  inst); //Phone app comments indicated that hex is expected.  But it doesn't in fact test for hex.
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
 
-void i2c_wbyte(uint8_t data) { //Constructed to mirror BASCOM which doesn't start or stop the bus
-    // Send data
-    TWDR0 = data;
-    TWCR0 = (1<<TWINT) | (1<<TWEN);
-    while (!(TWCR0 & (1<<TWINT)));
-}
-
+// Initialize I2C
 void i2c_init(void) {
     // Set the bit rate to 100 kHz
     TWSR0 = 0x00;
     TWBR0 = ((F_CPU / 100000L) - 16) / 2;
 }
 
-void i2c_stop(void) {
-    // Transmit STOP condition
-    TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
-    while(TWCR0 & (1<<TWSTO));
+// Send a byte via I2C and check for errors
+int i2c_wbyte(uint8_t data) {
+    TWDR0 = data; // Load data into the TWI data register
+    TWCR0 = (1<<TWINT) | (1<<TWEN); // Start transmission
+    while (!(TWCR0 & (1<<TWINT))); // Wait for transmission to complete
+
+    // Check if the byte was sent and acknowledged
+    if ((TWSR0 & 0xF8) != TW_MT_DATA_ACK) {
+        return -1; // Error: Data not sent or not acknowledged
+    }
+    return 0; // Success
 }
+
+// Send a STOP condition
+int i2c_stop(void) {
+    TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO); // Transmit STOP condition
+    while(TWCR0 & (1<<TWSTO)); // Wait for STOP condition to be transmitted
+    return 0; // Assuming STOP always succeeds, might not need error handling
+}
+
+// void i2c_wbyte(uint8_t data) { //Constructed to mirror BASCOM which doesn't start or stop the bus
+//     // Send data
+//     TWDR0 = data;
+//     TWCR0 = (1<<TWINT) | (1<<TWEN);
+//     while (!(TWCR0 & (1<<TWINT)));
+// }
+
+// void i2c_init(void) {
+//     // Set the bit rate to 100 kHz
+//     TWSR0 = 0x00;
+//     TWBR0 = ((F_CPU / 100000L) - 16) / 2;
+// }
+
+// void i2c_stop(void) {
+//     // Transmit STOP condition
+//     TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
+//     while(TWCR0 & (1<<TWSTO));
+// }
 
 uint8_t i2c_start(uint8_t address) {
     TWCR0 = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);  //TWINT:7; TWSTA: 5; TWEN: 2; Hence: 0b10100100  // Send START condition
@@ -501,18 +564,12 @@ uint8_t i2c_rbyte(uint8_t ack) {
 }
 #pragma endregion Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
 #pragma region ISRs
-void stepperDriverISR() {
+void StepperDriverISR() {
     // uint8_t x_dir_state = (PIND & (1 << X_DIR)) != 0; //Could use PORTD rather rathan PIND.  But as all (that are used) are configured for output, either can be used.
     uint8_t x_dir_state = (PIND & (1 << X_DIR)) == 0; 
     uint8_t y_dir_state = (PIND & (1 << Y_DIR)) != 0;
 
-    n++;
-    if (n==2000 & false){
-        sprintf(debugMsg,"PD: %#02x, PB: %#02x,SC: %d,  MD: %d",PORTD, PINB, StepCount, Master_dir);
-        uartPrint(debugMsg); 
-        n=0;
-        }
-    if (StepCount > 0) {  //StepCount is uint16_t so can't be negative. So this is equivalent to StepCount !=0 .
+    if (StepCount > 0) {  //StepCount is uint16_t so can't be negative. So this is equivalent to if(StepCount !=0).
         StepCount--;
 
         if (Dx > Dy) {
@@ -546,47 +603,40 @@ void stepperDriverISR() {
                 }
             }
         }
-    if (Remainder < 1) {
+    // if (Remainder < 1) {20240623: Logic changed to deal with zero delta (ie one axis movement) cases.
+    if (Remainder < 1 && Dx!=0 && Dy != 0) {
             PORTD |= (1 << X_STEP) | (1 << Y_STEP); // Turn on X and Y step pins.
             _delay_us(1);
             PORTD &= ~((1 << X_STEP) | (1 << Y_STEP)); // Turn off X and Y step pins.
             _delay_us(1);
-            // Update AbsX and AbsY using bitwise operations-replaced (20240606) with ternary operator.
-            // AbsX += (~x_dir_state & 1) - (x_dir_state & 1);
-            // AbsY += (~y_dir_state & 1) - (y_dir_state & 1);
             AbsX += x_dir_state ? 1 : -1;
             AbsY += y_dir_state ? 1 : -1;
         } else {
-            if (Master_dir == 1) { //20240606: Changed from 1 to 0.  Then back to 1.  Master_dir is not aligned with axis (where 0 = X).
+            if (Master_dir == 0) { //20240606: Changed from 1 to 0.  20240619: Master_dir is now aligned with axis (where 0 = X).
                 PORTD |= (1 << X_STEP); // Turn on X step pins.
                 _delay_us(1);
                 PORTD &= ~(1 << X_STEP); // Turn off X step pins.
-                _delay_us(1); //BASCOM used a 1us pulse.  Surely 1ms is fine.
-                // Update AbsX using bitwise operations
-                AbsX += (~x_dir_state & 1) - (x_dir_state & 1);
+                _delay_us(1); //BASCOM used a 1us pulse.  Surely 1ms is fine?
+                AbsX += (~x_dir_state & 1) - (x_dir_state & 1);  // Update AbsX 
             } else {
                 PORTD |= (1 << Y_STEP); // Turn on Y step pins.
                 _delay_us(1);
                 PORTD &= ~(1 << Y_STEP); // Turn off Y step pins.
                 _delay_us(1);
-                // Update AbsY using bitwise operations
-                AbsY += (~y_dir_state & 1) - (y_dir_state & 1);
+                AbsY += (~y_dir_state & 1) - (y_dir_state & 1);  // Update AbsY
             }
         }
     } else {
-        // Stop Timer1
+        StopTimer1();
         SteppingStatus = 0;
     }
 }
 //Setup ISRs
 ISR(TIMER1_COMPA_vect){
-    // sprintf(debugMsg,"DSS_PL: %d",DSS_preload);
-    // uartPrint(debugMsg); 
-    stepperDriverISR();
+    StepperDriverISR();
 }
 // ISR for Timer3 Compare A vector
 ISR(TIMER3_COMPA_vect){
-    // uartPrint("PreWD3\r");    
     wdt_reset();  // Reset the watchdog timer
     TickCounter_50ms_isr();
 }
@@ -628,67 +678,106 @@ void GetBatteryVoltage() {
     }
 }
 void SetLaserVoltage(uint8_t voltage) {
-    uint16_t D;
-    uint8_t Hi;
-    uint8_t Lo;
-    float Lvolt;
-
-    if (voltage == 0 || Laser2OperateFlag == 0 || Laser2StateFlag == 0) {
-        PORTE &= ~(1 << LASER2); // Turn off Laser2
-    } else {
-        PORTE |= (1 << LASER2); // Turn on Laser2
-    }
-
-    Lvolt = voltage / 51.0f; // Converts a byte value to a voltage for the laser DAC to set
-    D = Lvolt / VoltPerStep; // Calculate how many steps to set the requested voltage
-    D <<= 4; // Shift left by 4 bits
-    Hi = D >> 8; // Get the first 8 bits MSB
-    Lo = D & 0xFF; // Get the last 8 bits LSB
-
-    i2c_start(MCP4725); // Start the I2C bus for the laser power DAC.
-    // From BASCOM: 
-    // '1st byte sent HC0=1100 000 0   1st byte of register 1100=Device code. 000=AddressBits Lats bit A0set with I/O pin.0 R/W option
-    // 2nd byte sent &H60=0110 EEPROM and Voltage output control register DAC. Sets up start up voltage , &H40=0100 Voltage output control register only.
-    i2c_wbyte(0xC0); // Send the 1st byte
-    i2c_wbyte(0x40); // Send the 2nd byte
-    i2c_wbyte(Hi); // Send the 3rd byte (MSB)
-    i2c_wbyte(Lo); // Send the 4th byte (LSB)
-    i2c_stop(); // Stop the I2C bus
-
-    if (voltage > 0 && BatteryTick > 4) {
-        GetBatteryVoltage();
-        BatteryTick = 0;
-    }
+    MCP.setValue(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use MCP.setMaxVoltage(5.1);  
 }
+// void SetLaserVoltage(uint8_t voltage) {
+//     uint16_t D;
+//     uint8_t Hi;
+//     uint8_t Lo;
+//     float Lvolt;
 
-void initDACMCP4725() {
-    i2c_init(); // Initialize I2C with 400kHz bit rate
-    if (i2c_start(MCP4725)) { // Start I2C communication and send MCP4725 address
-        // The operation failed
-        sprintf(debugMsg, "Operation failed ");
-        uartPrint(debugMsg);
-    }
-    i2c_wbyte(0x0001); // Send data to set the default power to 0 volts in the EEPROM volt on startup
-    i2c_stop(); // Stop I2C communication
-}
+//     // if (voltage == 0 || Laser2OperateFlag == 0 || Laser2StateFlag == 0) {
+//     //     PORTE &= ~(1 << LASER2); // Turn off Laser2
+//     // } else {
+//         PORTE |= (1 << LASER2); // Turn on Laser2
+//     // }
+
+//     //Lvolt = voltage / 51.0f; // Converts a byte value to a voltage (decimal) for the laser DAC to set.  EG 255/51=5volts or 127/51=2.5volts
+//     Lvolt = 250 / 51.0f; //20240624. Overwrite Lvolt for testing. Just want to be sure it turns on.
+//     D = Lvolt / VoltPerStep; // Calculate how many steps to set the requested voltage
+//     D <<= 4; // Shift left by 4 bits
+//     Hi = D >> 8; // Get the first 8 bits MSB
+//     Lo = D & 0xFF; // Get the last 8 bits LSB
+//     sprintf(debugMsg,"voltage, D, Hi, Lo: %d, %04x, %02x, %02x", voltage, D, Hi, Lo);
+//     uartPrint(debugMsg);
+//     _delay_ms(50);
+
+
+//     // Start the I2C bus for the laser power DAC.
+//     if (i2c_start(MCP4725) != 0) {
+//         // Handle error (e.g., log error, set an error flag, etc.)
+//         uartPrint("i2c_start error");
+//         return; // Exit if we can't start communication
+//     }
+
+//     // Send the 1st byte
+//     if (i2c_wbyte(0xC0) != 0) {  //20240624 0xC0: 0b1100 0000.  1100 is MCP4725 device code.  LSB is R/W (R=0). A2, A1, A0 (bits 1,2,3, starting from 0) are address bytes.
+//     // Defaults for A2 and A1, set at manufacture, are 0. Assume that is the case.  A0 is set by logic state of A0 pin.  Assume (based on BASCOM) that this is tied low.
+//         uartPrint("i2c_wbyte(0xC0) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 2nd byte
+//     if (i2c_wbyte(0x40) != 0) { //0x40: 0b0100 0000. From table 6-2 of data sheet: C2:C1:C0 = 010 =>Load configuration bits and data code to the DAC Register
+//     // Ref para 6.1.2
+//         uartPrint("i2c_wbyte(0x40) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 3rd byte (MSB) 
+//     if (i2c_wbyte(Hi) != 0) { //20240624 Figure 6-2 NOT 6-1 shows that 3rd byte has 8 MSBits and 4th byte has 4LSBs + 4 con't care bits.
+//         uartPrint("i2c_wbyte(Hi) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 4th byte (LSB)
+//     if (i2c_wbyte(Lo) != 0) {
+//         uartPrint("i2c_wbyte(Lo) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Stop the I2C bus
+//     if (i2c_stop() != 0) {
+//         // Handle error if needed
+//         return; // Optional, as we're exiting the function anyway
+//     }
+
+//     if (voltage > 0 && BatteryTick > 4) {
+//         GetBatteryVoltage();
+//         BatteryTick = 0;
+//     }
+// }
+
+// void initDACMCP4725() {
+//     i2c_init(); // Initialize I2C with 400kHz bit rate
+//     if (i2c_start(MCP4725)) { // Start I2C communication and send MCP4725 address
+//         // The operation failed
+//         sprintf(debugMsg, "Operation failed ");
+//         uartPrint(debugMsg);
+//     }
+//     i2c_wbyte(0x0001); // Send data to set the default power to 0 volts in the EEPROM volt on startup
+//     i2c_stop(); // Stop I2C communication
+// }
 
 void firstOn(){
     uint8_t firstTimeOn = eeprom_read_byte(&firstTimeOn);
     if (firstTimeOn == 0xFF) {  // EEPROM is erased to 0xFF
         LoadEramDefaults();
         SetLaserVoltage(0);
-        initDACMCP4725();
+        // initDACMCP4725();
         uartPrint("AT+ENLOG0\r");  // Turn off logging
     }
 }
 
 void Audio(uint8_t pattern){
-    // uint16_t waitTime1;
-    // uint16_t waitTime2;
     uint8_t repeatCount = 2; //2 repeats for all but pattern 1
     uint8_t i;
-    sprintf(debugMsg,"In Audio. Pattern: %d",pattern);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"Audio. P:%d",pattern);
+    // uartPrint(debugMsg);
 
     if (pattern ==1) {repeatCount = 1;}  
     if (pattern ==6) {repeatCount = 4;}  
@@ -697,7 +786,7 @@ void Audio(uint8_t pattern){
         PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
         switch (pattern) {
             case 1: _delay_ms(100); break;
-            case 2: _delay_ms(1); break;
+            case 2: _delay_ms(50); break;   // 20240624 Originally 1ms on, 100ms off, repeat 2.  Could that be heard?
             case 3: _delay_ms(500); break;  //Initially 500.  Changed to 2500 for testing (20240601).
             case 4: _delay_ms(50); break;
             case 5: _delay_ms(50); break;
@@ -705,7 +794,7 @@ void Audio(uint8_t pattern){
         }
         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
         switch (pattern) {
-            case 2: _delay_ms(100); break;
+            case 2: _delay_ms(200); break;
             case 3: _delay_ms(100); break;
             case 4: _delay_ms(150); break;
             case 5: _delay_ms(50); break;
@@ -713,6 +802,61 @@ void Audio(uint8_t pattern){
         }
     }
 }
+
+// void Audio(uint8_t pattern) { //20240624 Refactored to be non-blocking
+//     // Define the array with values for 50ms increments
+//     // Format: [on time in 50ms increments, off time in 50ms increments, repeat count]
+//     static const uint8_t audioTiming[6][3] = {
+//         {2, 2, 1},  // Pattern 1: 100ms on, 100ms off, repeat 1 time
+//         {1, 9, 2},  // Pattern 2: 50ms on, 450ms off, repeat 2 times
+//         {10, 2, 2}, // Pattern 3: 500ms on, 100ms off, repeat 2 times
+//         {1, 3, 2},  // Pattern 4: 50ms on, 150ms off, repeat 2 times
+//         {1, 1, 2},  // Pattern 5: 50ms on, 50ms off, repeat 2 times
+//         {10, 15, 4} // Pattern 6: 500ms on, 750ms off, repeat 4 times
+//     };
+
+//     static uint8_t lastCounter = 0;
+//     static uint8_t currentPattern = 0;
+//     static bool phase = false; // false: buzzer off, true: buzzer on
+//     static uint8_t repeatCounter = 0;
+//     static uint8_t phaseCounter = 0; // Tracks the duration of the current phase
+
+//     // Check if pattern has changed or it's the first run
+//     if (pattern != currentPattern) {
+//         currentPattern = pattern;
+//         phase = false; // Ensure buzzer starts off
+//         lastCounter = Counter50ms; // Reset timing
+//         repeatCounter = 0; // Reset repeat counter
+//         phaseCounter = 0; // Reset phase duration counter
+//     }
+
+//     // Calculate elapsed time since last state change
+//     uint8_t elapsed = (Counter50ms - lastCounter + 20) % 20; // Assuming Counter50ms increments every 50ms and resets every second
+
+//     // Index for accessing the timing array
+//     uint8_t index = pattern - 1; // Adjust for 0-based index
+
+//     // Check if it's time to toggle the buzzer state
+//     if ((phase && phaseCounter >= audioTiming[index][0]) || (!phase && phaseCounter >= audioTiming[index][1])) {
+//         phase = !phase; // Toggle phase
+//         lastCounter = Counter50ms; // Reset timing for next phase
+//         phaseCounter = 0; // Reset phase duration counter
+
+//         if (phase) { // If we're turning the buzzer on
+//             PORTE |= (1 << BUZZER);
+//         } else { // We're turning the buzzer off
+//             PORTE &= ~(1 << BUZZER);
+//             repeatCounter++; // Increment repeat counter after an on + off cycle
+//         }
+//     } else {
+//         phaseCounter += elapsed; // Update phase duration counter
+//     }
+
+//     // Check if all repeats are done for the current pattern
+//     if (repeatCounter >= audioTiming[index][2]) {
+//         currentPattern = 0; // Reset pattern to allow re-entry or change
+//     }
+// }
 
 void WaitAfterPowerUp() {
     if (FirstTimeLaserOn == 1) {
@@ -729,18 +873,11 @@ void WarnLaserOn() {
 }
 
 void StartLaserFlickerInProgMode() {
-    // static uint16_t n;
-    // n++;
     if (LaserTick == 0) {
         SetLaserVoltage(0); // Off 150ms
     } else if (LaserTick == 3) {
         SetLaserVoltage(LaserPower); // On 850ms
     }    
-    // if (n == 1000){
-    //     sprintf(debugMsg,"In StartLFIP. LaserTick, LaserPower: %d, %d",LaserTick, LaserPower);
-    //     uartPrint(debugMsg);
-    //     n = 0;
-    // }
 }
 
 void GetLaserTemperature() {
@@ -827,15 +964,8 @@ void ProcessError() {
         return;
     }
 
-    if (X_TravelLimitFlag == 1) {
+    if ((X_TravelLimitFlag == 1)|(Y_TravelLimitFlag == 1)) {
         // sprintf(debugMsg,"Audio XLim");
-        // uartPrint(debugMsg);
-        Audio(5);
-        return;
-    }
-
-    if (Y_TravelLimitFlag == 1) {
-        // sprintf(debugMsg,"Audio YLim");
         // uartPrint(debugMsg);
         Audio(5);
         return;
@@ -898,8 +1028,8 @@ void MrSleepyTime() {
     SetLaserVoltage(0);
     PORTE &= ~(1 << FAN);// Fan = Off;
 
-    // stopTimer1();
-    TCCR1B &= ~((1 << CS12) | (1 << CS10));
+    StopTimer1();
+    // TCCR1B &= ~((1 << CS12) | (1 << CS10));
     SteppingStatus = 0;
     PORTD |= (1 << X_ENABLEPIN);  //Disable X - TMC2130 enable is low
     PORTD |= (1 << Y_ENABLEPIN);  //Disable Y
@@ -1038,14 +1168,36 @@ void initMPU6050() {
     uartPrint(debugMsg);
 }
 
-void startTimer1() {
+void StartTimer1() {
     // Set prescaler to 256 and start Timer1
     TCCR1B |= (1 << CS12);  //(1 << CS12)|(1 << CS10) for 1024 prescalar (4 times slower)
     TCCR1B &= ~(1 << CS11);
     TCCR1B &= ~(1 << CS10);
+    OCR1A= DSS_preload;  //20240614.
 }
 
-void stopTimer1() {
+void checkTimer3(){
+    if(false){
+        if ((TCCR3B & ((1 << CS32) | (1 << CS31) | (1 << CS30))) == 0) {
+            uartPrint("Timer3 is stopped");
+        } 
+        else {
+            uartPrint("Timer3 is running");
+        }
+    }
+}
+void CheckTimer1(uint8_t timer1Cnt){
+    if (false){
+        if ((TCCR1B & ((1 << CS12) | (1 << CS11) | (1 << CS10))) == 0) {
+            sprintf(debugMsg,"T1 stopped: %d, %d", timer1Cnt, OCR1A);
+        } 
+        else {
+            sprintf(debugMsg,"T1 running: %d, %d", timer1Cnt, OCR1A);
+        }
+        uartPrint(debugMsg);
+    }
+}
+void StopTimer1() {
     // Clear all CS1 bits to stop Timer1
     TCCR1B &= ~(1 << CS12);
     TCCR1B &= ~(1 << CS11);
@@ -1082,9 +1234,9 @@ uint8_t GetZone(uint8_t i) {
     }
     return Opzone;
 }
-void getMapPtCounts(bool doPrint) {
+void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
     uint8_t MapIndex;
-    uint8_t I, Prev_i, Prev_i_1;
+    uint8_t I, Prev_i; // Prev_i_1;
     I = 0;
     Prev_i = 0;
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++) {
@@ -1096,8 +1248,8 @@ void getMapPtCounts(bool doPrint) {
                     MapCount[2][Prev_i] = MapIndex - 1;
                 } else {
                     MapCount[2][Prev_i] = MapIndex - 1;
-                    Prev_i_1 = Prev_i - 1;
-                    MapCount[1][Prev_i] = MapIndex - MapCount[2][Prev_i_1];
+                    // Prev_i_1 = Prev_i - 1;
+                    MapCount[1][Prev_i] = MapIndex - MapCount[2][Prev_i - 1];
                     MapCount[1][Prev_i] = MapCount[1][Prev_i] + 1;
                 }
             }
@@ -1320,85 +1472,127 @@ void ProcessCoordinates() {
 
     Dx = X - AbsX; // Distance to move
     Dy = Y - AbsY; // Distance to move
-    // sprintf(debugMsg, "Dx, X, AbsX, Dy, Y, AbsY, PDx2: %d,%d,%d,%d,%d,%d,%d,%d", Dx, X, AbsX, Dy, Y, Dy, PIND, PORTD);  //This version used first.
-    // sprintf(debugMsg, "Dx, X, AbsX, Dy, Y, AbsY, PDx2: %d,%d,%d,%d,%d,%d,%u,%u", Dx, X, AbsX, Dy, Y, Dy, PIND, PORTD);  //Could use unsigned int or
-    // sprintf(debugMsg, "Dx: %d, X: %d, AbsX:%d, Dy:%d, Y:%d, AbsY:%d, PD:%#02x, PB:%#02x", Dx, X, AbsX, Dy, Y, Dy, PORTD, PINB);//hexadecimal
-    // uartPrint(debugMsg);
-    if (Dx > 0) {
-        PORTD |= (1 << X_DIR); // Set X_DIR pin high
-    } else {
-        PORTD &= ~(1 << X_DIR); // Set X_DIR pin low
-        Dx = Dx * -1; // Convert all distances to a positive number
-    }
 
-    if (Dy > 0) {
-        PORTD |= (1 << Y_DIR); // Set Y_DIR pin high
-    } else {
-        PORTD &= ~(1 << Y_DIR); // Set Y_DIR pin low
-        Dy = Dy * -1;
-    }
-    // _delay_ms(100);  20240610: Why was this here?  Removed.
-    // sprintf(debugMsg, "_Dx: %d, X: %d, AbsX:%d, Dy:%d, Y:%d, AbsY:%d, PD:%#02x, PB:%#02x", Dx, X, AbsX, Dy, Y, Dy, PORTD, PINB);//hexadecimal
-    // uartPrint(debugMsg);
+    if ((Dx==0) && (Dy == 0)){ //20240623: Explicitly exclude this case.
+        StepCount = 0;
+        }//Do nothing
+    else{
+        if (Dx > 0) {
+            PORTD |= (1 << X_DIR); // Set X_DIR pin high
+        } 
+        if (Dx < 0) { //20240622 Saw PortD.4 oscillating in testing jogging panning.  This (ie excluding the 0 case) probably won't fix but worth trying.
+            PORTD &= ~(1 << X_DIR); // Set X_DIR pin low
+            Dx = Dx * -1; // Convert all distances to a positive number
+        }
 
-    if (Dx > Dy) {
-        Master_dir = 1; // leading motor the moves the most X
-        StepOverRatio = Dx / Dy; // Slope ratio between X and Y
-        StepCount = Dx;
-    } else {
-        Master_dir = 0;
-        StepOverRatio = Dy / Dx;
-        StepCount = Dy;
-    }
-}
-void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
-    if (axis == 0) { // pan
-        X = steps;
-        Y = 0;
-    } else { // tilt
-        X = 0;
-        Y = steps;
-    }
-    ProcessCoordinates();
-    DSS_preload = HOMING_SPEED;
-    SteppingStatus = 1;
-    startTimer1();
-    if (waitUntilStop == 1) {  //So, if waitUntilStop is not 1, execution returns ?
-        // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
-        while (SteppingStatus == 1) {
-            // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
+        if (Dy > 0) {
+            PORTD |= (1 << Y_DIR); // Set Y_DIR pin high
+        } 
+        if (Dy < 0) {
+            PORTD &= ~(1 << Y_DIR); // Set Y_DIR pin low
+            Dy = Dy * -1;
+        }
+
+        if (Dx > Dy) {
+            Master_dir = 0; // leading motor moves the most
+            // StepOverRatio = Dx / Dy; // X:Y slope .  20240620: What protection against Dy == 0?
+            // CoPilot advises that BASCOM assigns a large number for an assignment of, for example, 40/0.  C would throw an error.
+            StepOverRatio = (Dy == 0) ? Dx : Dx / Dy ;
+            StepCount = Dx;
+        } else {
+            Master_dir = 1;
+            // StepOverRatio = Dy / Dx;
+            StepOverRatio = (Dx == 0) ? Dy : Dy/Dx;
+            StepCount = Dy;
         }
     }
 }
+
+void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
+    static uint16_t MM_n2 = 0;
+    if (axis == 0) { // pan
+        X = steps;
+        // Y = 0; // Why change Y?  Leave it as it is if you don't want to move it.
+    } else { // tilt
+        // X = 0; // Why change X?  Leave it as it is if you don't want to move it.
+        Y = steps;
+    }
+    ProcessCoordinates();
+    // CheckTimer1(11);
+    // DSS_preload = HOMING_SPEED;
+    SteppingStatus = 1;
+    StartTimer1();
+    if (waitUntilStop == 1) {  //So, if waitUntilStop is not 1, execution returns ?  Yes returns to HomeMotor() where there is a (blocking) {while limit switch is low} condition.
+        // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
+        while (SteppingStatus == 1) {
+            // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
+            // CheckBlueTooth();  //This should not be necessary.
+            if (!(MM_n % 30000) && false) { //20240624: Use && false to disable periodic printing.
+                MM_n2++; //Use this to distinguish b/w apparently identical messages.
+                // sprintf(debugMsg,"MM: MM_n2, mode, C, I, axis, PEF, TEF, X, AbsX, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, SetupModeFlag, Command, Instruction, axis, PanEnableFlag, TiltEnableFlag,X, AbsX, DSS_preload, PIND);
+                // uartPrint(debugMsg);
+                _delay_ms(30);
+                sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
+                uartPrint(debugMsg);
+                _delay_ms(30);
+            }
+            MM_n++;
+        }
+    }
+}
+
 void StopSystem() {
-    stopTimer1();
+    StopTimer1();
     SteppingStatus = 0;  // Reset stepping status
     X = AbsX; // Set X and Y to their absolute values
     Y = AbsY;
 }
-void JogMotors(bool prnt) {
-    if (PanEnableFlag == 1) {  // Check if pan is enabled
-            if(prnt){
-                sprintf(debugMsg, "In Jog PEF");
-                uartPrint(debugMsg);
-            }
-        MoveMotor(0, PanSpeed, 1);
+
+void JogMotors(bool prnt) {//
+    uint8_t axis = 0;
+    uint8_t speed = 0;
+    uint8_t dir = 0;
+    int pos = 0;
+
+    // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
+    if (PanEnableFlag == 1) {
+        SteppingStatus = 1;
+        axis = 0;
+        speed = PanSpeed;
+        dir = PanDirection;
+        DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
     }
-    if (TiltEnableFlag == 1) {  // Check if tilt is enabled
-            if(prnt){
-                sprintf(debugMsg, "In Jog TEF");
-                uartPrint(debugMsg);
-            }
-        MoveMotor(1, TiltSpeed, 1);
+    if (TiltEnableFlag == 1) {
+        SteppingStatus = 1;
+        axis = 1;
+        speed = TiltSpeed;
+        dir = TiltDirection;
+        DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
     }
+
+    pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to 4 steps per cycle through main loop or 1 for slow.  Needs calibration. 
+    pos = pos * (dir ? -1 : 1); // 20240623 Expect this to be pos = pos * (dir ? 1 : -1);  But both directions were wrong (from app)
+    pos += (axis == 0) ?  AbsX : AbsY; //2024620: Add an amount, pos, to AbsX.  This becomes X in MoveMotor so X - AbsX is the increment.  When that is reached, JogMotors would be called
+    //  again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments AbsX (which would have 
+    // been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is 4, MoveMotor() should, given the while loop, increment AbsX 
+    // by 4 before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
+    
+    if (!(JM_n % 120000) && false) { //20240624: Use && false to disable periodic printing.
+        sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
+        // sprintf(debugMsg,"JM: mode, axis, PEF, pos, X, AbsX, dir, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %#04x",SetupModeFlag, axis, PanEnableFlag, pos, X, AbsX, dir, DSS_preload, PIND);
+        uartPrint(debugMsg);
+    }
+    JM_n++;
+
     if (PanEnableFlag == 0 && TiltEnableFlag == 0) {  // If both pan and tilt are disabled, stop the motors.
-            if(prnt){
-                sprintf(debugMsg, "In Jog 0EF");
-                uartPrint(debugMsg);
-            }
         StopSystem();
     }
+    else {
+        StartTimer1();  //20240620.  Could be only if necessary?
+        MoveMotor(axis, pos, 1);
+    }
 }
+
 void CalcSpeedZone() {
     uint8_t Result;
 
@@ -1444,7 +1638,9 @@ uint8_t CalcSpeed() {
 }
 
 void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reaches the relevant limit switch.
+    // static volatile uint16_t m;
     MoveMotor(axis, steps, 0);
+    StartTimer1();  //20240614 This added.  Shouldn't be necessary.
     if (axis == 0) {
         while (!(PINB & (1 << PAN_STOP))){  //While pan_stop pin is low.
             // do nothing while motor moves
@@ -1454,8 +1650,7 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
             // do nothing while motor moves
         }
     }
-
-    stopTimer1();
+    StopTimer1();
     StepCount = 0;
     SteppingStatus = 0;
 
@@ -1471,10 +1666,10 @@ void MoveLaserMotor() {
     ProcessCoordinates(); // Drive motors to the coordinates
     DSS_preload = HOMING_SPEED; // Set speed rate
     SteppingStatus = 1;
-    startTimer1();
+    StartTimer1();
     while (SteppingStatus == 1) { // do nothing while motor moves 
     }
-    stopTimer1(); // Stop the motor from stepping as sensor has been triggered
+    StopTimer1(); // Stop the motor from stepping as sensor has been triggered.  20240615: The sensor has not been triggered. This is called when the target position is reached.
     StepCount = 0; // Clear the step count
 }
 void NeutralAxis() {
@@ -1492,19 +1687,23 @@ void NeutralAxis() {
 
 void HomeAxis() {
     int Correctionstepping;
+    StartTimer1(); //Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
     // *********PAN AXIS HOME****************
+    // CheckTimer1(2);
     if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
-    // if (!(PINB & (1 << PAN_STOP))){  //If pan_stop pin is low
         MoveMotor(0, -300, 1);
     }
-    HomeMotor(0, 17000); //Pan motor to home position
+    // CheckTimer1(3);
+    HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
         MoveMotor(1, 300, 1);
     }
+    // CheckTimer1(4);
     HomeMotor(1, -5000);  //Tilt motor homing position
     // --**Move Tilt into final position**--
+    CheckTimer1(5);
     switch (OperationMode) {
         case 0: Correctionstepping = 100; break;
         case 1: Correctionstepping = -220; break;
@@ -1513,8 +1712,8 @@ void HomeAxis() {
         default: Correctionstepping = 100; break;
     }
     MoveMotor(1, Correctionstepping, 1);
-
-    NeutralAxis();
+    CheckTimer1(6);
+    NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
     Audio(5);
     CmdLaserOnFlag = 0;
@@ -1566,12 +1765,12 @@ void RunSweep(uint8_t zn) {
                 ProcessCoordinates();
 
                 SteppingStatus = 1;
-                startTimer1();
+                StartTimer1();
 
                 while (SteppingStatus == 1) {
                     DoHouseKeeping();
                     if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
-                        stopTimer1();
+                        StopTimer1();
                         StepCount = 0;
                         SteppingStatus = 0;
                         return;
@@ -1646,11 +1845,8 @@ void PrintZoneData() {
     }
 }
 void PrintAppData() {
-    // uint16_t Hexresult;
-    // char Result[5];
-
     if (BT_ConnectedFlag == 1) {
-        printToBT(17,MapRunning);
+        printToBT(17,MapRunning);  
     
         if (SetupModeFlag == 0) {
             printToBT(2, LaserTemperature);
@@ -1662,8 +1858,6 @@ void PrintAppData() {
     }
 }
 void PrintConfigData() {
-    // uint16_t Hexresult;
-    // char Result[5];
     uint8_t i;
     uint16_t ConfigData[12];
     uint8_t ConfigCode[12];
@@ -1674,7 +1868,7 @@ void PrintConfigData() {
     ConfigCode[1] = 15;
 
     ConfigData[2] = MapTotalPoints;
-    ConfigCode[2] = 04;
+    ConfigCode[2] = 4;  // 20240618: This is already printed from PrintZoneData()
 
     ConfigData[3] = 0 ; //_version_major;
     ConfigCode[3] = 23;
@@ -1710,16 +1904,22 @@ void PrintConfigData() {
 #pragma endregion Print functions
 #pragma region Mode functions
 void ProgrammingMode() {
+    // uartPrint("In ProgrammingMode");
+    // printToBT(9, 1); //20240616: Moved from end of function to beginning as test.
     SetLaserVoltage(0); // Turn off laser
+    // uartPrint("In PM>SetLaserVoltage");
     HomeAxis();
-    printToBT(9, 0);
-    _delay_ms(1000);  
+    // uartPrint("In PM>HomeAxis");
+    printToBT(9, 1);
+    // sprintf(debugMsg,"ProgrammingMode: mode, X, AbsX, Y, AbsY: %d, %d, %d, %d, %d",SetupModeFlag, X, AbsX,  Y, AbsY);
+    // uartPrint(debugMsg);
+    _delay_ms(100);  
 }
 
 void OperationModeSetup(int OperationMode) {
     char* name;
     ClearSerial();
-    _delay_ms(2000); // Wait for 2 seconds
+    _delay_ms(2000); // Wait for 2 seconds.  TJ 20240614: Why?
     switch(OperationMode) {
         case 0:
             name = "Field-i";
@@ -1756,7 +1956,7 @@ void OperationModeSetup(int OperationMode) {
 #pragma endregion Mode functions
 void DoHouseKeeping() {
 
-    CheckBluetooth();
+    CheckBlueTooth();
     // ReadAccelerometer();
     // DecodeAccelerometer();
 
@@ -1766,7 +1966,8 @@ void DoHouseKeeping() {
         GetLaserTemperature();
 
         if (Z_AccelFlag == 0) {
-            ThrottleLaser();
+            // uartPrint("Calling ThrottleLaser()");
+            // ThrottleLaser();
         }
         Tick = 0;
     }
@@ -1780,7 +1981,7 @@ void DoHouseKeeping() {
 
     if (SystemFaultFlag == 1) {
         SetLaserVoltage(0);
-        stopTimer1();
+        StopTimer1();
         SteppingStatus = 0;
         ProcessError();
         return;
@@ -1822,8 +2023,13 @@ void setup() {
     if (Wd_byte & (1 << WDRF)) { // there was a WD overflow. This flag is cleared of a Watchdog Config
         Wd_flag = 1; // store the flag
     }
-    initDACMCP4725();  //
+    // initDACMCP4725();  //  This is called from firstOn() so remove from here
     firstOn();  //Load defaults to EEPROM if first time on.
+    Wire.begin(); // Initialize I2C
+    // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
+    MCP.begin;
+    MCP.setMaxVoltage(5.1);  
+
     testLoopUart("AfterFirstOn");
     ReadEramVars();  //Reads user data from EEPROM to RAM.
     PORTE |= (1 << FAN); //Turn fan on.
@@ -1833,67 +2039,82 @@ void setup() {
     SetLaserVoltage(0);                                     //Lasers switched off
     _delay_ms(100); 
     // testLoopUart("Before enable pins");
-    sprintf(debugMsg, "PORTD, %#02x, PINB  %#02x", PORTD, PINB);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "PORTD, %#02x, PINB  %#02x", PORTD, PINB);
+    // uartPrint(debugMsg);
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
     // sprintf(debugMsg, "PORTD, %#02x, PINB:  %#02x", PORTD, PINB);
     // uartPrint(debugMsg);
-    Audio(6);
+    Audio(1); //TJ 20240615 Had been using Audio(6)
     _delay_ms(1000);
     HomeAxis();
 }
+
+void testLaserPower(){
+    // Use LaserTick as timer for testing.
+    static uint8_t lastLaserTick = 0;
+    static uint8_t cnter = 0;
+    static uint8_t l_power = 0;
+    if (lastLaserTick !=LaserTick){ //Only do something if LaserTick has changed (incrementes every 50ms )
+        lastLaserTick = LaserTick;
+        if (LaserTick == 0){ //Do something each second (which is the frequency that LaserTick resets to zero.)
+            if(cnter ==0) {
+                l_power = 0;
+            }else{
+                l_power |= (1<<cnter-1); //Set one higher bit each time through. So max value will be 255 (for cnter == 8).
+            }
+            SetLaserVoltage(l_power);
+            // SetLaserVoltage(255); //Test with full power.
+            sprintf(debugMsg,"cnter, l_power: %d, %02x", cnter, l_power);
+            uartPrint(debugMsg);
+            _delay_ms(200);
+            cnter++;
+            if (cnter == 9){
+                cnter = 0;
+                l_power = 0;
+            }
+        }
+    }
+}
 int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
-    static uint16_t cnter = 0;
+    static uint16_t main_n;
     static bool doPrint = true;
-    
     setup();
-    while(1) {
-        cnter++;
-        if (false){
-            _delay_ms(1000);
-        }
-        else{
-        
-        if (cnter == 300000){
-            sprintf(debugMsg,"In main <CheckBT. X, AbsX, Dx, Y, SetupModeFlag: %d, %d, %d, %d, %d", X, AbsX, Dx,Y, SetupModeFlag);
-            uartPrint(debugMsg);
-            cnter = 0;
-        }
-        CheckBluetooth();  //Should this be here?  It's called from DoHouseKeeping().  It was in both places in BASCOM.
+    while(1) {        
         doPrint = false;
-        n++;
-        // if (n==4000){
-        //     n=0;
-        //     doPrint = true;
-        //     }
-        //     else doPrint = false;
+        if (main_n % 20000 == 0){
+            doPrint = true;
+            }
         if (SetupModeFlag == 1) {
-           JogMotors(doPrint); 
+        //    JogMotors(doPrint); 
+            testLaserPower();
         }
         if (SetupModeFlag == 0) {  //In run mode
             if(doPrint){
                 sprintf(debugMsg, "GetMapPtsCts");
                 uartPrint(debugMsg);
             }            
-            getMapPtCounts(doPrint);  //Any need to call doPrint?
+            getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  No, this should be called at the end of setup.
             for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                if(doPrint){}
-                    // sprintf(debugMsg, "MapCount: %d", MapCount);
+                if(doPrint){
+                    sprintf(debugMsg, "MapCount: %d", MapCount);
                     uartPrint("MapCount");
-                }      
+                    }      
                 if (MapCount[1][Zn] > 0) {
                     RunSweep(Zn);
                 }
             }
-        DoHouseKeeping();
+        }
         if (SetupModeFlag == 2) {
             CalibrateLightSensor();
         }
-        }
-        // return 0;
-    } 
+        // 20240625: Should just be DoHouseKeeping here.
+        // DoHouseKeeping();
+        StopTimer1();
+        CheckBlueTooth();
+        _delay_ms(1000);
 
+    } 
     return 0;
 }

@@ -8,6 +8,8 @@
 // uint16_t Instruction;
 
 void DecodeCommsData() {
+    // uartPrint("In DecodeCommsData");
+    _delay_ms(500);
     switch (Command) {
         case 1: Cmd1(); break; //Laser power
         case 2: Cmd2(); break; //Pan registers (stop/start, speed, dir)
@@ -47,6 +49,7 @@ void DecodeCommsData() {
         case 36: Cmd36(); break;  //Update LightTriggerOperation (in EEPROM)
         case 37: Cmd37(); break;  //getLightLevel()
         case 38: Cmd38(); break;  //Update FactoryLightTripLevel (in EEPROM)
+        case 39: Cmd39(); break;  //20240612: Test function set up by TJ
     }
 }
 
@@ -61,68 +64,37 @@ void Cmd1() {
     _delay_ms(100);
 }
 
+// void resetDebugCounters(){ //Reset counters to zero so that there is a print after every message (cmd2 & cmd3) is received.
+//     MM_n = 0;
+//     JM_n = 0;
+// }
+
 void Cmd2() {
-    uint8_t Mask;
-    uint8_t A;
-
     // Process Pan Stop/Start Register
-    Mask = 0b00000001;
-    A = Mask & Instruction;
-    if (A == 1) {
-        PanEnableFlag = 1;
-    } else {
-        PanEnableFlag = 0;
-    }
-
+    TiltEnableFlag = 0;  //20240620: Added by TJ.
+    PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Pan Direction Register
-    Mask = 0b00000010;
-    A = Mask & Instruction;
-    if (A == 2) {
-        PanDirection = 1;
-    } else {
-        PanDirection = 0;
-    }
-
+    PanDirection = (Instruction & 0b00000010) ? 1 : 0;
     // Process Pan Speed Register
-    Mask = 0b00000100;
-    A = Mask & Instruction;
-    if (A == 4) {
-        PanSpeed = 1;
-    } else {
-        PanSpeed = 0;
-    }
+    PanSpeed  = (Instruction & 0b00000100) ? 1 : 0;
+    // sprintf(debugMsg,"Cmd2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
+    // uartPrint(debugMsg);
+    _delay_ms(30);
+    // resetDebugCounters();
 }
 
 void Cmd3() {
-    uint8_t Mask;
-    uint8_t A;
-
     // Process Tilt Stop/Start Register
-    Mask = 0b00000001;
-    A = Mask & Instruction;
-    if (A == 1) {
-        TiltEnableFlag = 1;
-    } else {
-        TiltEnableFlag = 0;
-    }
-
+    PanEnableFlag = 0; //20240620: Added by TJ.
+    TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Tilt Direction Register
-    Mask = 0b00000010;
-    A = Mask & Instruction;
-    if (A == 2) {
-        TiltDirection = 1;
-    } else {
-        TiltDirection = 0;
-    }
-
+    TiltDirection = (Instruction & 0b00000010) ? 0 : 1; //20240622 Had the opposite previously be directions seemed to be wrong.
     // Process Tilt Speed Register
-    Mask = 0b00000100;
-    A = Mask & Instruction;
-    if (A == 4) {
-        TiltSpeed = 1;
-    } else {
-        TiltSpeed = 0;
-    }
+    TiltSpeed  = (Instruction & 0b00000100) ? 1 : 0;
+    sprintf(debugMsg,"Cmd3: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
+    uartPrint(debugMsg);
+    _delay_ms(30);
+    // resetDebugCounters();
 }
 
 void Cmd4() {
@@ -131,13 +103,6 @@ void Cmd4() {
     GetLaserTemperature();
     ThrottleLaser();
     Audio(1);
-
-    //20240609: Following added for debugging/development
-    // uint8_t updatedValue = eeprom_read_byte(&EramMaxLaserPower);
-    // // Print the updated EEPROM value
-    // char buffer[20];
-    // sprintf(buffer, "Updated EEPROM: %d", updatedValue);
-    // uartPrint(buffer);
 }
 
 void Cmd5() {
@@ -237,8 +202,13 @@ void Cmd9() {
 void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     // uint8_t Mask;
     uint8_t A;
-    sprintf(debugMsg,"Entered cmd10.  Cmd, Inst, %d, %d", Command, Instruction);
-    uartPrint(debugMsg);
+    // uartPrint("C10R"); // For debugging.
+    // _delay_ms(100);
+    // sprintf(debugMsg, "C:%d,I:%d", Command, Instruction);
+    // uartPrint(debugMsg);
+    // _delay_ms(100);
+    // sprintf(debugMsg,"Entered cmd10.  Cmd, Inst, %d, %d", Command, Instruction);
+    // uartPrint(debugMsg);
     A = Instruction;
 
     if (A == 0b00000000) {   //Run mode   <10:0>
@@ -449,3 +419,13 @@ void Cmd38() {
     FactoryLightTripLevel = Instruction;
     Audio(1);
 }
+
+void Cmd39(){
+    received39 = true;
+    // Audio(6);
+    SetLaserVoltage(255);
+    sprintf(debugMsg,"Cmd39: LaserPower: %d,",LaserPower);
+    uartPrint(debugMsg);
+
+}
+

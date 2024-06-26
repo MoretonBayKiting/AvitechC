@@ -38,6 +38,7 @@
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
 #define DEF_MAX_LASER_POWER 120
+#define MAX_LASER_VALUE 4095 //20240625: Use this for testing - may not be used after that.
 #define DEF_LASER_2_TEMP_TRIP 50
 #define DEF_LASER_2_BATT_TRIP 102
 #define DEF_LASER_2_OPERATE_FLAG 0

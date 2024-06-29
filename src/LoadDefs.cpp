@@ -3,6 +3,7 @@
 #include "LoadDefs.h"
 #include "const.h"
 #include <avr/eeprom.h>
+#include <stdio.h>
 
 uint16_t EEMEM EramResetSeconds;  //NOLINT
 uint8_t EEMEM EramFirstTimeOn;  //NOLINT
@@ -31,6 +32,19 @@ void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if the
     eeprom_update_byte(&EramUserLightTripLevel, DEF_USER_LIGHT_TRIP_LEVEL);
     eeprom_update_byte(&EramFactoryLightTripLevel, DEF_FACTORY_LIGHT_TRIP_LEVEL);
     eeprom_update_byte(&EramLightTriggerOperation, DEF_LIGHT_TRIGGER_OPERATION);
+
+    // // Write a few EEPROM addresses to serial for testing.
+    // sprintf(debugMsg, "EramUserLaserPower: %04x", (uint16_t)&EramUserLaserPower); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramMaxLaserPower: %04x", (uint16_t)&EramMaxLaserPower); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramActiveMapZones: %04x", (uint16_t)&EramActiveMapZones); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramFirstTimeOn: %04x", (uint16_t)&EramFirstTimeOn); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramLightTriggerOperation: %04x", (uint16_t)&EramLightTriggerOperation); uartPrint(debugMsg);
+    // // Read back a few values written to EEPROM
+    // sprintf(debugMsg, "EramUserLaserPower: %d", eeprom_read_byte(&EramUserLaserPower)); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramMaxLaserPower: %d", eeprom_read_byte(&EramMaxLaserPower)); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramActiveMapZones: %d", eeprom_read_byte(&EramActiveMapZones)); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramFirstTimeOn: %d", eeprom_read_byte(&EramFirstTimeOn)); uartPrint(debugMsg);
+    // sprintf(debugMsg, "EramLightTriggerOperation: %d", eeprom_read_byte(&EramLightTriggerOperation)); uartPrint(debugMsg);
 }
 
 void ReadEramVars(void){                // Transfer EEPROM user data to RAM
@@ -40,7 +54,11 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     Laser2TempTrip = eeprom_read_byte(&EramLaser2TempTrip);
     Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
     Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
-    MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);   
+    MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints); 
+    sprintf(debugMsg,"MapTotalPonts address:  %p",(void*)&EramMapTotalPoints);
+    uartPrint(debugMsg);  
+    sprintf(debugMsg,"MapTotalPonts: %d",MapTotalPoints);
+    uartPrint(debugMsg);  
     for(int i = 0; i < 5; i++) {
         SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
     }
@@ -54,4 +72,3 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
     LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
 }
-

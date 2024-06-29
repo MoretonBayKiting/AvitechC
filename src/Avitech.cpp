@@ -33,13 +33,13 @@
 #pragma region Variable definitions
 MCP4725 DAC(0x60);// (MCP4725ADD>>1);
 uint8_t printCnter = 0;
-uint16_t eeprom_address = 0;
+// uint16_t eeprom_address = 0;
 
 // volatile uint16_t n = 0;  //Counter used in debugging.
 uint16_t Boardrevision;                                   // Board that program will be deployed to
 int X = 0;                                            // X position requested to move EG X=100   .Move X 100 steps
 int Y = 0;                                            // Y position requested to move EG X=100   .Move X 100 steps
-int AbsX = 0;  // Can this be negative?                // X absolute position from home position
+int AbsX = 0;                                        // X absolute position from home position
 int AbsY = 0;                                         // Y absolute position from home position
 int Dy;                                              // Used to calulate how many steps required on Y axis from last position
 int Dx;                                              // Used to calulate how many steps required on X axis from last position
@@ -235,7 +235,7 @@ union {
 uint16_t Frame_size;
 uint16_t ResetSeconds;
 bool received39;
-int Vertices[3][MAX_NBR_VERTICES];
+int Vertices[3][MAX_NBR_VERTICES]; //Columns: X, Y, Slope?
 int Perimeter[2][MAX_NBR_PERIMETER_PTS];
 uint8_t NbrPerimeterPts;
 int res[2];  //Global variables to be used in cartesian/polar conversions:Input and results.
@@ -587,8 +587,10 @@ uint8_t i2c_rbyte(uint8_t ack) {
 #pragma region ISRs
 void StepperDriverISR() {
     // uint8_t x_dir_state = (PIND & (1 << X_DIR)) != 0; //Could use PORTD rather rathan PIND.  But as all (that are used) are configured for output, either can be used.
-    uint8_t x_dir_state = (PIND & (1 << X_DIR)) == 0; 
-    uint8_t y_dir_state = (PIND & (1 << Y_DIR)) != 0;
+    // bool x_dir_state = (PIND & (1 << X_DIR)) == 0; 20240629 Replace with something easier to follow but also opposite sign.
+    bool x_dir_state = (PIND & (1 << X_DIR)) ? 1 : 0;
+    // bool y_dir_state = (PIND & (1 << Y_DIR)) == 0; //20240629.  Changed != to ==
+    bool y_dir_state = (PIND & (1 << Y_DIR)) ? 1 : 0;
 
     if (StepCount > 0) {  //StepCount is uint16_t so can't be negative. So this is equivalent to if(StepCount !=0).
         StepCount--;
@@ -638,13 +640,15 @@ void StepperDriverISR() {
                 _delay_us(1);
                 PORTD &= ~(1 << X_STEP); // Turn off X step pins.
                 _delay_us(1); //BASCOM used a 1us pulse.  Surely 1ms is fine?
-                AbsX += (~x_dir_state & 1) - (x_dir_state & 1);  // Update AbsX 
+                // AbsX += (~x_dir_state & 1) - (x_dir_state & 1);  // Update AbsX 
+                AbsX += x_dir_state ? 1 : -1;
             } else {
                 PORTD |= (1 << Y_STEP); // Turn on Y step pins.
                 _delay_us(1);
                 PORTD &= ~(1 << Y_STEP); // Turn off Y step pins.
                 _delay_us(1);
-                AbsY += (~y_dir_state & 1) - (y_dir_state & 1);  // Update AbsY
+                // AbsY += (~y_dir_state & 1) - (y_dir_state & 1);  // Update AbsY
+                AbsY += y_dir_state ? 1 : -1;
             }
         }
     } else {
@@ -703,8 +707,8 @@ void GetBatteryVoltage() {
 void SetLaserVoltage(uint16_t voltage) {
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);  
     uint16_t thisVoltage = voltage;
-    sprintf(debugMsg,"In SetLV.  voltage: %d", voltage);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"In SetLV.  voltage: %d", voltage);
+    // uartPrint(debugMsg);
     if ((voltage<256) && (voltage>2)){ //If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
         thisVoltage = (voltage<<4);
     }
@@ -1287,8 +1291,12 @@ uint8_t GetZone(uint8_t i) {
     // Opzone = eeprom_read_word((uint16_t*)GetPosEepromAddress(i, 1));
     // eeprom_write_word((uint16_t*)((uintptr_t)&EramPositions[i].EramY), Opzone);
     Opzone = eeprom_read_word((uint16_t*)((uintptr_t)&EramPositions[i].EramY));
+    sprintf(debugMsg,"Opzone, raw (hex), index: %04x, %d",Opzone, i);
+    uartPrint(debugMsg);
     // Opzone = eeprom_read_word(&EramPositions[i].EramY);
     Opzone >>= 12;
+    sprintf(debugMsg,"Opzone, 1st byte (hex): %04x",Opzone);
+    uartPrint(debugMsg);
     switch (Opzone) {
         case 1: Opzone = 1; break;
         case 2: Opzone = 2; break;
@@ -1299,37 +1307,39 @@ uint8_t GetZone(uint8_t i) {
 }
 void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
     uint8_t MapIndex;
-    uint8_t I, Prev_i; // Prev_i_1;
-    I = 0;
+    uint8_t i, Prev_i; // Prev_i_1;
+    i = 0;
     Prev_i = 0;
-    for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++) {
-        I = GetZone(MapIndex);
-        if (I > 0) {
-            if (I != Prev_i) {
-                if (Prev_i == 1) {
-                    MapCount[1][Prev_i] = MapIndex;
-                    MapCount[2][Prev_i] = MapIndex - 1;
-                } else {
-                    MapCount[2][Prev_i] = MapIndex - 1;
-                    // Prev_i_1 = Prev_i - 1;
-                    MapCount[1][Prev_i] = MapIndex - MapCount[2][Prev_i - 1];
-                    MapCount[1][Prev_i] = MapCount[1][Prev_i] + 1;
+    sprintf(debugMsg,"in GetMapPtCounts.  MapTotalPoints: %d",MapTotalPoints);
+    uartPrint(debugMsg);
+    // MapCount[0][i] is incremental amount for zone i (i 0 based); MapCount[1][i] is cumulative.  Incremental repeats 1st point at end.
+    for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++) {// 20240628: Start at MapIndex = 1.  Pass MapIndex -1 to GetZone as that looks up EramMapPositions[] which is zero based. 
+        i = GetZone(MapIndex-1)-1;  //Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
+        if (i > 0) {//If i == 0 (ie 1st zone), don't do anything. Assignments for that zone either when Prev_i = 0 or at total when there is only one zone.
+            if (i != Prev_i) { //Do something when you have the first point of a new zone.
+                if (Prev_i == 0) {
+                    MapCount[0][Prev_i] = MapIndex; //Incremental is 1 greater than cumulative as incremental adds the first point of the zone as an additional last point.
+                    MapCount[1][Prev_i] = MapIndex - 1;
+                } else { // The case where prev_i > 1
+                    MapCount[1][Prev_i] = MapIndex - 1; //This is the same as the Prev_i = 1 case.
+                    MapCount[0][Prev_i] = MapIndex - MapCount[1][Prev_i - 1]+ 1; //Incremental for this zone is counter less cumulative for previous plus repeated 1st point.
                 }
             }
-            if (MapIndex == MapTotalPoints) {
-                if (I > 1) {
-                    Prev_i = I - 1;
-                }
-                MapCount[2][I] = MapIndex;
-                if (I == 1) {
-                    MapCount[1][I] = MapIndex + 1;
-                } else {
-                    MapCount[1][I] = MapIndex - MapCount[2][Prev_i];
-                    MapCount[1][I] = MapCount[1][I] + 1;
-                }
-            }
-            Prev_i = I;
         }
+        if (MapIndex == MapTotalPoints) { //This is the case i == Prev_i or i == 1. Only do something if it's the last stored point (so index is MapTotalPoints - 1).
+            if (i > 0) {
+                Prev_i = i - 1;
+            }
+            MapCount[1][i] = MapIndex; //Last 
+            if (i == 0) {
+                MapCount[0][i] = MapIndex + 1;
+            } else {
+                MapCount[0][i] = MapIndex - MapCount[1][Prev_i]  + 1;
+            }
+        }
+        Prev_i = i;
+        sprintf(debugMsg,"MapIndex: %d, zone: %d", MapIndex, i);
+        uartPrint(debugMsg);
     }
 }
 void LoadZoneMap(uint8_t zn) {
@@ -1338,30 +1348,44 @@ void LoadZoneMap(uint8_t zn) {
     // 1111  1111111111111111
     //  ^             ^------------ Map point number   eg point 1, point 40 etc
     //  ^--------------------- Operation Zone     eg Zone 0 to 4
-    uint8_t MapIndex, MI;
+    uint8_t MapIndex, MI, zn_1;
+    zn_1 = zn-1; //Zone is 0 index based in MapCounts but is 1 index based in android app.
     // int temp;
 
     if (MapTotalPoints == 0) {
+        uartPrint("There are no map points");
         return;
     }
+    else {
+        sprintf(debugMsg,"MapTotalPoints: %d",MapTotalPoints);
+        uartPrint(debugMsg);
+    }
 
-    for (MapIndex = 0; MapIndex < MapCount[0][zn] - 1; MapIndex++) {
-        if (zn == 0) {
+    for (MapIndex = 0; MapIndex < MapCount[0][zn_1]; MapIndex++) {
+        if (zn_1 == 0) {//
             MI = MapIndex;
         } else {
-            MI = MapIndex + MapCount[2][zn - 1];
+            MI = MapIndex + MapCount[1][zn_1 - 1];//The index in EramPositions is across all zones whereas the loop index here is for a single zone
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
+        sprintf(debugMsg,"Vertices:MI: %d, X:, %d, Y: %d, AddX: %p, AddY: %p,",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],(void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
+        uartPrint(debugMsg);    
     }
     // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
     Vertices[0][MapIndex] = Vertices[0][0];
     Vertices[1][MapIndex] = Vertices[1][0];
-    // Get the slope of the segment, stored in Vertices[2][i]
+    // Get the slope of each segment & store in Vertices[2][i]
     for (MapIndex = 1; MapIndex < MapCount[0][zn]; MapIndex++) {
-        Vertices[2][MapIndex - 1] = (Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 / (Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+        if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1])>10){
+            Vertices[2][MapIndex - 1] = (Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 / (Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+        } else {
+            Vertices[2][MapIndex - 1] = MAX_SLOPE * 10 ;
+        }
+
     }
 }
+
 int getCartFromTilt(int t) {
    float a;
    a = LASER_HT/tan(t/STEPS_PER_RAD);
@@ -1372,7 +1396,8 @@ int getTiltFromCart(int rho) {
    a = atan(LASER_HT/(float)rho);
    return (int)(a*STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
-int getNextTiltVal(int thisTilt, uint8_t dirn) {
+int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.  
+    // getNextTiltVal() should calculate the required tilt value to get the specified separation.  TILT_SEP will need calibration.
    int rho;
    rho = getCartFromTilt(thisTilt);
    if (dirn == 1) {
@@ -1380,6 +1405,7 @@ int getNextTiltVal(int thisTilt, uint8_t dirn) {
    } else {
       rho = rho + TILT_SEP;
    }
+   sprintf("From gNTV: thisTilt: %d, dirn: %d, rho: %d, newTilt: %d",thisTilt, dirn, rho, getTiltFromCart(rho));
    return getTiltFromCart(rho);
 }
 void getCart(int p, int t, int thisres[2]) {
@@ -1395,51 +1421,44 @@ void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as
    thisRes[0] = (int)temp; //pan
    thisRes[1] = getTiltFromCart((int)r); //tilt.
 }
-void GetPerimeter(uint8_t zn) {
-    uint8_t I, J = 0, L, M;
+void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
+    // This GetPerimter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
+    // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
+    // is intended to reflect an approximately constant Cartesian Y axis offset.
+    uint8_t i, j = 0;
     // float Scale = 50.0;
     int nextTilt;
-    uint8_t testBit;
-    uint8_t dirn;
+    bool testBit;
+    uint8_t dirn = 0;
+    uint8_t zn_1 = zn-1;
 
-    for (I = 1; I < MapCount[1][zn] - 1; I++) {
-        L = I + 1;
-        J++;
-        Perimeter[1][J] = Vertices[1][I];
-        Perimeter[2][J] = Vertices[2][I];
+    for (i = 0; i < MapCount[0][zn_1] - 1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone z.
+        
+        Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
+        Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
 
         dirn = 0;
-        if (Vertices[2][L] > Vertices[2][I]) dirn = 1;
-        if (Vertices[2][L] < Vertices[2][I]) dirn = 2;
+        if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
+        if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
 
-        if (dirn != 0) {
-            nextTilt = getNextTiltVal(Perimeter[2][J], dirn);
-            testBit = 0;
-            if (nextTilt < Vertices[2][L] && dirn == 1) testBit = 1;
-            if (nextTilt > Vertices[2][L] && dirn == 2) testBit = 1;
-
-            while (testBit == 1) {
-                M = J;
-                J++;
-                Perimeter[2][J] = nextTilt;
-                Perimeter[1][J] = abs(Perimeter[2][J] - Perimeter[2][M]);
-                Perimeter[1][J] = Perimeter[1][J] * abs(Vertices[3][I]);
-                Perimeter[1][J] = Perimeter[1][J] / 10;
-
-                if (Vertices[1][L] > Vertices[1][I]) {
-                    Perimeter[1][J] = Perimeter[1][M] + Perimeter[1][J];
-                } else {
-                    Perimeter[1][J] = Perimeter[1][M] - Perimeter[1][J];
-                }
-
-                nextTilt = getNextTiltVal(Perimeter[2][J], dirn);
-                testBit = 0;
-                if (nextTilt < Vertices[2][L] && dirn == 1) testBit = 1;
-                if (nextTilt > Vertices[2][L] && dirn == 2) testBit = 1;
+        if (dirn != 0) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  In that case don't fill in any extras.  (Though it may be necessary to do so.)
+            nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
+            testBit = false;
+            if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
+            while (testBit) { 
+                j++;
+                Perimeter[1][j] = nextTilt;
+                Perimeter[0][j] = abs(Perimeter[1][j] - Perimeter[1][j-1]) * abs(Vertices[2][i]); // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
+                Perimeter[0][j] = Perimeter[0][j-1] + ((dirn==1) ? 1 : -1) * Perimeter[0][j]; // Add delta x to x(i)
+                sprintf(debugMsg,"(x,y): (%d, %d) for (i, j):(%d,%d)",Perimeter[0][j], Perimeter[1][j], i, j);
+                uartPrint(debugMsg);
+                nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
+                if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
         }
+        j++; //Increment j between segments so that intermediate points in one segment don't write over those in the next.
     }
-    NbrPerimeterPts = J - 1;
+    NbrPerimeterPts = j - 1;
 }
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
 void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
@@ -1633,8 +1652,9 @@ void JogMotors(bool prnt) {//
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
     }
 
-    pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to 4 steps per cycle through main loop or 1 for slow.  Needs calibration. 
-    pos = pos * (dir ? -1 : 1); // 20240623 Expect this to be pos = pos * (dir ? 1 : -1);  But both directions were wrong (from app)
+    pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to 4 steps per cycle through main loop or 1 for slow.  Needs calibration. 20240629: Testing with 40:10.
+    // pos = pos * (dir ? -1 : 1); // 20240623 Expect this to be pos = pos * (dir ? 1 : -1);  But both directions were wrong (from app)
+    pos = pos * (dir ? 1 : -1); // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
     pos += (axis == 0) ?  AbsX : AbsY; //2024620: Add an amount, pos, to AbsX.  This becomes X in MoveMotor so X - AbsX is the increment.  When that is reached, JogMotors would be called
     //  again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments AbsX (which would have 
     // been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is 4, MoveMotor() should, given the while loop, increment AbsX 
@@ -2131,16 +2151,13 @@ void setup() {
     for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
         GetBatteryVoltage();   //Load up the battery voltage array
     } 
-    // uartPrint("Before SetLaserVoltage(0);");
     // SetLaserVoltage(0);                                     //Lasers switched off
     _delay_ms(100); 
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
     Audio(1); //TJ 20240615 Had been using Audio(6)
     _delay_ms(1000);
-    // uartPrint("Before HomeAxis();");
     HomeAxis();
-    // uartPrint("After HomeAxis();");
 }
 
 // void testLaserPower(){
@@ -2192,30 +2209,49 @@ int main() {
             doPrint = true;
             }
         if (SetupModeFlag == 1) {
-        //    JogMotors(doPrint); 
+           JogMotors(doPrint); 
         //    testI2C();
             // testLaserPower();
         }
         if (SetupModeFlag == 0) {  //In run mode
-            // if(doPrint){
-            //     sprintf(debugMsg, "GetMapPtsCts");
-            //     uartPrint(debugMsg);
-            // }            
+            // sprintf(debugMsg, "EramPos address & 1st value: %p, %02x", (void*)&EramPositions[0], eeprom_read_byte((uint8_t*)&EramPositions[0]));
+            // uartPrint(debugMsg);            
+            // uartPrint("About to load map points");
             getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  No, this should be called at the end of setup.
-            for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                // if(doPrint){
-                //     sprintf(debugMsg, "MapCount: %d", MapCount);
-                //     uartPrint("MapCount");
-                //     }      
-                if (MapCount[1][Zn] > 0) {
-                    RunSweep(Zn);
-                }
-            }
+            LoadZoneMap(1); 
+            // sprintf(debugMsg,"After LZM.  MapTotalPoints: %d",MapTotalPoints);
+            // uartPrint(debugMsg);
+            eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
+            _delay_ms(200);
+            // sprintf(debugMsg,"MapTotalPoints address:  %p",(void*)&EramMapTotalPoints);
+            // uartPrint(debugMsg);
+            // sprintf(debugMsg,"Read MTP from EEPROM: %d",eeprom_read_byte(&EramMapTotalPoints));
+            // uartPrint(debugMsg);
+            // sprintf(debugMsg, "MTP from EEPROM 2: %02x", eeprom_read_byte((uint8_t*)&EramMapTotalPoints));
+            // uartPrint(debugMsg);
+
+            GetPerimeter(1);
+            _delay_ms(30000);
+
+            // for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
+            //     // if(doPrint){
+            //     //     sprintf(debugMsg, "MapCount: %d", MapCount);
+            //     //     uartPrint("MapCount");
+            //     //     }      
+            //     if (MapCount[1][Zn] > 0) {
+            //         RunSweep(Zn);
+            //     }
+            // }
         }
         if (SetupModeFlag == 2) {
             CalibrateLightSensor();
         }
         DoHouseKeeping();
+        // _delay_ms(2000);
+        // uartPrint("About to load map points");
+        // LoadZoneMap(1); 
+        // uartPrint("After load map points");
+        // _delay_ms(30000);
     } 
     return 0;
 }

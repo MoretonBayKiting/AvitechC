@@ -34,6 +34,7 @@
 #define BUFFER_SIZE 100 //Length of buffer to use for income serial messages.
 #define HIGH_JOG_POS 40 //These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
 #define LOW_JOG_POS 10
+#define MAX_SLOPE 100 //The slope to use to go from one vertex to another if y (tilt) doesn't change.
 
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100

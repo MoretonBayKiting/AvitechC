@@ -9,8 +9,8 @@
 
 void DecodeCommsData() {
 
-    sprintf(debugMsg, "In DecodeCommsData: Command: %d, Instruction: %d",Command, Instruction);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "In DecodeCommsData: Command: %d, Instruction: %d",Command, Instruction);
+    // uartPrint(debugMsg);
     _delay_ms(500);
     switch (Command) {
         case 1: Cmd1(); break; //Update laser power (in EEPROM)
@@ -90,7 +90,8 @@ void Cmd3() {
     PanEnableFlag = 0; //20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Tilt Direction Register
-    TiltDirection = (Instruction & 0b00000010) ? 0 : 1; //20240622 Had the opposite previously be directions seemed to be wrong.
+    TiltDirection = (Instruction & 0b00000010) ? 0 : 1; //20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
+    //20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
     // Process Tilt Speed Register
     TiltSpeed  = (Instruction & 0b00000100) ? 1 : 0;
     // sprintf(debugMsg,"Cmd3: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
@@ -133,20 +134,20 @@ void Cmd7() {
 
 void Cmd9() {
     // Debug message to indicate function entry and show received Instruction
-    sprintf(debugMsg, "Entering cmd9. Instruction: %04x", Instruction);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Entering cmd9. Instruction: %04x", Instruction);
+    // uartPrint(debugMsg);
 
     // uint16_t Mask;
     uint16_t OperationZone;
-    int MapPointNumber;
+    int16_t ZoneY = Y; // 20240628 ZoneY is Y with zone added. Y populates the 12LSBs and zone is one of the 4MSBs.
 
-    StopTimer3();
+    StopTimer3();  //20240628 Don't want interrupt getting in the way of EEPROM write?
     // Get the Operation Zone data from the received data
     OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
     OperationZone >>= 8; // Position the Operation Zone bits
     // Debug message for Operation Zone extraction
-    sprintf(debugMsg, "Extracted OperationZone: %d", OperationZone);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Extracted OperationZone: %d", OperationZone);
+    // uartPrint(debugMsg);
     // Decode the binary data for Operation Zone
     switch (OperationZone) {
         case 1: OperationZone = 1; break;
@@ -156,104 +157,42 @@ void Cmd9() {
         default: uartPrint("Invalid Operation Zone!"); break; // Handle invalid Operation Zone
     }
     // Debug message for Operation Zone decoding
-    sprintf(debugMsg, "Decoded OperationZone: %d", OperationZone);
-    uartPrint(debugMsg);
-    MapPointNumber = Instruction & 0b000011111111; // Get Map Point number from Instruction
+    // sprintf(debugMsg, "Decoded OperationZone: %d", OperationZone);
+    // uartPrint(debugMsg);
+    
+    uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
     // Debug message for Map Point Number extraction
-    sprintf(debugMsg, "Extracted MapPointNumber: %d", MapPointNumber);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Extracted MapPointNumber: %d", MapPointNumber);
+    // uartPrint(debugMsg);
 
     if (MapPointNumber >= MAX_NBR_MAP_PTS) {
         uartPrint("Error: MapPointNumber out of range!");
         return; // Early return to prevent out-of-bounds access
     }
-
+    ZoneY = ((Instruction & 0b111100000000) <<4) | Y; //20240628. 
     // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);    
-    MapTotalPoints = MapPointNumber; // Store to RAM variable
+    MapTotalPoints = MapPointNumber-1; // Store to RAM variable.  The -1 converts the 1 base array coming from the phone app to zero base EramPositions[MAX_NBR_MAP_PTS].
 
     // Debug message before EEPROM update
-    sprintf(debugMsg, "Updating EEPROM at MapPoint: %d with X: %d, Y: %d", MapPointNumber, X, Y);
+    sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y,Instruction, ZoneY);
     uartPrint(debugMsg);
 
     // Update EEPROM with X and Y values
     uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramX;
-    sprintf(debugMsg, "EEPROM addresss for X: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramX);
-    uartPrint(debugMsg);
-    // eeprom_update_word((uint16_t*)eepromAddress, X);
+    // sprintf(debugMsg, "EEPROM address for X: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramX);
+    // uartPrint(debugMsg);
+    eeprom_update_word((uint16_t*)eepromAddress, X);
     eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramY;
-    sprintf(debugMsg, "EEPROM addresss for Y: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramY);
-    uartPrint(debugMsg);
-    // eeprom_update_word((uint16_t*)eepromAddress, Y);
+    // sprintf(debugMsg, "EEPROM address for Y: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramY);
+    // uartPrint(debugMsg);
+    eeprom_update_word((uint16_t*)eepromAddress, ZoneY);
     Audio(1);
     // Debug message to indicate function completion
-    sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x", X, Y, OperationZone, Command, Instruction);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x", X, Y, OperationZone, Command, Instruction);
+    // uartPrint(debugMsg);
 
     StartTimer3();
 }
-
-// void Cmd9() {
-// // **************** 20240522: These comments from the origingal BASCOM version.
-// //    The recived data on the bluetooth contains the map point number and the operation zone data.
-// //    The MSB 8 bits are the operation zone and the LSB is the map point number
-// //     1111  11111111
-// //      ^        ^------------ Map point number   eg point 1, point 40 etc
-// //    '  ^--------------------- Operation Zone     eg Zone 0 to 4
-// // **************** 20240522
-//     uint16_t Mask;
-//     uint16_t Result;
-//     uint16_t OperationZone;
-//     int MapPointNumber;
-
-//     Mask = 0;
-//     Result = 0;
-//     OperationZone = 0;
-//     MapPointNumber = 0;
-
-//     StopTimer3();
-//     // Get the Operation Zone data from the received data
-//     Mask = 0b111100000000; // Load the bit mask
-//     OperationZone = Instruction & Mask; // Filter out the operating zone from the data
-//     OperationZone <<= 4;
-//     Result = OperationZone | Y; // Encode the Operation zone into the Y data
-
-//     OperationZone >>= 12; // Bit shift the data to the correct format with a value of 0 to 4 Operating Zones
-
-//     // Decode the binary data
-//     switch (OperationZone) {
-//         case 1: OperationZone = 1; break;
-//         case 2: OperationZone = 2; break;
-//         case 4: OperationZone = 3; break;
-//         case 8: OperationZone = 4; break;
-//     }
-//     sprintf(debugMsg,"cmd9. X, Y, OpZone, Cmd, Inst %d,%d,%d,%d,%04x", X, Y, OperationZone, Command, Instruction);
-//     uartPrint(debugMsg);
-//     // Get the map point number from the received Instruction data
-//     Mask = 0b000011111111; // Load the bit mask
-//     MapPointNumber = Instruction & Mask; // Filter out the Map Point number from the data
-//     EramMapTotalPoints = MapPointNumber;
-//     MapTotalPoints = MapPointNumber; // Store to RAM variable
-
-//     uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramX;
-//     eeprom_update_word((uint16_t*)eepromAddress, X);
-//     eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramY;
-//     eeprom_update_word((uint16_t*)eepromAddress, Y);
-
-//     Audio(1);
-
-//     // Check data that has been saved
-//     // Result = EramY;
-//     Result >>= 12; // Bit shift the data to the correct format with a value of 1 to 4 Operating Zones
-//     // Decode the binary data
-//     switch (Result) {
-//         case 1: uartPrint("<22:0001>\n"); break;
-//         case 2: uartPrint("<22:0002>\n"); break;
-//         case 4: uartPrint("<22:0003>\n"); break;
-//         case 8: uartPrint("<22:0004>\n"); break;
-//         default: uartPrint("<22:0099>\n"); break;
-//     }
-//     StartTimer3();
-// }
 
 void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     // uint8_t Mask;

@@ -161,6 +161,7 @@ void Cmd9() {
     // uartPrint(debugMsg);
     
     uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
+    MapTotalPoints = MapPointNumber;
     // Debug message for Map Point Number extraction
     // sprintf(debugMsg, "Extracted MapPointNumber: %d", MapPointNumber);
     // uartPrint(debugMsg);
@@ -171,18 +172,17 @@ void Cmd9() {
     }
     ZoneY = ((Instruction & 0b111100000000) <<4) | Y; //20240628. 
     // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);    
-    MapTotalPoints = MapPointNumber-1; // Store to RAM variable.  The -1 converts the 1 base array coming from the phone app to zero base EramPositions[MAX_NBR_MAP_PTS].
 
     // Debug message before EEPROM update
-    sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y,Instruction, ZoneY);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y,Instruction, ZoneY);
+    // uartPrint(debugMsg);
 
-    // Update EEPROM with X and Y values
-    uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramX;
+    // Update EEPROM with X and Y values.  Note that index for EramPositions is zero based whereas app treats as 1 based.  Hence MapPointNumber-1
+    uint16_t eepromAddress = (uint16_t)&EramPositions[MapPointNumber-1].EramX;
     // sprintf(debugMsg, "EEPROM address for X: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramX);
     // uartPrint(debugMsg);
     eeprom_update_word((uint16_t*)eepromAddress, X);
-    eepromAddress = (uint16_t)&EramPositions[MapTotalPoints].EramY;
+    eepromAddress = (uint16_t)&EramPositions[MapPointNumber-1].EramY;
     // sprintf(debugMsg, "EEPROM address for Y: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramY);
     // uartPrint(debugMsg);
     eeprom_update_word((uint16_t*)eepromAddress, ZoneY);

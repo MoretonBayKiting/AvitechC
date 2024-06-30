@@ -27,15 +27,17 @@
 #define MAX_NBR_MAP_PTS 40   // This is the maximum overall number of vertices
 #define MAX_NBR_PERIMETER_PTS 100
 #define MAX_NBR_PTS 40
-#define STEPS_PER_RAD 2052 //36 * 57 (36 steps per degree and 57 radians per degree?)
+#define STEPS_PER_RAD 2052.0 //36 * 57 (36 steps per degree and 57 radians per degree?)
 #define TILT_SEP  10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
-#define LASER_HT  5//Height of laser in metres.  Used for polar:cartesian conversions.
+#define LASER_HT 5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
 #define BUFFER_SIZE 100 //Length of buffer to use for income serial messages.
 #define HIGH_JOG_POS 40 //These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
 #define LOW_JOG_POS 10
-#define MAX_SLOPE 100 //The slope to use to go from one vertex to another if y (tilt) doesn't change.
-
+#define MIN_PERIMETER_TILT 2// Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
+#define FIXED_PAN_DIFF 200//Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
+#define FIXED_TILT_DIFF 50//Steps between dense perimeter points on tilt only (ie constant pan) boundary segment
+#define DEF_SLOPE 30000// Extreme number for slope (inverse) when tilt values are close.
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
 #define DEF_MAX_LASER_POWER 120

@@ -1291,12 +1291,12 @@ uint8_t GetZone(uint8_t i) {
     // Opzone = eeprom_read_word((uint16_t*)GetPosEepromAddress(i, 1));
     // eeprom_write_word((uint16_t*)((uintptr_t)&EramPositions[i].EramY), Opzone);
     Opzone = eeprom_read_word((uint16_t*)((uintptr_t)&EramPositions[i].EramY));
-    sprintf(debugMsg,"Opzone, raw (hex), index: %04x, %d",Opzone, i);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"Opzone, raw (hex), index: %04x, %d",Opzone, i);
+    // uartPrint(debugMsg);
     // Opzone = eeprom_read_word(&EramPositions[i].EramY);
     Opzone >>= 12;
-    sprintf(debugMsg,"Opzone, 1st byte (hex): %04x",Opzone);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"Opzone, 1st byte (hex): %04x",Opzone);
+    // uartPrint(debugMsg);
     switch (Opzone) {
         case 1: Opzone = 1; break;
         case 2: Opzone = 2; break;
@@ -1310,8 +1310,8 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
     uint8_t i, Prev_i; // Prev_i_1;
     i = 0;
     Prev_i = 0;
-    sprintf(debugMsg,"in GetMapPtCounts.  MapTotalPoints: %d",MapTotalPoints);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"in GetMapPtCounts.  MapTotalPoints: %d",MapTotalPoints);
+    // uartPrint(debugMsg);
     // MapCount[0][i] is incremental amount for zone i (i 0 based); MapCount[1][i] is cumulative.  Incremental repeats 1st point at end.
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++) {// 20240628: Start at MapIndex = 1.  Pass MapIndex -1 to GetZone as that looks up EramMapPositions[] which is zero based. 
         i = GetZone(MapIndex-1)-1;  //Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
@@ -1330,9 +1330,9 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
             if (i > 0) {
                 Prev_i = i - 1;
             }
-            MapCount[1][i] = MapIndex; //Last 
+            MapCount[1][i] = MapIndex; //Consider 4 stored points in a single zone.  This would be entered when MapIndex == 4.  4 is the correct number of cumulative specified points.
             if (i == 0) {
-                MapCount[0][i] = MapIndex + 1;
+                MapCount[0][i] = MapIndex + 1; // This would be 5 which is the number of specified points (4) plus 1 for the first one being repeated.
             } else {
                 MapCount[0][i] = MapIndex - MapCount[1][Prev_i]  + 1;
             }
@@ -1349,19 +1349,20 @@ void LoadZoneMap(uint8_t zn) {
     //  ^             ^------------ Map point number   eg point 1, point 40 etc
     //  ^--------------------- Operation Zone     eg Zone 0 to 4
     uint8_t MapIndex, MI, zn_1;
+    float res = 0.0;
     zn_1 = zn-1; //Zone is 0 index based in MapCounts but is 1 index based in android app.
     // int temp;
 
     if (MapTotalPoints == 0) {
-        uartPrint("There are no map points");
+        uartPrint("Zero points");
         return;
     }
     else {
-        sprintf(debugMsg,"MapTotalPoints: %d",MapTotalPoints);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg,"MapTotalPoints: %d",MapTotalPoints);
+        // uartPrint(debugMsg);
     }
-
-    for (MapIndex = 0; MapIndex < MapCount[0][zn_1]; MapIndex++) {
+    for (MapIndex = 0; MapIndex < MapCount[0][zn_1]-1; MapIndex++) { //Upper limit.  See notes below in next loop. With n-1 distinct points, there are n points in total
+    // and they are indexed from 0 to n-2 - hence 0 to < n -1.
         if (zn_1 == 0) {//
             MI = MapIndex;
         } else {
@@ -1369,43 +1370,68 @@ void LoadZoneMap(uint8_t zn) {
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        sprintf(debugMsg,"Vertices:MI: %d, X:, %d, Y: %d, AddX: %p, AddY: %p,",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],(void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
+        sprintf(debugMsg,"V MI: %d X: %d Y: %d AddX: %p AddY: %p",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],
+                                                                        (void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
         uartPrint(debugMsg);    
     }
     // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
     Vertices[0][MapIndex] = Vertices[0][0];
     Vertices[1][MapIndex] = Vertices[1][0];
     // Get the slope of each segment & store in Vertices[2][i]
-    for (MapIndex = 1; MapIndex < MapCount[0][zn]; MapIndex++) {
-        if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1])>10){
-            Vertices[2][MapIndex - 1] = (Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 / (Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+    for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++) { //MapCount[0][zn] is a count of the number of specified vertices, including the last repeated one, in zone 1.
+    // If there are 4 distinct points, then MapCount[0][zn] would be 5. Segments are 0:1, 1:2, 2:3, 3:4  So start from 1 and consider MapIndex and (MapIndex - 1) as the segment endpoints.
+        if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1])>MIN_PERIMETER_TILT){ //If the difference in Ys is big enough, get slope.
+            float num = static_cast<float>(Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10;
+            float den = static_cast<float>(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+            if (abs(den)>=1) {
+                res = static_cast<float>(num)/den;
+            } else {
+                uartPrint("Abs(den)<1");
+            }
+            // float res  = ((float)((Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 ))/ ((float)(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]));
+            Vertices[2][MapIndex - 1] = res;
+            // sprintf(debugMsg, "Slope MI: %d, num %f, den %f, 100res %f",MapIndex,num, den, 100 * res);
+            sprintf(debugMsg, "Slope MI: %d, num %d, den %d, 100res %d",MapIndex,(int)num, (int)den, (int)(100 * res));
+            uartPrint(debugMsg);
         } else {
-            Vertices[2][MapIndex - 1] = MAX_SLOPE * 10 ;
+            Vertices[2][MapIndex - 1] = DEF_SLOPE ; //Set an extreme value where delta(x) is potentially large and delta(y) is small.
+            // It needs to be dealt with as a speical case in GetPerimeter().
         }
-
     }
 }
 
 int getCartFromTilt(int t) {
-   float a;
-   a = LASER_HT/tan(t/STEPS_PER_RAD);
-   return (int)(a + 0.5); // rounding to the nearest integer before casting
+    float a = (float)t/STEPS_PER_RAD;
+    float b = tan(a);
+    float c = LASER_HT/b;
+    // sprintf(debugMsg,"100a %d, 100b %d, c %d, t %d",100*a, 100*b, c, t);
+    // uartPrint(debugMsg);
+    // sprintf(debugMsg,"a %0.4f, b %0.4f, c %0.4f, t %d",a, b, c, t);
+    // uartPrint(debugMsg);
+    return (int)(c + 0.5); // rounding to the nearest integer before casting
 }
 int getTiltFromCart(int rho) {
-   float a;
-   a = atan(LASER_HT/(float)rho);
-   return (int)(a*STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
+    float a = LASER_HT/(float)rho;
+    float b = atan(a);
+    // sprintf(debugMsg,"100a %d, b %d, rho %d",100 * a, 100 * b, rho);
+    // uartPrint(debugMsg);
+    // sprintf(debugMsg,"a %0.4f, b %0.4f, rho %d",a, b, rho);
+    // uartPrint(debugMsg);
+    return (int)(b*STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
 int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.  
     // getNextTiltVal() should calculate the required tilt value to get the specified separation.  TILT_SEP will need calibration.
-   int rho;
-   rho = getCartFromTilt(thisTilt);
+   int rho = getCartFromTilt(thisTilt);
+//    sprintf(debugMsg,"rho %d, thisTilt %d", rho, thisTilt);
+//    uartPrint(debugMsg);
    if (dirn == 1) {
       rho = rho - TILT_SEP;
    } else {
       rho = rho + TILT_SEP;
    }
-   sprintf("From gNTV: thisTilt: %d, dirn: %d, rho: %d, newTilt: %d",thisTilt, dirn, rho, getTiltFromCart(rho));
+//    sprintf(debugMsg,"From gNTV: thisTilt: %d, dirn: %d, rho: %d, newTilt: %d",thisTilt, dirn, rho, getTiltFromCart(rho));
+//    uartPrint(debugMsg);
+   _delay_ms(1000);
    return getTiltFromCart(rho);
 }
 void getCart(int p, int t, int thisres[2]) {
@@ -1424,7 +1450,7 @@ void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as
 void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
     // This GetPerimter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
-    // is intended to reflect an approximately constant Cartesian Y axis offset.
+    // is intended to reflect an approximately constant Cartesian tilt axis offset.
     uint8_t i, j = 0;
     // float Scale = 50.0;
     int nextTilt;
@@ -1433,33 +1459,51 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     uint8_t zn_1 = zn-1;
 
     for (i = 0; i < MapCount[0][zn_1] - 1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone z.
-        
         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
         Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
-
+        sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
+        uartPrint(debugMsg);
         dirn = 0;
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
 
-        if (dirn != 0) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  In that case don't fill in any extras.  (Though it may be necessary to do so.)
+        if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
+            // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
             nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
             testBit = false;
             if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
             while (testBit) { 
                 j++;
                 Perimeter[1][j] = nextTilt;
-                Perimeter[0][j] = abs(Perimeter[1][j] - Perimeter[1][j-1]) * abs(Vertices[2][i]); // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
-                Perimeter[0][j] = Perimeter[0][j-1] + ((dirn==1) ? 1 : -1) * Perimeter[0][j]; // Add delta x to x(i)
-                sprintf(debugMsg,"(x,y): (%d, %d) for (i, j):(%d,%d)",Perimeter[0][j], Perimeter[1][j], i, j);
+                // if (Vertices[0][i]==Vertices[0][i+1]){ //Tilt only case - this needs no separate attention as Vertices[2][i] = 0 in such cases which is fine.
+                //     Perimeter[0][j] = Vertices[0][i];//Pan value doesn't change.
+                // } else {
+                Perimeter[0][j] = (Perimeter[1][j] - Vertices[1][i]) * Vertices[2][i]; // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
+                Perimeter[0][j] = Vertices[0][i] + Perimeter[0][j]/10; // Add delta x to x(i)
+                // }
+                // Perimeter[0][j] = Perimeter[0][j-1] + ((dirn==1) ? 1 : -1) * Perimeter[0][j]/10; // Add delta x to x(i)
+                // sprintf(debugMsg,"P1j:%d, P1j_1 %d, V0i %d,V1i %d, V2i %d, dirn %d, nt %d",Perimeter[1][j], Perimeter[1][j-1], Vertices[0][i], Vertices[1][i], Vertices[2][i],dirn,nextTilt);
+                // uartPrint(debugMsg);
+                sprintf(debugMsg,"(x,y):(%d, %d) (i, j):(%d,%d)",Perimeter[0][j], Perimeter[1][j], i, j);
                 uartPrint(debugMsg);
                 nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
-        }
+        } else { //The fixed tilt, pan only case.
+            int nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/FIXED_PAN_DIFF; 
+            for (uint8_t a = 1; a<=nbrPts; a++){
+                j++;
+                Perimeter[0][j] = Vertices[0][i] + FIXED_PAN_DIFF * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
+                Perimeter[1][j] = Vertices[1][i];
+                sprintf(debugMsg,"(x,y):(%d, %d) (i, j):(%d,%d)",Perimeter[0][j], Perimeter[1][j], i, j);
+                uartPrint(debugMsg);
+            }   
+        } 
         j++; //Increment j between segments so that intermediate points in one segment don't write over those in the next.
     }
     NbrPerimeterPts = j - 1;
 }
+
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
 void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
     int c1[2], c2[2]; //The cartesian end points.

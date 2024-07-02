@@ -1335,7 +1335,7 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
         }
         sprintf(debugMsg,"MapIndex: %d zone: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
         uartPrint(debugMsg);
-        _delay_ms(100);
+        // _delay_ms(100);
         Prev_i = i;
     }
 }
@@ -1451,7 +1451,7 @@ int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a
 
 void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
     // Using snprintf for safer string formatting and concatenation
-    snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) (i, j):(%d,%d)", prefix, a, b, c, d);
+    snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
     // _delay_ms(100);
 }
@@ -1459,14 +1459,14 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
     // is intended to reflect an approximately constant Cartesian tilt axis offset.
-    uint8_t i, j = 0;
-    int nextTilt = 0;
+    uint8_t j = 0;
+    int nextTilt = 0, lastTilt = 0; 
     bool testBit = false;
     int nbrPts =0;
     uint8_t dirn = 0;
     uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
 
-    for (i = 0; i < MapCount[0][zn_1] - 1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone z.
+    for (uint8_t i = 0; i < MapCount[0][zn_1] - 1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone z.
         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
         Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
         // sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
@@ -1474,20 +1474,26 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         dirn = 0;
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
-        printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-        printPerimeterStuff("P0j, P1j", Perimeter[0][j], Perimeter[1][j], i , j);
+        // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
+        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
+            
             nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
             testBit = false;
             if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
             while (testBit) { 
                 j++;
+                if(j>=MAX_NBR_PERIMETER_PTS) break;
                 Perimeter[1][j] = nextTilt;
                 Perimeter[0][j] = (Perimeter[1][j] - Vertices[1][i]) * Vertices[2][i]; // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
                 Perimeter[0][j] = Vertices[0][i] + Perimeter[0][j]/10; // Add delta x to x(i)
+                lastTilt = nextTilt;
                 nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
-                printPerimeterStuff("P0j, P1j", Perimeter[0][j], Perimeter[1][j], i , j);
+                if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
+                    nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
+                }
+                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
         } else { //The fixed tilt, pan only case.
@@ -1501,14 +1507,22 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
             }
             for (uint8_t a = 1; a<=nbrPts; a++){
                 j++;
+                if(j>=MAX_NBR_PERIMETER_PTS) break;
                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
                 Perimeter[1][j] = Vertices[1][i];
-                printPerimeterStuff("P0j, P1j", Perimeter[0][j], Perimeter[1][j], i , j);
+                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
             }   
         }
-        j++; //Increment j between segments so that intermediate points in one segment don't write over those in the next.
+        // j++; //Don't need last point repeated in perimeter (though it is necessary in the set of vertices).
+        // Perimeter[0][j] = Vertices[0][i+1]; //Set the last vertex (the repeated first one) to another dense perimeter point so that the perimeter closes.
+        // Perimeter[1][j] = Vertices[1][i+1]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
+        j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
+        if(j>=MAX_NBR_PERIMETER_PTS) break;
     }
+        
     NbrPerimeterPts = j - 1; //Subtract last increment (which is nevertheless necessary so that next segment starts right)
+    sprintf(debugMsg,"NbrPerimeterPts %d",NbrPerimeterPts);
+    uartPrint(debugMsg);
 }
 
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
@@ -1762,7 +1776,7 @@ void CalcSpeedZone() {
         if (BT_ConnectedFlag == 1) {            
             printToBT(16,Result);
             // printf("<16:%x>", Result);
-            _delay_ms(50);
+            // _delay_ms(50);
         }
         CurrentSpeedZone = Result;
     }
@@ -1871,17 +1885,15 @@ void RunSweep(uint8_t zn) {
 
     LoadZoneMap(zn);
     GetPerimeter(zn);
-    NbrPts = 30;//
     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
-        NbrPts = NbrPts + NbrPerimeterPts;
-            for (uint8_t Index = 1; Index <= NbrPts; Index++) {
+        for (uint8_t Index = 0; Index < NbrPerimeterPts + NBR_RND_PTS; Index++) {
             // Store present point to use in interpolation
             last[0] = X;
             last[1] = Y;
             getXY(Index, PatType, zn);
             nxt[0] = X;
             nxt[1] = Y;
-            sprintf(debugMsg,"x0 %d,y0 %d,x1 %d,y1 %d",last[0],last[1],nxt[0],nxt[1]);
+            sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
             uartPrint(debugMsg);
             CalcSpeedZone();
             DSS_preload = CalcSpeed();
@@ -1895,20 +1907,22 @@ void RunSweep(uint8_t zn) {
                 CmdLaserOnFlag = 1;
             }
 
-            nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
-            for (i = 0; i <= nbrMidPts; i++) {
-                if (nbrMidPts > 0) {
-                    if (i == nbrMidPts) {
-                        X = nxt[0];
-                        Y = nxt[1];
-                    } else {
-                        CartesianInterpolate(last,nxt,i, nbrMidPts, res);
-                        getPolars(res[1], res[2], res);  //Pass res as input 
-                        X = res[1];
-                        Y = res[2];
-                    }
-                }
+            // nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
+            // for (i = 0; i <= nbrMidPts; i++) {
+                // if (nbrMidPts > 0) {
+                //     if (i == nbrMidPts) {
+                //         X = nxt[0];
+                //         Y = nxt[1];
+                //     } else {
+                //         CartesianInterpolate(last,nxt,i, nbrMidPts, res);
+                //         getPolars(res[1], res[2], res);  //Pass res as input 
+                //         X = res[1];
+                //         Y = res[2];
+                //     }
+                // }
                 ProcessCoordinates();
+                // sprintf(debugMsg,"X: %d, Y: %d, Index: %d", X, Y, Index);
+                // uartPrint(debugMsg);
 
                 SteppingStatus = 1;
                 StartTimer1();
@@ -1921,7 +1935,7 @@ void RunSweep(uint8_t zn) {
                         SteppingStatus = 0;
                         return;
                     }
-                }
+                // }
             }
         }
     }
@@ -1977,7 +1991,7 @@ void PrintZoneData() {
 
 
     for (i = 0; i < 5; i++) { //Print both count of map points (MapCount[0][i]) for maps and 5 speed zones
-        if (i==0){
+        if (i == 0){
             res = MapTotalPoints;  //This needs to be assigned.
             }
             else{

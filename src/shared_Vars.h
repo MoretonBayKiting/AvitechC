@@ -43,8 +43,8 @@ extern uint8_t EramFirstTimeOn;
 extern uint8_t SetupModeFlag;
 extern long LightLevel;
 extern uint8_t SendSetupDataFlag;
-extern uint16_t EramAccelTripPoint;
-extern uint16_t AccelTripPoint;
+extern int EramAccelTripPoint;
+extern int AccelTripPoint;
 extern uint8_t EramOperationMode;
 extern uint8_t OperationMode;
 extern uint8_t EramSpeedZone[]; //Leave out size?

@@ -38,6 +38,8 @@
 #define FIXED_PAN_DIFF 200//Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50//Steps between dense perimeter points on tilt only (ie constant pan) boundary segment
 #define DEF_SLOPE 30000// Extreme number for slope (inverse) when tilt values are close.
+#define X_MAX_COUNT 16000 //Maximum X count. About 4 turns of the head from 0 in +ve direction
+#define MAX_PAN_DIST 30 // 20240702 Approximate maximum panning distance between dense perimeter points 
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
 #define DEF_MAX_LASER_POWER 120

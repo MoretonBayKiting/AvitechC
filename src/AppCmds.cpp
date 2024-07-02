@@ -4,6 +4,8 @@
 #include "AppCmds.h"
 #include <util/delay.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 // uint8_t Command;
 // uint16_t Instruction;
 
@@ -170,7 +172,8 @@ void Cmd9() {
         uartPrint("Error: MapPointNumber out of range!");
         return; // Early return to prevent out-of-bounds access
     }
-    ZoneY = ((Instruction & 0b111100000000) <<4) | Y; //20240628. 
+    ZoneY = ((Instruction & 0b111100000000) <<4) | abs(Y); //20240628. eg <9:257. => 0b0001 0000 0001 .  This is point 1 in zone 1.  <9:518> =>  0b0010 0000 0110 would be point 6 in zone 2.
+    // Compounding with Y only works if the first byte of Y (4 bytes, first being highest) is 0 (which is where zone is encoded).
     // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);    
 
     // Debug message before EEPROM update
@@ -195,23 +198,14 @@ void Cmd9() {
 }
 
 void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
-    // uint8_t Mask;
     uint8_t A;
-    // uartPrint("C10R"); // For debugging.
-    // _delay_ms(100);
-    // sprintf(debugMsg, "C:%d,I:%d", Command, Instruction);
-    // uartPrint(debugMsg);
-    // _delay_ms(100);
-    // sprintf(debugMsg,"Entered cmd10.  Cmd, Inst, %d, %d", Command, Instruction);
-    // uartPrint(debugMsg);
     A = Instruction;
 
     if (A == 0b00000000) {   //Run mode   <10:0>
+        eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); //Setting to run mode indicates completion of setup so store MapTotalPoints.
         WarnLaserOnOnce = 1; //Enable laser warning when Run Mode button is pressed
         SetupModeFlag = 0;
         PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-        // LoadPositionMap();  //20240409    Does something else need to be used to replace this?  LoadZoneMap is called from RunSweep.
-        // LoadActiveMapZones();
     }
 
     if (A == 0b00000001) {   //Program Mode  <10:1>

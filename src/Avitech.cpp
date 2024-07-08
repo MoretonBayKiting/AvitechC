@@ -81,7 +81,9 @@ uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
 // uint16_t AppCompatibilityNo;
-uint8_t GyroAddress = 1;
+uint8_t GyroAddress; // 0x69 for Board 6.13 and later (MPU6050).  0x68 for earlier boards (MPU6000).  Set with <11:4> (0x69) and <11:8> (0x69) and store in EramGyroAddress
+//Note that these addresses are 7 bit addresses.  With r/w bits these would be 0xD2/0xD3 for 0x69 and 0xD0/0xD1 for 0x68.
+uint8_t EEMEM EramGyroAddress;
 
 //----Set up for Watchdog timer------------------
 uint8_t Wd_flag; // Read the flag first, as configuring the watchdog clears the WDRF bit in the MCUSR register
@@ -214,7 +216,7 @@ union { // Accel_Z to be used to access any of Z_accel, int or the subcomponents
 } Accel_Z;
 
 uint8_t Z_AccelFlag = 0;
-uint8_t Z_AccelFlagPrevious;
+uint8_t Z_AccelFlagPrevious = 0;
 
 union {
     int Acceltemp;
@@ -348,7 +350,7 @@ void uart_init(uint16_t ubrr) {
     // Set baud rate
     UBRR0H = (unsigned char)(ubrr>>8);
     UBRR0L = (unsigned char)ubrr;
-    // Enable receiver and transmitter and receive interrupt.
+    // Enable receiver and transmitter and receiver interrupt.
     UCSR0B = (1<<RXEN0)|(1<<TXEN0)|(1<<RXCIE0);
     // Set frame format: 8 data bits, 1 stop bit
     UCSR0C = (1<<UCSZ01)|(1<<UCSZ00);
@@ -426,12 +428,12 @@ ISR(USART0_RX_vect) {
     }
 }
 
-void processReceivedData() {
-    if (ReceivedData[CommandLength] == '\0') {
-        memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
-        uartPrint(RecdDataConst);
-    }
-}
+// void processReceivedData() {
+//     if (ReceivedData[CommandLength] == '\0') {
+//         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
+//         uartPrint(RecdDataConst);
+//     }
+// }
 
 void ProcessError(){
     if(Z_AccelFlag){
@@ -730,88 +732,7 @@ void SetLaserVoltage(uint16_t voltage) {
     }
     DAC.setValue(thisVoltage);
 }
-// void SetLaserVoltage(uint8_t voltage) {
-//     uint16_t D;
-//     uint8_t Hi;
-//     uint8_t Lo;
-//     float Lvolt;
 
-//     // if (voltage == 0 || Laser2OperateFlag == 0 || Laser2StateFlag == 0) {
-//     //     PORTE &= ~(1 << LASER2); // Turn off Laser2
-//     // } else {
-//         PORTE |= (1 << LASER2); // Turn on Laser2
-//     // }
-
-//     //Lvolt = voltage / 51.0f; // Converts a byte value to a voltage (decimal) for the laser DAC to set.  EG 255/51=5volts or 127/51=2.5volts
-//     Lvolt = 250 / 51.0f; //20240624. Overwrite Lvolt for testing. Just want to be sure it turns on.
-//     D = Lvolt / VoltPerStep; // Calculate how many steps to set the requested voltage
-//     D <<= 4; // Shift left by 4 bits
-//     Hi = D >> 8; // Get the first 8 bits MSB
-//     Lo = D & 0xFF; // Get the last 8 bits LSB
-//     sprintf(debugMsg,"voltage, D, Hi, Lo: %d, %04x, %02x, %02x", voltage, D, Hi, Lo);
-//     uartPrint(debugMsg);
-//     _delay_ms(50);
-
-
-//     // Start the I2C bus for the laser power DAC.
-//     if (i2c_start(MCP4725) != 0) {
-//         // Handle error (e.g., log error, set an error flag, etc.)
-//         uartPrint("i2c_start error");
-//         return; // Exit if we can't start communication
-//     }
-
-//     // Send the 1st byte
-//     if (i2c_wbyte(0xC0) != 0) {  //20240624 0xC0: 0b1100 0000.  1100 is MCP4725 device code.  LSB is R/W (R=0). A2, A1, A0 (bits 1,2,3, starting from 0) are address bytes.
-//     // Defaults for A2 and A1, set at manufacture, are 0. Assume that is the case.  A0 is set by logic state of A0 pin.  Assume (based on BASCOM) that this is tied low.
-//         uartPrint("i2c_wbyte(0xC0) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 2nd byte
-//     if (i2c_wbyte(0x40) != 0) { //0x40: 0b0100 0000. From table 6-2 of data sheet: C2:C1:C0 = 010 =>Load configuration bits and data code to the DAC Register
-//     // Ref para 6.1.2
-//         uartPrint("i2c_wbyte(0x40) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 3rd byte (MSB) 
-//     if (i2c_wbyte(Hi) != 0) { //20240624 Figure 6-2 NOT 6-1 shows that 3rd byte has 8 MSBits and 4th byte has 4LSBs + 4 con't care bits.
-//         uartPrint("i2c_wbyte(Hi) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 4th byte (LSB)
-//     if (i2c_wbyte(Lo) != 0) {
-//         uartPrint("i2c_wbyte(Lo) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Stop the I2C bus
-//     if (i2c_stop() != 0) {
-//         // Handle error if needed
-//         return; // Optional, as we're exiting the function anyway
-//     }
-
-//     if (voltage > 0 && BatteryTick > 4) {
-//         GetBatteryVoltage();
-//         BatteryTick = 0;
-//     }
-// }
-
-// void initDACMCP4725() {
-//     i2c_init(); // Initialize I2C with 400kHz bit rate
-//     if (i2c_start(MCP4725)) { // Start I2C communication and send MCP4725 address
-//         // The operation failed
-//         sprintf(debugMsg, "Operation failed ");
-//         uartPrint(debugMsg);
-//     }
-//     i2c_wbyte(0x0001); // Send data to set the default power to 0 volts in the EEPROM volt on startup
-//     i2c_stop(); // Stop I2C communication
-// }
 
 void firstOn(){
     uint8_t firstTimeOn = eeprom_read_byte(&EramFirstTimeOn);
@@ -855,61 +776,6 @@ void Audio(uint8_t pattern){
         }
     }
 }
-
-// void Audio(uint8_t pattern) { //20240624 Refactored to be non-blocking
-//     // Define the array with values for 50ms increments
-//     // Format: [on time in 50ms increments, off time in 50ms increments, repeat count]
-//     static const uint8_t audioTiming[6][3] = {
-//         {2, 2, 1},  // Pattern 1: 100ms on, 100ms off, repeat 1 time
-//         {1, 9, 2},  // Pattern 2: 50ms on, 450ms off, repeat 2 times
-//         {10, 2, 2}, // Pattern 3: 500ms on, 100ms off, repeat 2 times
-//         {1, 3, 2},  // Pattern 4: 50ms on, 150ms off, repeat 2 times
-//         {1, 1, 2},  // Pattern 5: 50ms on, 50ms off, repeat 2 times
-//         {10, 15, 4} // Pattern 6: 500ms on, 750ms off, repeat 4 times
-//     };
-
-//     static uint8_t lastCounter = 0;
-//     static uint8_t currentPattern = 0;
-//     static bool phase = false; // false: buzzer off, true: buzzer on
-//     static uint8_t repeatCounter = 0;
-//     static uint8_t phaseCounter = 0; // Tracks the duration of the current phase
-
-//     // Check if pattern has changed or it's the first run
-//     if (pattern != currentPattern) {
-//         currentPattern = pattern;
-//         phase = false; // Ensure buzzer starts off
-//         lastCounter = Counter50ms; // Reset timing
-//         repeatCounter = 0; // Reset repeat counter
-//         phaseCounter = 0; // Reset phase duration counter
-//     }
-
-//     // Calculate elapsed time since last state change
-//     uint8_t elapsed = (Counter50ms - lastCounter + 20) % 20; // Assuming Counter50ms increments every 50ms and resets every second
-
-//     // Index for accessing the timing array
-//     uint8_t index = pattern - 1; // Adjust for 0-based index
-
-//     // Check if it's time to toggle the buzzer state
-//     if ((phase && phaseCounter >= audioTiming[index][0]) || (!phase && phaseCounter >= audioTiming[index][1])) {
-//         phase = !phase; // Toggle phase
-//         lastCounter = Counter50ms; // Reset timing for next phase
-//         phaseCounter = 0; // Reset phase duration counter
-
-//         if (phase) { // If we're turning the buzzer on
-//             PORTE |= (1 << BUZZER);
-//         } else { // We're turning the buzzer off
-//             PORTE &= ~(1 << BUZZER);
-//             repeatCounter++; // Increment repeat counter after an on + off cycle
-//         }
-//     } else {
-//         phaseCounter += elapsed; // Update phase duration counter
-//     }
-
-//     // Check if all repeats are done for the current pattern
-//     if (repeatCounter >= audioTiming[index][2]) {
-//         currentPattern = 0; // Reset pattern to allow re-entry or change
-//     }
-// }
 
 void WaitAfterPowerUp() {
     if (FirstTimeLaserOn == 1) {
@@ -960,21 +826,43 @@ void GetLaserTemperature() {
         LaserTemperature = 60;
     }
 }
+// void ReadAccelerometer() {
+//     i2c_start(MPU6050_W_PIN);
+//     // i2c_wbyte(Mpu6050_w);
+//     i2c_wbyte(0x3F);  //0x3F is the high byte of the Z accelerometer register.
+//     i2c_start(MPU6050_R_PIN);
+//     // i2c_wbyte(Mpu6050_r);
+//     // Ref: https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf
+//     Accel_Z.Zh_accel = i2c_rbyte(1); // Read Z high byte (0x3F) and send ACK
+//     Accel_Z.Zl_accel = i2c_rbyte(1); // Read Z low byte (0x40) and send ACK
+//     Accel.H_acceltemp = i2c_rbyte(1); // Read Temp high byte (0x41) and send ACK
+//     Accel.L_acceltemp = i2c_rbyte(0); // Read Temp low byte (0x42) and send NACK
+//     i2c_stop();
+//     // Acceltemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;  //This may be the wrong way around .  Need to check endianness.
+//     Accel.Acceltemp = Accel.Acceltemp / 340;
+//     Accel.Acceltemp = Accel.Acceltemp + 36.53;
+// }
+
 void ReadAccelerometer() {
-    i2c_start(MPU6050_W_PIN);
-    // i2c_wbyte(Mpu6050_w);
-    i2c_wbyte(0x3F);  //0x3F is the high byte of the Z accelerometer register.
-    i2c_start(MPU6050_R_PIN);
-    // i2c_wbyte(Mpu6050_r);
-    // Ref: https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf
-    Accel_Z.Zh_accel = i2c_rbyte(1); // Read Z high byte (0x3F) and send ACK
-    Accel_Z.Zl_accel = i2c_rbyte(1); // Read Z low byte (0x40) and send ACK
-    Accel.H_acceltemp = i2c_rbyte(1); // Read Temp high byte (0x41) and send ACK
-    Accel.L_acceltemp = i2c_rbyte(0); // Read Temp low byte (0x42) and send NACK
-    i2c_stop();
-    // Acceltemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;  //This may be the wrong way around .  Need to check endianness.
-    Accel.Acceltemp = Accel.Acceltemp / 340;
-    Accel.Acceltemp = Accel.Acceltemp + 36.53;
+    static uint16_t cnt = 0;
+    cnt++;
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x3F); // 0x3F is the high byte of the Z accelerometer register
+    Wire.endTransmission(false); // false to send a restart, keeping the connection active
+    Wire.requestFrom(GyroAddress, (uint8_t)4); // Request 4 bytes: Z high, Z low, Temp high, Temp low
+    if (Wire.available() == 4) { // If 4 bytes were returned
+        Accel_Z.Zh_accel = Wire.read(); // Read Z high byte
+        Accel_Z.Zl_accel = Wire.read(); // Read Z low byte
+        Accel.H_acceltemp = Wire.read(); // Read Temp high byte
+        Accel.L_acceltemp = Wire.read(); // Read Temp low byte
+    }
+    // Convert temperature from raw values to degrees Celsius
+    int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
+    Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
+    if(!(cnt % 65000)){
+        sprintf(debugMsg,"Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+        uartPrint(debugMsg);
+    }
 }
 void DecodeAccelerometer() {
     if (OperationMode == 0) { // Field-1
@@ -986,7 +874,7 @@ void DecodeAccelerometer() {
         }
     }
 
-    // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then 
+    // Similar if onditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then 
 
     if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10) {
         Z_AccelFlag = 1;
@@ -1155,51 +1043,165 @@ void ThrottleLaser() {
     LaserPower = 200; //20240625: Don't let it go to zero (for testing)
 }
 
-void initMPU6050() {
-    i2c_init(); // initialize I2C library
+// void initMPU6050() {
+//     i2c_init(); // initialize I2C library
 
-    // turn on the internal temp reading register
-    i2c_start(MPU6050_W_PIN);
-    i2c_wbyte(0x6B);
-    i2c_wbyte(0x01);
-    i2c_stop();
-    _delay_ms(100);
+//     // turn on the internal temp reading register
+//     i2c_start(MPU6050_W_PIN);
+//     i2c_wbyte(0x6B);
+//     i2c_wbyte(0x01);
+//     i2c_stop();
+//     _delay_ms(100);
 
-    // reset signal accel path
-    i2c_start(MPU6050_W_PIN);
-    i2c_wbyte(0x68);
-    i2c_wbyte(0x03);
-    i2c_stop();
-    _delay_ms(100);
+//     // reset signal accel path
+//     i2c_start(MPU6050_W_PIN);
+//     i2c_wbyte(0x68);
+//     i2c_wbyte(0x03);
+//     i2c_stop();
+//     _delay_ms(100);
+
+//     // Set the slowest sampling rate
+//     i2c_start(MPU6050_W_PIN);
+//     i2c_wbyte(0x19);
+//     i2c_wbyte(0xFF);
+//     i2c_stop();
+
+//     // Set full scale reading to 16g's
+//     i2c_start(MPU6050_W_PIN);
+//     i2c_wbyte(0x1C);
+//     i2c_wbyte(0x18);
+//     i2c_stop();
+
+//     // Read the WHO_AM_I register
+//     i2c_start(MPU6050_W_PIN);
+//     i2c_wbyte(WHO_AM_I_MPU6050);
+//     i2c_stop();
+
+//     i2c_start(MPU6050_R_PIN);
+//     uint8_t MPU_whoami = i2c_rbyte(0);
+//     i2c_stop();
+
+//     sprintf(debugMsg, "Accel Chip %x", MPU_whoami);
+//     uartPrint(debugMsg);
+
+//     sprintf(debugMsg, "Gyro Flag: %d", GyroAddress);
+//     uartPrint(debugMsg);
+// }
+
+// Define device addresses
+
+// void initMPU() {
+//     Wire.begin(); // Initialize I2C
+
+//     // Wake up the MPU
+//     Wire.beginTransmission(GyroAddress);
+//     Wire.write(0x6B); // Power management register
+//     Wire.write(0x00); // Set to zero (wakes up the MPU-6050/6000)
+//     Wire.endTransmission(true);
+//     delay(100);
+
+//     // Reset signal paths
+//     Wire.beginTransmission(GyroAddress);
+//     Wire.write(0x68); // Signal path reset register
+//     Wire.write(0x07); // Reset all signal paths
+//     Wire.endTransmission(true);
+//     delay(100);
+
+//     // Set the slowest sampling rate
+//     Wire.beginTransmission(GyroAddress);
+//     Wire.write(0x19); // Sample rate divider
+//     Wire.write(0xFF); // 255 for the slowest sample rate
+//     Wire.endTransmission(true);
+
+//     // Set full scale reading to ±16g
+//     Wire.beginTransmission(GyroAddress);
+//     Wire.write(0x1C); // Accelerometer configuration register
+//     Wire.write(0x18); // ±16g full scale
+//     Wire.endTransmission(true);
+
+//     // Read the WHO_AM_I register
+//     Wire.beginTransmission(GyroAddress);
+//     Wire.write(0x75); // WHO_AM_I register address
+//     Wire.endTransmission(false); // Restart condition
+//     Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
+//     uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
+
+//     sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI,GyroAddress);
+//     uartPrint(debugMsg);
+//     }
+
+void initMPU() {
+    Wire.begin(); // Initialize I2C
+    uartPrint("MPU 0");
+    // Wake up the MPU
+    Wire.beginTransmission(GyroAddress);
+    uartPrint("MPU 0A");
+    Wire.write(0x6B); // Power management register
+    Wire.write(0x00); // Set to zero (wakes up the MPU-6050/6000)
+    uint8_t error = Wire.endTransmission(true);
+    if (error) {
+        // sprintf(debugMsg, "Error waking MPU: %d", error);
+        uartPrint("MPU 1");
+    } else {
+        // uartPrint("MPU awake");
+    }
+    delay(100);
+
+    // Reset signal paths
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x68); // Signal path reset register
+    Wire.write(0x07); // Reset all signal paths
+    error = Wire.endTransmission(true);
+    if (error) {
+        // sprintf(debugMsg, "Error resetting signal paths: %d", error);
+        uartPrint("MPU 2");
+    } else {
+        // uartPrint("Signal paths reset");
+    }
+    delay(100);
 
     // Set the slowest sampling rate
-    i2c_start(MPU6050_W_PIN);
-    i2c_wbyte(0x19);
-    i2c_wbyte(0xFF);
-    i2c_stop();
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x19); // Sample rate divider
+    Wire.write(0xFF); // 255 for the slowest sample rate
+    error = Wire.endTransmission(true);
+    if (error) {
+        // sprintf(debugMsg, "Error setting sample rate: %d", error);
+        uartPrint("MPU 3");
+    } else {
+        // uartPrint("Sample rate set");
+    }
 
-    // Set full scale reading to 16g's
-    i2c_start(MPU6050_W_PIN);
-    i2c_wbyte(0x1C);
-    i2c_wbyte(0x18);
-    i2c_stop();
+    // Set full scale reading to ±16g
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x1C); // Accelerometer configuration register
+    Wire.write(0x18); // ±16g full scale
+    error = Wire.endTransmission(true);
+    if (error) {
+        // sprintf(debugMsg, "Error setting full scale: %d", error);
+        uartPrint("MPU 4");
+    } else {
+        // uartPrint("Full scale set");
+    }
 
     // Read the WHO_AM_I register
-    i2c_start(MPU6050_W_PIN);
-    i2c_wbyte(WHO_AM_I_MPU6050);
-    i2c_stop();
-
-    i2c_start(MPU6050_R_PIN);
-    uint8_t MPU_whoami = i2c_rbyte(0);
-    i2c_stop();
-
-    sprintf(debugMsg, "Accel Chip &H%d", MPU_whoami);
-    uartPrint(debugMsg);
-
-    sprintf(debugMsg, "Gyro Flag: %d", GyroAddress);
-    uartPrint(debugMsg);
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x75); // WHO_AM_I register address
+    error = Wire.endTransmission(false); // Restart condition
+    if (error) {
+        // sprintf(debugMsg, "Error before reading WHO_AM_I: %d", error);
+        uartPrint("MPU 5");
+    } else {
+        Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
+        if (Wire.available()) {
+            uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
+            // sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
+            // uartPrint(debugMsg);
+        } else {
+            uartPrint("WHO_AM_I read failed");
+        }
+    }
 }
-
 void StartTimer1() {
     // Set prescaler to 256 and start Timer1
     TCCR1B |= (1 << CS12);  //(1 << CS12)|(1 << CS10) for 1024 prescalar (4 times slower)
@@ -1215,28 +1217,6 @@ void StartTimer3() {
     TCCR3B |= (1 << CS30);
     OCR3A=  780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
 }
-
-// void checkTimer3(){
-//     if(true){
-//         if ((TCCR3B & ((1 << CS32) | (1 << CS31) | (1 << CS30))) == 0) {
-//             uartPrint("Timer3 is stopped");
-//         } 
-//         else {
-//             uartPrint("Timer3 is running");
-//         }
-//     }
-// }
-// void CheckTimer1(uint8_t timer1Cnt){
-//     if (false){
-//         if ((TCCR1B & ((1 << CS12) | (1 << CS11) | (1 << CS10))) == 0) {
-//             sprintf(debugMsg,"T1 stopped: %d, %d", timer1Cnt, OCR1A);
-//         } 
-//         else {
-//             sprintf(debugMsg,"T1 running: %d, %d", timer1Cnt, OCR1A);
-//         }
-//         uartPrint(debugMsg);
-//     }
-// }
 void StopTimer3() {
     // Clear all CS1 bits to stop Timer3
     TCCR3B &= ~(1 << CS32);
@@ -1249,7 +1229,6 @@ void StopTimer1() {
     TCCR1B &= ~(1 << CS11);
     TCCR1B &= ~(1 << CS10);
 }
-
 void setupTimer1() {
     TCCR1B |= (1 << WGM12);  // Configure timer 1 for CTC mode (Clear timer on compare)
     TCCR1B |= (1 << CS12); // Set up and start Timer1. 20240609: (1 << CS12) | (1 << CS10); for a prescaler of 1024. (1 << CS12); for 256.
@@ -1257,7 +1236,6 @@ void setupTimer1() {
     // With a prescalar of 256 and compare value of 100, frequency: 16MHz/256 ~ 64kHz/100 ~ 640Hz which is a period of about 1.6ms. 
     TIMSK1 |= (1 << OCIE1A);  // Enable the compare match interrupt
 }
-
 void setupTimer3() {
     TCCR3B |= (1 << WGM32);  // Configure timer for CTC mode
     TCCR3B |= (1 << CS32) | (1 << CS30);  //Bits 0 and 2 set.  TCCR: Timer/Counter Control Register.  Prescaler:1024
@@ -1268,18 +1246,6 @@ void setupTimer3() {
 
 #pragma endregion Utility functions
 #pragma region Zone functions
-// uintptr_t GetPosEepromAddress(uint8_t posIndex, uint8_t axis){
-//     // Calculate the address offset for a position coordinate
-//     if (posIndex < MAX_NBR_MAP_PTS){
-//         if (axis == 0){
-//             return (uintptr_t)&EramPositions[posIndex].EramX - (uintptr_t)&EramPositions[0];
-//         } else
-//         {
-//             return (uintptr_t)&EramPositions[posIndex].EramY - (uintptr_t)&EramPositions[0];
-//         }
-//     }
-// }
-
 uint8_t GetZone(uint8_t i) {
     uint16_t Opzone;
     if (i<=MapTotalPoints){
@@ -1333,8 +1299,8 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
                 MapCount[0][i] = MapIndex - MapCount[1][i-1] + 1;
             }
         }
-        sprintf(debugMsg,"MapIndex: %d zone: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg,"MapIndex: %d zone: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
+        // uartPrint(debugMsg);
         // _delay_ms(100);
         Prev_i = i;
     }
@@ -1351,7 +1317,7 @@ void LoadZoneMap(uint8_t zn) {
     // int temp;
 
     if (MapTotalPoints == 0) {
-        uartPrint("Zero points");
+        // uartPrint("Zero points");
         return;
     }
     else {
@@ -1367,9 +1333,9 @@ void LoadZoneMap(uint8_t zn) {
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        sprintf(debugMsg,"V MI: %d X: %d Y: %d AddX: %p AddY: %p",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],
-                                                                        (void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
-        uartPrint(debugMsg);    
+        // sprintf(debugMsg,"V MI: %d X: %d Y: %d AddX: %p AddY: %p",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],
+        //                                                                 (void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
+        // uartPrint(debugMsg);    
     }
     // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
     Vertices[0][MapIndex] = Vertices[0][0];
@@ -1383,7 +1349,7 @@ void LoadZoneMap(uint8_t zn) {
             if (abs(den)>=1) {
                 res = static_cast<float>(num)/den;
             } else {
-                uartPrint("Abs(den)<1");
+                // uartPrint("Abs(den)<1");
             }
             // float res  = ((float)((Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 ))/ ((float)(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]));
             Vertices[2][MapIndex - 1] = res;
@@ -1396,7 +1362,6 @@ void LoadZoneMap(uint8_t zn) {
         }
     }
 }
-
 int getCartFromTilt(int t) {
     float a = (float)t/STEPS_PER_RAD;
     float b = tan(a);
@@ -1448,12 +1413,11 @@ int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a
     int rho = getCartFromTilt(TiltPolar);
     return STEPS_PER_RAD*PanCart/rho;
 }
-
 void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
     // Using snprintf for safer string formatting and concatenation
     snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
-    // _delay_ms(100);
+    _delay_ms(100);
 }
 void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
@@ -1498,12 +1462,12 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
             }
         } else { //The fixed tilt, pan only case.
             int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
-            sprintf(debugMsg,"fixedPanDiff: %d, thisTilt: %d, Cart Pan: %d",fixedPanDiff, Vertices[1][i],MAX_PAN_DIST);
-            uartPrint(debugMsg);
+            // sprintf(debugMsg,"fixedPanDiff: %d, thisTilt: %d, Cart Pan: %d",fixedPanDiff, Vertices[1][i],MAX_PAN_DIST);
+            // uartPrint(debugMsg);
             if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
                 nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
-                sprintf(debugMsg,"nbrPts: %d",nbrPts);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg,"nbrPts: %d",nbrPts);
+                // uartPrint(debugMsg);
             }
             for (uint8_t a = 1; a<=nbrPts; a++){
                 j++;
@@ -1521,10 +1485,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     }
         
     NbrPerimeterPts = j - 1; //Subtract last increment (which is nevertheless necessary so that next segment starts right)
-    sprintf(debugMsg,"NbrPerimeterPts %d",NbrPerimeterPts);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"NbrPerimeterPts %d",NbrPerimeterPts);
+    // uartPrint(debugMsg);
 }
-
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
 void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
     int c1[2], c2[2]; //The cartesian end points.
@@ -1680,8 +1643,8 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
                 // sprintf(debugMsg,"MM: MM_n2, mode, C, I, axis, PEF, TEF, X, AbsX, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, SetupModeFlag, Command, Instruction, axis, PanEnableFlag, TiltEnableFlag,X, AbsX, DSS_preload, PIND);
                 // uartPrint(debugMsg);
                 // _delay_ms(30);
-                sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
+                // uartPrint(debugMsg);
                 _delay_ms(30);
             }
             MM_n++;
@@ -1737,9 +1700,8 @@ void JogMotors(bool prnt) {//
     // by 4 before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
     
     if (!(JM_n % 120000) && false) { //20240624: Use && false to disable periodic printing.
-        sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
-        // sprintf(debugMsg,"JM: mode, axis, PEF, pos, X, AbsX, dir, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %#04x",SetupModeFlag, axis, PanEnableFlag, pos, X, AbsX, dir, DSS_preload, PIND);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
+        // uartPrint(debugMsg);
     }
     JM_n++;
 
@@ -1893,7 +1855,8 @@ void RunSweep(uint8_t zn) {
             getXY(Index, PatType, zn);
             nxt[0] = X;
             nxt[1] = Y;
-            sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
+            // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
+            sprintf(debugMsg,"RN %d, x0 %d,y0 %d",AltRndNbr, last[0],last[1]);
             uartPrint(debugMsg);
             CalcSpeedZone();
             DSS_preload = CalcSpeed();
@@ -2171,6 +2134,78 @@ void DoHouseKeeping() {
     }
 }
 
+void setup() {
+    sei();  // Enable global interrupts.
+    uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro
+    _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
+    setupTimer1();
+    setupTimer3();
+    setupPeripherals();
+    setupWatchdog();
+    OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets
+    Wd_byte = MCUSR; // Read the Watchdog flag
+    if (Wd_byte & (1 << WDRF)) { // there was a WD overflow. This flag is cleared of a Watchdog Config
+        Wd_flag = 1; // store the flag
+    }
+    // uartPrint("Before wire.begin();");
+    Wire.begin(); // Initialize I2C
+    if (!DAC.begin()){
+        uartPrint("DAC.begin() returned false.");
+        return;
+    };  // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
+    // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
+    // uartPrint("Before firstOn();");
+    firstOn();  //Load defaults to EEPROM if first time on.
+    // uartPrint("Before ReadEramVars();");
+    ReadEramVars();  //Reads user data from EEPROM to RAM.
+    // initMPU();
+    PORTE |= (1 << FAN); //Turn fan on.
+    for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
+        GetBatteryVoltage();   //Load up the battery voltage array
+    } 
+    SetLaserVoltage(0);                                     //Lasers switched off
+    PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
+    PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
+    Audio(1); //TJ 20240615 Had been using Audio(6)
+    HomeAxis();
+}
+int main() {
+    // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
+    // static uint16_t main_n;
+    static bool doPrint = true;
+    // static bool firstRun = true; //Needs to be or set passed by cmd10();
+    setup();
+    while(1) {        
+        doPrint = false;
+        if (SetupModeFlag == 1) {
+           JogMotors(doPrint); 
+        }
+        if (SetupModeFlag == 0) {  //In run mode
+            // if (firstRun) {
+                eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
+                getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
+                // firstRun = false;
+            // }
+            if (MapTotalPoints > 0){
+                // uartPrint("MTP>0");
+                for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
+                    sprintf(debugMsg,"In runsweep Zn-1: %d",Zn-1);
+                    uartPrint(debugMsg);
+                    if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
+                        // uartPrint("Entering RunSweep");
+                        RunSweep(Zn-1); //
+                    }
+                }
+            }else{}
+        }
+        if (SetupModeFlag == 2) {
+            CalibrateLightSensor();
+        }
+        DoHouseKeeping();
+    } 
+    return 0;
+}
+
 // void testI2C() {
 //     byte error, address;
 //     int nDevices;
@@ -2197,44 +2232,6 @@ void DoHouseKeeping() {
 
 //   delay(5000); // wait 5 seconds for the next scan
 // }
-
-void setup() {
-    sei();  // Enable global interrupts.
-    uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro
-    _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
-    setupTimer1();
-    setupTimer3();
-    setupPeripherals();
-    setupWatchdog();
-    OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets
-    Wd_byte = MCUSR; // Read the Watchdog flag
-    if (Wd_byte & (1 << WDRF)) { // there was a WD overflow. This flag is cleared of a Watchdog Config
-        Wd_flag = 1; // store the flag
-    }
-    // uartPrint("Before wire.begin();");
-    Wire.begin(); // Initialize I2C
-    // uartPrint("Before DAC.begin();");
-    // DAC.begin();
-    if (!DAC.begin()){
-        uartPrint("DAC.begin() returned false.");
-        return;
-    };  // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
-    // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    // uartPrint("Before firstOn();");
-    firstOn();  //Load defaults to EEPROM if first time on.
-    // uartPrint("Before ReadEramVars();");
-    ReadEramVars();  //Reads user data from EEPROM to RAM.
-    PORTE |= (1 << FAN); //Turn fan on.
-    for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
-        GetBatteryVoltage();   //Load up the battery voltage array
-    } 
-    SetLaserVoltage(0);                                     //Lasers switched off
-    PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
-    PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
-    Audio(1); //TJ 20240615 Had been using Audio(6)
-    HomeAxis();
-}
-
 // void testLaserPower(){
 //     // Use LaserTick as timer for testing.
 //     static uint8_t lastLaserTick = 0;
@@ -2263,39 +2260,175 @@ void setup() {
 //         }
 //     }
 // }
-int main() {
-    // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
-    static uint16_t main_n;
-    static bool doPrint = true;
-    // static bool firstRun = true; //Needs to be or set passed by cmd10();
-    setup();
-    while(1) {        
-        doPrint = false;
-        if (SetupModeFlag == 1) {
-           JogMotors(doPrint); 
-        }
-        if (SetupModeFlag == 0) {  //In run mode
-            // if (firstRun) {
-                eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
-                getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
-                // firstRun = false;
-            // }
-            if (MapTotalPoints > 0){
-                // uartPrint("MTP>0");
-                for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                    // sprintf(debugMsg,"In runsweep Zn-1: %d",Zn-1);
-                    // uartPrint(debugMsg);
-                    if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
-                        // uartPrint("Entering RunSweep");
-                        RunSweep(Zn-1); //
-                    }
-                }
-            }else{}
-        }
-        if (SetupModeFlag == 2) {
-            CalibrateLightSensor();
-        }
-        DoHouseKeeping();
-    } 
-    return 0;
-}
+
+// void SetLaserVoltage(uint8_t voltage) {
+//     uint16_t D;
+//     uint8_t Hi;
+//     uint8_t Lo;
+//     float Lvolt;
+
+//     // if (voltage == 0 || Laser2OperateFlag == 0 || Laser2StateFlag == 0) {
+//     //     PORTE &= ~(1 << LASER2); // Turn off Laser2
+//     // } else {
+//         PORTE |= (1 << LASER2); // Turn on Laser2
+//     // }
+
+//     //Lvolt = voltage / 51.0f; // Converts a byte value to a voltage (decimal) for the laser DAC to set.  EG 255/51=5volts or 127/51=2.5volts
+//     Lvolt = 250 / 51.0f; //20240624. Overwrite Lvolt for testing. Just want to be sure it turns on.
+//     D = Lvolt / VoltPerStep; // Calculate how many steps to set the requested voltage
+//     D <<= 4; // Shift left by 4 bits
+//     Hi = D >> 8; // Get the first 8 bits MSB
+//     Lo = D & 0xFF; // Get the last 8 bits LSB
+//     sprintf(debugMsg,"voltage, D, Hi, Lo: %d, %04x, %02x, %02x", voltage, D, Hi, Lo);
+//     uartPrint(debugMsg);
+//     _delay_ms(50);
+
+
+//     // Start the I2C bus for the laser power DAC.
+//     if (i2c_start(MCP4725) != 0) {
+//         // Handle error (e.g., log error, set an error flag, etc.)
+//         uartPrint("i2c_start error");
+//         return; // Exit if we can't start communication
+//     }
+
+//     // Send the 1st byte
+//     if (i2c_wbyte(0xC0) != 0) {  //20240624 0xC0: 0b1100 0000.  1100 is MCP4725 device code.  LSB is R/W (R=0). A2, A1, A0 (bits 1,2,3, starting from 0) are address bytes.
+//     // Defaults for A2 and A1, set at manufacture, are 0. Assume that is the case.  A0 is set by logic state of A0 pin.  Assume (based on BASCOM) that this is tied low.
+//         uartPrint("i2c_wbyte(0xC0) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 2nd byte
+//     if (i2c_wbyte(0x40) != 0) { //0x40: 0b0100 0000. From table 6-2 of data sheet: C2:C1:C0 = 010 =>Load configuration bits and data code to the DAC Register
+//     // Ref para 6.1.2
+//         uartPrint("i2c_wbyte(0x40) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 3rd byte (MSB) 
+//     if (i2c_wbyte(Hi) != 0) { //20240624 Figure 6-2 NOT 6-1 shows that 3rd byte has 8 MSBits and 4th byte has 4LSBs + 4 con't care bits.
+//         uartPrint("i2c_wbyte(Hi) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Send the 4th byte (LSB)
+//     if (i2c_wbyte(Lo) != 0) {
+//         uartPrint("i2c_wbyte(Lo) error");
+//         i2c_stop(); // Attempt to properly close the I2C communication
+//         return; // Exit after error
+//     }
+
+//     // Stop the I2C bus
+//     if (i2c_stop() != 0) {
+//         // Handle error if needed
+//         return; // Optional, as we're exiting the function anyway
+//     }
+
+//     if (voltage > 0 && BatteryTick > 4) {
+//         GetBatteryVoltage();
+//         BatteryTick = 0;
+//     }
+// }
+
+// void initDACMCP4725() {
+//     i2c_init(); // Initialize I2C with 400kHz bit rate
+//     if (i2c_start(MCP4725)) { // Start I2C communication and send MCP4725 address
+//         // The operation failed
+//         sprintf(debugMsg, "Operation failed ");
+//         uartPrint(debugMsg);
+//     }
+//     i2c_wbyte(0x0001); // Send data to set the default power to 0 volts in the EEPROM volt on startup
+//     i2c_stop(); // Stop I2C communication
+// }
+
+// void Audio(uint8_t pattern) { //20240624 Refactored to be non-blocking
+//     // Define the array with values for 50ms increments
+//     // Format: [on time in 50ms increments, off time in 50ms increments, repeat count]
+//     static const uint8_t audioTiming[6][3] = {
+//         {2, 2, 1},  // Pattern 1: 100ms on, 100ms off, repeat 1 time
+//         {1, 9, 2},  // Pattern 2: 50ms on, 450ms off, repeat 2 times
+//         {10, 2, 2}, // Pattern 3: 500ms on, 100ms off, repeat 2 times
+//         {1, 3, 2},  // Pattern 4: 50ms on, 150ms off, repeat 2 times
+//         {1, 1, 2},  // Pattern 5: 50ms on, 50ms off, repeat 2 times
+//         {10, 15, 4} // Pattern 6: 500ms on, 750ms off, repeat 4 times
+//     };
+
+//     static uint8_t lastCounter = 0;
+//     static uint8_t currentPattern = 0;
+//     static bool phase = false; // false: buzzer off, true: buzzer on
+//     static uint8_t repeatCounter = 0;
+//     static uint8_t phaseCounter = 0; // Tracks the duration of the current phase
+
+//     // Check if pattern has changed or it's the first run
+//     if (pattern != currentPattern) {
+//         currentPattern = pattern;
+//         phase = false; // Ensure buzzer starts off
+//         lastCounter = Counter50ms; // Reset timing
+//         repeatCounter = 0; // Reset repeat counter
+//         phaseCounter = 0; // Reset phase duration counter
+//     }
+
+//     // Calculate elapsed time since last state change
+//     uint8_t elapsed = (Counter50ms - lastCounter + 20) % 20; // Assuming Counter50ms increments every 50ms and resets every second
+
+//     // Index for accessing the timing array
+//     uint8_t index = pattern - 1; // Adjust for 0-based index
+
+//     // Check if it's time to toggle the buzzer state
+//     if ((phase && phaseCounter >= audioTiming[index][0]) || (!phase && phaseCounter >= audioTiming[index][1])) {
+//         phase = !phase; // Toggle phase
+//         lastCounter = Counter50ms; // Reset timing for next phase
+//         phaseCounter = 0; // Reset phase duration counter
+
+//         if (phase) { // If we're turning the buzzer on
+//             PORTE |= (1 << BUZZER);
+//         } else { // We're turning the buzzer off
+//             PORTE &= ~(1 << BUZZER);
+//             repeatCounter++; // Increment repeat counter after an on + off cycle
+//         }
+//     } else {
+//         phaseCounter += elapsed; // Update phase duration counter
+//     }
+
+//     // Check if all repeats are done for the current pattern
+//     if (repeatCounter >= audioTiming[index][2]) {
+//         currentPattern = 0; // Reset pattern to allow re-entry or change
+//     }
+// }
+
+// void checkTimer3(){
+//     if(true){
+//         if ((TCCR3B & ((1 << CS32) | (1 << CS31) | (1 << CS30))) == 0) {
+//             uartPrint("Timer3 is stopped");
+//         } 
+//         else {
+//             uartPrint("Timer3 is running");
+//         }
+//     }
+// }
+// void CheckTimer1(uint8_t timer1Cnt){
+//     if (false){
+//         if ((TCCR1B & ((1 << CS12) | (1 << CS11) | (1 << CS10))) == 0) {
+//             sprintf(debugMsg,"T1 stopped: %d, %d", timer1Cnt, OCR1A);
+//         } 
+//         else {
+//             sprintf(debugMsg,"T1 running: %d, %d", timer1Cnt, OCR1A);
+//         }
+//         uartPrint(debugMsg);
+//     }
+// }
+
+// uintptr_t GetPosEepromAddress(uint8_t posIndex, uint8_t axis){
+//     // Calculate the address offset for a position coordinate
+//     if (posIndex < MAX_NBR_MAP_PTS){
+//         if (axis == 0){
+//             return (uintptr_t)&EramPositions[posIndex].EramX - (uintptr_t)&EramPositions[0];
+//         } else
+//         {
+//             return (uintptr_t)&EramPositions[posIndex].EramY - (uintptr_t)&EramPositions[0];
+//         }
+//     }
+// }

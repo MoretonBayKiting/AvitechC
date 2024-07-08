@@ -69,6 +69,7 @@ extern uint8_t FactoryLightTripLevel;
 extern float VoltPerStep;
 extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
+extern uint8_t EEMEM EramGyroAddress;
 
 extern uint32_t JM_n; 
 extern uint32_t MM_n;
@@ -108,6 +109,7 @@ void printToBT(uint8_t cmd, uint16_t inst);
 void StopTimer1();
 void StopTimer3();
 void StartTimer3();
+void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue); 
 #endif // SHARED_VARS_H

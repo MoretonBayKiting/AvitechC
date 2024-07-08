@@ -251,7 +251,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
 void Cmd11() {
     // Process the Send Diagnostic Data register
     if (Instruction == 0b00000001) {
-        SendDataFlag ^= 1;  //Toggle vale of SendDataFlag
+        SendDataFlag ^= 1;  //Toggle value of SendDataFlag
         SendSetupDataFlag = 0;
         Audio(1);
     }
@@ -261,6 +261,22 @@ void Cmd11() {
         eeprom_update_byte(&EramFirstTimeOn, 255);
         Audio(1);
     }
+
+    if (Instruction == 0b00000100) { // Set GyroAddress to true
+        eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
+        GyroAddress = MPU6050_ADDRESS;
+        initMPU();
+        Audio(1);
+    }
+
+    if (Instruction == 0b00001000) { // Set GyroAddress to false
+        eeprom_update_byte(&EramGyroAddress, MPU6000_ADDRESS);
+        GyroAddress = MPU6000_ADDRESS;
+        initMPU();
+        Audio(1);
+    }
+    sprintf(debugMsg,"AppCmds.Gyro address:  %p value: %02x",(void*)&EramGyroAddress, GyroAddress);  
+    uartPrint(debugMsg);  
 }
 
 void Cmd12() {

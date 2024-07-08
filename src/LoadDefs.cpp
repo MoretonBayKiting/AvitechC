@@ -32,6 +32,7 @@ void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if the
     eeprom_update_byte(&EramUserLightTripLevel, DEF_USER_LIGHT_TRIP_LEVEL);
     eeprom_update_byte(&EramFactoryLightTripLevel, DEF_FACTORY_LIGHT_TRIP_LEVEL);
     eeprom_update_byte(&EramLightTriggerOperation, DEF_LIGHT_TRIGGER_OPERATION);
+    eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
 
     // // Write a few EEPROM addresses to serial for testing.
     // sprintf(debugMsg, "EramUserLaserPower: %04x", (uint16_t)&EramUserLaserPower); uartPrint(debugMsg);
@@ -55,9 +56,11 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
     Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints); 
-    sprintf(debugMsg,"MapTotalPonts address:  %p",(void*)&EramMapTotalPoints);
+    
+    sprintf(debugMsg,"MapTotalPoints address:  %p value: %d",(void*)&EramMapTotalPoints, MapTotalPoints);  
     uartPrint(debugMsg);  
-    sprintf(debugMsg,"MapTotalPonts: %d",MapTotalPoints);
+    GyroAddress = eeprom_read_byte(&EramGyroAddress); 
+    sprintf(debugMsg,"Gyro address:  %p value: %02x",(void*)&EramGyroAddress, GyroAddress);  
     uartPrint(debugMsg);  
     for(int i = 0; i < 5; i++) {
         SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);

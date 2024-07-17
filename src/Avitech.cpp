@@ -81,7 +81,7 @@ uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
 // uint16_t AppCompatibilityNo;
-uint8_t GyroAddress; // 0x69 for Board 6.13 and later (MPU6050).  0x68 for earlier boards (MPU6000).  Set with <11:4> (0x69) and <11:8> (0x69) and store in EramGyroAddress
+uint8_t GyroAddress = MPU6000_ADDRESS; // 0x69 for Board 6.13 and later (MPU6050).  0x68 for earlier boards (MPU6000).  Set with <11:4> (0x69) and <11:8> (0x69) and store in EramGyroAddress
 //Note that these addresses are 7 bit addresses.  With r/w bits these would be 0xD2/0xD3 for 0x69 and 0xD0/0xD1 for 0x68.
 uint8_t EEMEM EramGyroAddress;
 
@@ -99,13 +99,9 @@ uint8_t TiltEnableFlag; // Y enable axis flag when jogging mode
 uint8_t TiltSpeed; // Y stepping speed flag... 1=fast 0=slow
 
 //---------Laser Variables------------------------
-// uint8_t EramUserLaserPower[3]; // Laser Power that the user sets up
-// uint8_t DefaultEramUserLaserPower;
 uint8_t UserLaserPower;
 uint8_t EEMEM EramUserLaserPower;
 
-// uint8_t EramMaxLaserPower[3]; // Store Eram laser operating power setting
-// uint8_t DefaulteramMaxLaserPower;
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
 uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver
@@ -115,9 +111,9 @@ float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro
 
 uint8_t LaserOverTempFlag; // Laser over temp error flag
 uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
-uint8_t CmdLaserOnFlag;
+bool CmdLaserOnFlag = false;
 
-uint8_t SetupModeFlag = 1; // Should this be set to 1 (setup mode - 0 is run mode) as default? 0 in BASCOM version.
+uint8_t SetupModeFlag = 0; // Should this be set to 1 (setup mode - 0 is run mode) as default? 0 in BASCOM version.
 
 uint8_t Laser2StateFlag; // Sets the current state if the laser 2 is working. 0=off 1=on
 
@@ -187,7 +183,7 @@ uint8_t IsHome;
 
 long Secondsfromreset;                                     // Variable to hold the reset current count
 
-uint8_t SystemFaultFlag;
+bool SystemFaultFlag;
 uint8_t Index;
 
 uint16_t EEMEM EramLaserID;
@@ -741,6 +737,8 @@ void firstOn(){
         SetLaserVoltage(0);
         // initDACMCP4725();
         uartPrint("AT+ENLOG0\r");  // Turn off logging
+        firstTimeOn = 0; //20240717: Reset first time on.  Not sure where this was done in BASCOM.
+        eeprom_update_byte(&EramFirstTimeOn, 0);
     }
 }
 
@@ -779,7 +777,7 @@ void Audio(uint8_t pattern){
 
 void WaitAfterPowerUp() {
     if (FirstTimeLaserOn == 1) {
-        _delay_ms(5);
+        _delay_ms(5); //20240717.  What's this for?
         FirstTimeLaserOn = 0;
     }
 }
@@ -826,22 +824,6 @@ void GetLaserTemperature() {
         LaserTemperature = 60;
     }
 }
-// void ReadAccelerometer() {
-//     i2c_start(MPU6050_W_PIN);
-//     // i2c_wbyte(Mpu6050_w);
-//     i2c_wbyte(0x3F);  //0x3F is the high byte of the Z accelerometer register.
-//     i2c_start(MPU6050_R_PIN);
-//     // i2c_wbyte(Mpu6050_r);
-//     // Ref: https://invensense.tdk.com/wp-content/uploads/2015/02/MPU-6000-Register-Map1.pdf
-//     Accel_Z.Zh_accel = i2c_rbyte(1); // Read Z high byte (0x3F) and send ACK
-//     Accel_Z.Zl_accel = i2c_rbyte(1); // Read Z low byte (0x40) and send ACK
-//     Accel.H_acceltemp = i2c_rbyte(1); // Read Temp high byte (0x41) and send ACK
-//     Accel.L_acceltemp = i2c_rbyte(0); // Read Temp low byte (0x42) and send NACK
-//     i2c_stop();
-//     // Acceltemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;  //This may be the wrong way around .  Need to check endianness.
-//     Accel.Acceltemp = Accel.Acceltemp / 340;
-//     Accel.Acceltemp = Accel.Acceltemp + 36.53;
-// }
 
 void ReadAccelerometer() {
     static uint16_t cnt = 0;
@@ -859,7 +841,7 @@ void ReadAccelerometer() {
     // Convert temperature from raw values to degrees Celsius
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
-    if(!(cnt % 65000)){
+    if(!(cnt % 30000)){
         sprintf(debugMsg,"Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
         uartPrint(debugMsg);
     }
@@ -868,7 +850,7 @@ void DecodeAccelerometer() {
     if (OperationMode == 0) { // Field-1
         if (Accel_Z.Z_accel < AccelTripPoint) {
             Z_AccelFlag = 1;
-            SystemFaultFlag = 1;
+            SystemFaultFlag = true;
         } else {
             Z_AccelFlag = 0;
         }
@@ -878,7 +860,7 @@ void DecodeAccelerometer() {
 
     if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10) {
         Z_AccelFlag = 1;
-        SystemFaultFlag = 1;
+        SystemFaultFlag = true;
         return;
     }
 
@@ -1035,141 +1017,71 @@ void ThrottleLaser() {
     // if (LaserTemperature > 55) {
     //     LaserPower = 0;
     //     LaserOverTempFlag = 1;
-    //     SystemFaultFlag = 1;
+    //     SystemFaultFlag = true;
     // } else {
     //     LaserOverTempFlag = 0;
-    //     SystemFaultFlag = 0;
+    //     SystemFaultFlag = false;
     // }
     LaserPower = 200; //20240625: Don't let it go to zero (for testing)
 }
 
-// void initMPU6050() {
-//     i2c_init(); // initialize I2C library
-
-//     // turn on the internal temp reading register
-//     i2c_start(MPU6050_W_PIN);
-//     i2c_wbyte(0x6B);
-//     i2c_wbyte(0x01);
-//     i2c_stop();
-//     _delay_ms(100);
-
-//     // reset signal accel path
-//     i2c_start(MPU6050_W_PIN);
-//     i2c_wbyte(0x68);
-//     i2c_wbyte(0x03);
-//     i2c_stop();
-//     _delay_ms(100);
-
-//     // Set the slowest sampling rate
-//     i2c_start(MPU6050_W_PIN);
-//     i2c_wbyte(0x19);
-//     i2c_wbyte(0xFF);
-//     i2c_stop();
-
-//     // Set full scale reading to 16g's
-//     i2c_start(MPU6050_W_PIN);
-//     i2c_wbyte(0x1C);
-//     i2c_wbyte(0x18);
-//     i2c_stop();
-
-//     // Read the WHO_AM_I register
-//     i2c_start(MPU6050_W_PIN);
-//     i2c_wbyte(WHO_AM_I_MPU6050);
-//     i2c_stop();
-
-//     i2c_start(MPU6050_R_PIN);
-//     uint8_t MPU_whoami = i2c_rbyte(0);
-//     i2c_stop();
-
-//     sprintf(debugMsg, "Accel Chip %x", MPU_whoami);
-//     uartPrint(debugMsg);
-
-//     sprintf(debugMsg, "Gyro Flag: %d", GyroAddress);
-//     uartPrint(debugMsg);
-// }
-
-// Define device addresses
-
-// void initMPU() {
-//     Wire.begin(); // Initialize I2C
-
-//     // Wake up the MPU
-//     Wire.beginTransmission(GyroAddress);
-//     Wire.write(0x6B); // Power management register
-//     Wire.write(0x00); // Set to zero (wakes up the MPU-6050/6000)
-//     Wire.endTransmission(true);
-//     delay(100);
-
-//     // Reset signal paths
-//     Wire.beginTransmission(GyroAddress);
-//     Wire.write(0x68); // Signal path reset register
-//     Wire.write(0x07); // Reset all signal paths
-//     Wire.endTransmission(true);
-//     delay(100);
-
-//     // Set the slowest sampling rate
-//     Wire.beginTransmission(GyroAddress);
-//     Wire.write(0x19); // Sample rate divider
-//     Wire.write(0xFF); // 255 for the slowest sample rate
-//     Wire.endTransmission(true);
-
-//     // Set full scale reading to ±16g
-//     Wire.beginTransmission(GyroAddress);
-//     Wire.write(0x1C); // Accelerometer configuration register
-//     Wire.write(0x18); // ±16g full scale
-//     Wire.endTransmission(true);
-
-//     // Read the WHO_AM_I register
-//     Wire.beginTransmission(GyroAddress);
-//     Wire.write(0x75); // WHO_AM_I register address
-//     Wire.endTransmission(false); // Restart condition
-//     Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
-//     uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
-
-//     sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI,GyroAddress);
-//     uartPrint(debugMsg);
-//     }
-
 void initMPU() {
+    uint8_t error = 0;
     Wire.begin(); // Initialize I2C
-    uartPrint("MPU 0");
+    // Read the WHO_AM_I register
+    Wire.beginTransmission(GyroAddress);
+    Wire.write(0x75); // WHO_AM_I register address
+    error = Wire.endTransmission(false); // Restart condition
+    if (error) {
+        sprintf(debugMsg, "Error b4 WHO_AM_I: %d", error);
+        uartPrint(debugMsg);
+        // uartPrint("MPU 5");
+    } else {
+        Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
+        if (Wire.available()) {
+            uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
+            sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
+            uartPrint(debugMsg);
+        } else {
+            uartPrint("WHO_AM_I read failed");
+        }
+    }
     // Wake up the MPU
     Wire.beginTransmission(GyroAddress);
-    uartPrint("MPU 0A");
     Wire.write(0x6B); // Power management register
     Wire.write(0x00); // Set to zero (wakes up the MPU-6050/6000)
-    uint8_t error = Wire.endTransmission(true);
+    error = Wire.endTransmission(true);
     if (error) {
-        // sprintf(debugMsg, "Error waking MPU: %d", error);
-        uartPrint("MPU 1");
+        sprintf(debugMsg, "Error waking MPU: %d", error);
+        uartPrint(debugMsg);
     } else {
-        // uartPrint("MPU awake");
+        uartPrint("MPU awake");
     }
-    delay(100);
-
+    _delay_ms(300);
     // Reset signal paths
     Wire.beginTransmission(GyroAddress);
     Wire.write(0x68); // Signal path reset register
-    Wire.write(0x07); // Reset all signal paths
+    Wire.write(0x03); // Reset all signal paths
     error = Wire.endTransmission(true);
     if (error) {
         // sprintf(debugMsg, "Error resetting signal paths: %d", error);
         uartPrint("MPU 2");
     } else {
-        // uartPrint("Signal paths reset");
+        uartPrint("Signal paths reset");
     }
-    delay(100);
-
+    _delay_ms(300);
     // Set the slowest sampling rate
+    
     Wire.beginTransmission(GyroAddress);
     Wire.write(0x19); // Sample rate divider
     Wire.write(0xFF); // 255 for the slowest sample rate
     error = Wire.endTransmission(true);
     if (error) {
-        // sprintf(debugMsg, "Error setting sample rate: %d", error);
-        uartPrint("MPU 3");
+        sprintf(debugMsg, "Error setting sample rate: %d", error);
+        uartPrint(debugMsg);
+        // uartPrint("MPU 3");
     } else {
-        // uartPrint("Sample rate set");
+        uartPrint("Sample rate set");
     }
 
     // Set full scale reading to ±16g
@@ -1181,25 +1093,7 @@ void initMPU() {
         // sprintf(debugMsg, "Error setting full scale: %d", error);
         uartPrint("MPU 4");
     } else {
-        // uartPrint("Full scale set");
-    }
-
-    // Read the WHO_AM_I register
-    Wire.beginTransmission(GyroAddress);
-    Wire.write(0x75); // WHO_AM_I register address
-    error = Wire.endTransmission(false); // Restart condition
-    if (error) {
-        // sprintf(debugMsg, "Error before reading WHO_AM_I: %d", error);
-        uartPrint("MPU 5");
-    } else {
-        Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
-        if (Wire.available()) {
-            uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
-            // sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
-            // uartPrint(debugMsg);
-        } else {
-            uartPrint("WHO_AM_I read failed");
-        }
+        uartPrint("Full scale set");
     }
 }
 void StartTimer1() {
@@ -1413,12 +1307,12 @@ int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a
     int rho = getCartFromTilt(TiltPolar);
     return STEPS_PER_RAD*PanCart/rho;
 }
-void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
-    // Using snprintf for safer string formatting and concatenation
-    snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
-    uartPrint(debugMsg);
-    _delay_ms(100);
-}
+// void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
+//     // Using snprintf for safer string formatting and concatenation
+//     snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+//     uartPrint(debugMsg);
+//     _delay_ms(100);
+// }
 void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
@@ -1439,7 +1333,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
         // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+        // printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
             
@@ -1457,36 +1351,27 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
                 }
-                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                // printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
         } else { //The fixed tilt, pan only case.
             int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
-            // sprintf(debugMsg,"fixedPanDiff: %d, thisTilt: %d, Cart Pan: %d",fixedPanDiff, Vertices[1][i],MAX_PAN_DIST);
-            // uartPrint(debugMsg);
             if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
                 nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
-                // sprintf(debugMsg,"nbrPts: %d",nbrPts);
-                // uartPrint(debugMsg);
             }
             for (uint8_t a = 1; a<=nbrPts; a++){
                 j++;
                 if(j>=MAX_NBR_PERIMETER_PTS) break;
                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
                 Perimeter[1][j] = Vertices[1][i];
-                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                // printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
             }   
         }
-        // j++; //Don't need last point repeated in perimeter (though it is necessary in the set of vertices).
-        // Perimeter[0][j] = Vertices[0][i+1]; //Set the last vertex (the repeated first one) to another dense perimeter point so that the perimeter closes.
-        // Perimeter[1][j] = Vertices[1][i+1]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
         if(j>=MAX_NBR_PERIMETER_PTS) break;
     }
         
     NbrPerimeterPts = j - 1; //Subtract last increment (which is nevertheless necessary so that next segment starts right)
-    // sprintf(debugMsg,"NbrPerimeterPts %d",NbrPerimeterPts);
-    // uartPrint(debugMsg);
 }
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
 void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
@@ -1674,8 +1559,11 @@ void JogMotors(bool prnt) {//
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
         if(abs(X) >= X_MAX_COUNT ) {
             X_TravelLimitFlag = 1;   
-            SystemFaultFlag = 1;
+            SystemFaultFlag = true;
             ProcessError();
+        } else {  //20240717: Both flags should be reset if there is no longer an error
+            X_TravelLimitFlag = false;       
+            SystemFaultFlag=false;
         }
     }
     if (TiltEnableFlag == 1) {
@@ -1685,14 +1573,16 @@ void JogMotors(bool prnt) {//
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
         if (Y<=0||Y>=y_maxCount){
-            Y_TravelLimitFlag = 1;
-            SystemFaultFlag=1;
+            Y_TravelLimitFlag = true;
+            SystemFaultFlag=true;
             ProcessError();
+        } else { //20240717: Both flags should be reset if there is no longer an error
+            Y_TravelLimitFlag = false;       
+            SystemFaultFlag=false;
         }
     }
 
     pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to 4 steps per cycle through main loop or 1 for slow.  Needs calibration. 20240629: Testing with 40:10.
-    // pos = pos * (dir ? -1 : 1); // 20240623 Expect this to be pos = pos * (dir ? 1 : -1);  But both directions were wrong (from app)
     pos = pos * (dir ? 1 : -1); // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
     pos += (axis == 0) ?  AbsX : AbsY; //2024620: Add an amount, pos, to AbsX.  This becomes X in MoveMotor so X - AbsX is the increment.  When that is reached, JogMotors would be called
     //  again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments AbsX (which would have 
@@ -1837,7 +1727,7 @@ void HomeAxis() {
     NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
     Audio(5);
-    CmdLaserOnFlag = 0;
+    CmdLaserOnFlag = false;
     IsHome = 1;
 }
 
@@ -1856,18 +1746,18 @@ void RunSweep(uint8_t zn) {
             nxt[0] = X;
             nxt[1] = Y;
             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
-            sprintf(debugMsg,"RN %d, x0 %d,y0 %d",AltRndNbr, last[0],last[1]);
-            uartPrint(debugMsg);
+            // sprintf(debugMsg,"RN %d, x0 %d,y0 %d",AltRndNbr, last[0],last[1]);
+            // uartPrint(debugMsg);
             CalcSpeedZone();
             DSS_preload = CalcSpeed();
 
             if (Index == 1) {
-                CmdLaserOnFlag = 0;
+                CmdLaserOnFlag = false;
                 DSS_preload = STEP_RATE_MAX;
             }
 
             if (Index == 2) {
-                CmdLaserOnFlag = 1;
+                CmdLaserOnFlag = true;
             }
 
             // nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
@@ -2027,15 +1917,9 @@ void PrintConfigData() {
 #pragma endregion Print functions
 #pragma region Mode functions
 void ProgrammingMode() {
-    // uartPrint("In ProgrammingMode");
-    // printToBT(9, 1); //20240616: Moved from end of function to beginning as test.
     SetLaserVoltage(0); // Turn off laser
-    // uartPrint("In PM>SetLaserVoltage");
     HomeAxis();
-    // uartPrint("In PM>HomeAxis");
     printToBT(9, 1);
-    // sprintf(debugMsg,"ProgrammingMode: mode, X, AbsX, Y, AbsY: %d, %d, %d, %d, %d",SetupModeFlag, X, AbsX,  Y, AbsY);
-    // uartPrint(debugMsg);
     _delay_ms(100);  
 }
 
@@ -2080,7 +1964,7 @@ void OperationModeSetup(int OperationMode) {
 void DoHouseKeeping() {
 
     CheckBlueTooth();
-    // ReadAccelerometer();
+    ReadAccelerometer();
     // DecodeAccelerometer();
 
     if (Tick > 4) {
@@ -2089,7 +1973,6 @@ void DoHouseKeeping() {
         GetLaserTemperature();
 
         if (Z_AccelFlag == 0) {
-            // uartPrint("Calling ThrottleLaser()");
             ThrottleLaser();
         }
         Tick = 0;
@@ -2118,7 +2001,7 @@ void DoHouseKeeping() {
     if (SetupModeFlag == 0) {
         IsHome = 0;
         WaitAfterPowerUp();
-        if (CmdLaserOnFlag == 1 && MapTotalPoints >= 2) {
+        if (CmdLaserOnFlag && MapTotalPoints >= 2) {
             WarnLaserOn();
             SetLaserVoltage(LaserPower);
         } else {
@@ -2136,7 +2019,7 @@ void DoHouseKeeping() {
 
 void setup() {
     sei();  // Enable global interrupts.
-    uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro
+    uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro constant
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
     setupTimer1();
     setupTimer3();
@@ -2147,18 +2030,15 @@ void setup() {
     if (Wd_byte & (1 << WDRF)) { // there was a WD overflow. This flag is cleared of a Watchdog Config
         Wd_flag = 1; // store the flag
     }
-    // uartPrint("Before wire.begin();");
     Wire.begin(); // Initialize I2C
     if (!DAC.begin()){
         uartPrint("DAC.begin() returned false.");
         return;
     };  // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    // uartPrint("Before firstOn();");
     firstOn();  //Load defaults to EEPROM if first time on.
-    // uartPrint("Before ReadEramVars();");
     ReadEramVars();  //Reads user data from EEPROM to RAM.
-    // initMPU();
+    initMPU();
     PORTE |= (1 << FAN); //Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
         GetBatteryVoltage();   //Load up the battery voltage array
@@ -2171,7 +2051,6 @@ void setup() {
 }
 int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
-    // static uint16_t main_n;
     static bool doPrint = true;
     // static bool firstRun = true; //Needs to be or set passed by cmd10();
     setup();
@@ -2196,7 +2075,7 @@ int main() {
                         RunSweep(Zn-1); //
                     }
                 }
-            }else{}
+            }else SetLaserVoltage(0); // 20240718: Standby mode
         }
         if (SetupModeFlag == 2) {
             CalibrateLightSensor();

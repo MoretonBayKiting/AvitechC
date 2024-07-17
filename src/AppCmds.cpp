@@ -258,7 +258,7 @@ void Cmd11() {
 
     // Process the full reset flag on next restart
     if (Instruction == 0b00000010) {
-        eeprom_update_byte(&EramFirstTimeOn, 255);
+        eeprom_update_byte(&EramFirstTimeOn, 0xFF);
         Audio(1);
     }
 

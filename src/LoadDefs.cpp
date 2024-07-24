@@ -12,6 +12,7 @@ uint8_t FirstTimeOn;
 // uint8_t Tick;
 
 void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if there is not already user data stored in EEPROM)
+    uartPrint("In LoadEramDefaults()");
     eeprom_update_byte(&EramUserLaserPower, DEF_USER_LASER_POWER);
     eeprom_update_byte(&EramMaxLaserPower, DEF_MAX_LASER_POWER);
     eeprom_update_byte(&EramLaser2TempTrip, DEF_LASER_2_TEMP_TRIP);
@@ -56,12 +57,20 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
     Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints); 
-    
+    // uartPrint(F("MapTotalPoints address: "));
+    // uartPrint((void*)&EramMapTotalPoints);
+    // uartPrint(F(" value: "));
+    // uartPrint(MapTotalPoints);
+    // uartPrint("\n");
+    #ifdef DEBUG
     sprintf(debugMsg,"MapTotalPoints address:  %p value: %d",(void*)&EramMapTotalPoints, MapTotalPoints);  
     uartPrint(debugMsg);  
+    #endif
     GyroAddress = eeprom_read_byte(&EramGyroAddress); 
+    #ifdef DEBUG
     sprintf(debugMsg,"Gyro address:  %p value: %02x",(void*)&EramGyroAddress, GyroAddress);  
     uartPrint(debugMsg);  
+    #endif
     for(int i = 0; i < 5; i++) {
         SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
     }

@@ -7,6 +7,9 @@
 // #define STARTUP_SPEED 100
 #define START_RAMPING_COUNT 100
 #define STEP_RATE_MAX 75
+#define STEP_RATE_MIN 200 //20240724 Arbitrary value 
+#define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
+#define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
 // #define STEP_RATE_MIN 2000
 #define HOMING_SPEED 100
 #define TILT_SLOW_STEP_RATE 1200
@@ -56,11 +59,11 @@
 #define DEF_FIRST_TIME_ON 1
 #define DEF_LASER_ID 0
 
-#define DEF_ACCEL_TRIP_POINT 600
+#define DEF_ACCEL_TRIP_POINT 2500 //600
 #define DEF_RESET_SECONDS 3600
 
-#define DEF_USER_LIGHT_TRIP_LEVEL 10
-#define DEF_FACTORY_LIGHT_TRIP_LEVEL 10
+#define DEF_USER_LIGHT_TRIP_LEVEL 32
+#define DEF_FACTORY_LIGHT_TRIP_LEVEL 32
 #define DEF_LIGHT_TRIGGER_OPERATION 1
 #define DEF_OPERATION_MODE 0
 
@@ -75,7 +78,7 @@
 // MCP4725 is DAC to control laser power.  Comms is via I2C.
 // #define LASER_W_PIN 0xD2 //This value is made up.  Needs to be found.
 #define MCP4725ADD (0x60 << 1) // I2C address of MCP4725.  This is the 7 bit address (0x60) left shifted to get the write address.
-
+#define AUDIO_DELAY 50
 #define BAUD 9600 //57600  //Baud rate for HC-05
 #define MYUBRR F_CPU/16/BAUD-1 // The formula for calculating the UBRR value is given in the AVR datasheet:
 #define DEBUG_MSG_LENGTH 120

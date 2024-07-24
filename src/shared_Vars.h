@@ -69,6 +69,7 @@ extern uint8_t FactoryLightTripLevel;
 extern float VoltPerStep;
 extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
+extern bool GyroOnFlag; 
 extern uint8_t EEMEM EramGyroAddress;
 
 extern uint32_t JM_n; 
@@ -90,7 +91,8 @@ extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 // Functions
 void GetLaserTemperature();
 void ThrottleLaser();
-void Audio(uint8_t pattern);
+void Audio2(uint8_t cnt, uint8_t OnPd,uint8_t OffPd);
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// Declaration of Audio2, overloaded, with debugInfo
 void ProcessCoordinates();
 void ProgrammingMode();
 void setupWatchdog();
@@ -105,10 +107,11 @@ void DecodeCommsData();
 void ReadEramVars();
 void LoadEramDefaults();
 void uartPrint(const char* str);
+// void uartPrintFlash(const __FlashStringHelper* message);
 void printToBT(uint8_t cmd, uint16_t inst);
 void StopTimer1();
 void StopTimer3();
-void StartTimer3();
+void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue); 

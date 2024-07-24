@@ -1,4 +1,6 @@
 #pragma region Include files
+    #include <Arduino.h>
+    // #include <type_traits>
     #include <stdio.h>
     #include <stdint.h>
     #include <unistd.h>
@@ -28,7 +30,7 @@
     // twi.h has #define TW_STATUS		(TWSR & TW_STATUS_MASK).  But TWSR, applicable for ATmega328P should be TWSR0 for ATmega328PB.
     #undef TW_STATUS
     #define TW_STATUS		(TWSR0 & TW_STATUS_MASK)
-
+// #define DEBUG
 #pragma endregion Include files
 #pragma region Variable definitions
 MCP4725 DAC(0x60);// (MCP4725ADD>>1);
@@ -61,6 +63,12 @@ char OpModeTxt[12];
 int StepOverRatio;                                // Step over ratio between Pan And tilt
 uint16_t Remainder;                                       // Used for Step Over Ratio calculation
 bool Master_dir;                                       // Which motor need to step the most X or Y
+//FstTick, OnTicks, OffTicks, AudioLength used for buzzer.
+volatile uint16_t FstTick;
+uint8_t OnTicks = 0;
+uint8_t OffTicks = 0;
+uint8_t AudioLength = 0;
+uint8_t PrevAudioLength = 0; //For testing
 uint16_t TJTick;
 uint8_t Tick;                                            // Tick flag. 2Hz update time
 uint8_t AccelTick;                                       // Tick flag. 2Hz update time
@@ -82,6 +90,7 @@ uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
 // uint16_t AppCompatibilityNo;
 uint8_t GyroAddress = MPU6000_ADDRESS; // 0x69 for Board 6.13 and later (MPU6050).  0x68 for earlier boards (MPU6000).  Set with <11:4> (0x69) and <11:8> (0x69) and store in EramGyroAddress
+bool GyroOnFlag = false; //20240722: Add to facilitate startup with different boards.
 //Note that these addresses are 7 bit addresses.  With r/w bits these would be 0xD2/0xD3 for 0x69 and 0xD0/0xD1 for 0x68.
 uint8_t EEMEM EramGyroAddress;
 
@@ -248,6 +257,10 @@ volatile uint8_t CommandLength = 0;
 void HomeAxis();
 void DoHouseKeeping();
 void StopTimer1();
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd);// Declaration of Audio2 without debugInfo
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// Declaration of Audio2, overloaded, with debugInfo
+void Audio3();
+void uartPrintFlash(const __FlashStringHelper* message);
 #pragma endregion Function Declarations
 #pragma region Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
 void setupPeripherals(){
@@ -304,6 +317,7 @@ void StartBuzzerInProgMode() {
 void TickCounter_50ms_isr() {
     Counter50ms++;
     TJTick++;
+    Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0) {
         // StartBuzzerInProgMode();
         BuzzerTick++;
@@ -353,10 +367,11 @@ void uart_init(uint16_t ubrr) {
     // Add a small delay before sending AT commands
     _delay_ms(2000);
     // Put HC-05 into AT command mode
-    uartPrint("AT\r");
+    uartPrintFlash(F("AT\r"));
     _delay_ms(1000);  // Wait for HC-05 to respond
     // Set HC-05 to master role
-    uartPrint("AT+ROLE=1\r");
+    uartPrintFlash(F("AT+ROLE=1\r"));
+    // uartPrint(F("AT+ROLE=1\r"));
     _delay_ms(1000);  // Wait for HC-05 to respond
 }
 // Serial write/read functions
@@ -364,20 +379,20 @@ void uartPutChar(char c) {
     while (!(UCSR0A & (1 << UDRE0)));  // Wait for empty transmit buffer
     UDR0 = c;  // Put data into buffer, sends the data
 }
-void uartPrint(const char* str) {
-// void uartPrint(volatile char* str) { //20240625: 
-    if (strlen(str) >= DEBUG_MSG_LENGTH) {
-        const char* errorMsg = "Error: Debug message too long\n";
-        while (*errorMsg) {
-            uartPutChar(*errorMsg++);
-        }
-    } else {
-        while (*str) {
-            uartPutChar(*str++);
-        } 
-        uartPutChar('\r');
-        uartPutChar('\n');
+void uartPrint(const char* message) {
+    while (*message) {
+        uartPutChar(*message++);
     }
+    uartPutChar('\r');
+    uartPutChar('\n');
+}
+void uartPrintFlash(const __FlashStringHelper* message) {
+    const char* p = reinterpret_cast<const char*>(message);
+    while (pgm_read_byte(p) != 0) {
+        uartPutChar(pgm_read_byte(p++));
+    }
+    // uartPutChar('\r');
+    // uartPutChar('\n');
 }
 int uartAvailable(void) {
     return (UCSR0A & (1 << RXC0));  // Return non-zero if data is available to read
@@ -386,21 +401,6 @@ char uartGetChar(void) {
     while (!(UCSR0A & (1 << RXC0)));  /* Wait for data to be received */
     return UDR0;  /* Get and return received data from buffer */
 }
-
-// ISR(USART0_RX_vect) {
-//     char c = UDR0;
-//     ReceivedData[DataCount] = c;
-//     DataCount++;
-//     if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
-//         DataCount = 0;
-//     }
-//     if (c == '\n' || c == '>') { // Set the flag when a complete command is received
-//         ReceivedData[DataCount] = '\0'; // Add null terminator
-//         DataInBufferFlag = true;
-//         CommandLength = DataCount; // Store the length of the command
-//         DataCount = 0;
-//     }
-// }
 ISR(USART0_RX_vect) {
     char c = UDR0;
     if (c == '\r' || c == '\n') {
@@ -433,15 +433,15 @@ ISR(USART0_RX_vect) {
 
 void ProcessError(){
     if(Z_AccelFlag){
-        Audio(3);
+        Audio2(2,1,1,"PEAF");
         return;
     }
     if(LaserOverTempFlag){
-        Audio(4);
+        Audio2(2,1,3,"PELas");
         return;
     }
    if(X_TravelLimitFlag || Y_TravelLimitFlag) {
-        Audio(5);
+        Audio2(2,1,1,"PETravel");
         return;
     }
 }
@@ -451,13 +451,9 @@ void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for backgrou
     if (DataInBufferFlag == true) { // We have got something
         // processReceivedData();
         char *token;
-        // uartPrint("In CheckBlueTooth() body."); // Debugging line
-        // uartPrint(ReceivedData); // Debugging line
         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
         token = strchr(RecdDataConst, '<');  // Find the start of the command
         if (token != NULL) {
-            // sprintf(debugMsg,"Token: %s\n", token);
-            // uartPrint(debugMsg);
             Command = atoi(token + 1);// Convert the command to an integer
             token = strchr(token, ':');  // Find the start of the instruction
 
@@ -466,13 +462,10 @@ void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for backgrou
                 if (end != NULL) {
                     *end = '\0'; // Replace '>' with '\0' to end the string
                     Instruction = atoi(token + 1);
-                    // _delay_ms(50); //Perhaps this should be removed.
                     DecodeCommsData();  // Process the command and instruction
                 }
             }
         }
-        // Reset the buffer and the flag
-        // memset(ReceivedData, 0, sizeof(ReceivedData));
         memset((void*)ReceivedData, 0, sizeof(ReceivedData));
         DataInBufferFlag = false;
     }
@@ -736,44 +729,103 @@ void firstOn(){
         LoadEramDefaults();
         SetLaserVoltage(0);
         // initDACMCP4725();
-        uartPrint("AT+ENLOG0\r");  // Turn off logging
+        uartPrintFlash(F("AT+ENLOG0\r"));  // Turn off logging
         firstTimeOn = 0; //20240717: Reset first time on.  Not sure where this was done in BASCOM.
         eeprom_update_byte(&EramFirstTimeOn, 0);
     }
 }
 
-void Audio(uint8_t pattern){
-    uint8_t repeatCount = 2; //2 repeats for all but pattern 1
-    uint8_t i;
-    // sprintf(debugMsg,"Audio. P:%d",pattern);
-    // uartPrint(debugMsg);
-
-    if (pattern ==1) {repeatCount = 1;}  
-    // if (pattern ==6) {repeatCount = 3;}  //20240625 Use 2 repeats
-    if (pattern ==7) {repeatCount = 5;}  
-    //20240528:  _delay_ms() takes a constant argument.  So previous strategy of passsing a parameter to it didn't work.
-    for (i = 0; i < repeatCount; i++) {
-        PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-        switch (pattern) {
-            case 1: _delay_ms(100); break;
-            case 2: _delay_ms(50); break;   // 20240624 Originally 1ms on, 100ms off, repeat 2.  Could that be heard?
-            case 3: _delay_ms(500); break;  //Initially 500.  Changed to 2500 for testing (20240601).
-            case 4: _delay_ms(50); break;
-            case 5: _delay_ms(50); break;
-            case 6: _delay_ms(500); break;
-            case 7: _delay_ms(200); break;
-        }
+// Version without debugInfo
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd) {
+    Audio2(cnt, OnPd, OffPd, nullptr); // Call the overloaded version with nullptr for debugInfo
+}
+// Overloaded version with debugInfo
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
+    OnTicks = OnPd;
+    OffTicks = OffPd;
+    AudioLength = cnt * (OnTicks + OffTicks); // Could be cnt * OnTicks + (cnt-1)*OffTicks;
+    if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
+    #ifdef DEBUG 
+    uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
+    if (debugInfo != nullptr) {
+        sprintf(debugMsg, "%d, %d, %d, %d, %d, %s \n", TJTick, FstTick, cnt, OnPd, OffPd, debugInfo);
+    } else {
+        sprintf(debugMsg, "%d, %d, %d, %d, %d \n", TJTick, FstTick, cnt, OnPd, OffPd);
+    }
+    uartPrint(debugMsg);
+    #endif
+}
+void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by Audio2().
+    static bool BuzzerOn = false;
+    if(PrevAudioLength != AudioLength){
+        PrevAudioLength = AudioLength; 
+        #ifdef DEBUG 
+        sprintf(debugMsg, "A3 %d, %d, %d, %d, %d \n", TJTick, FstTick,AudioLength, OnTicks, OffTicks);
+        uartPrint(debugMsg);
+        #endif
+    }
+    //If FstTick is not set, there's nothing to do.
+    if ((FstTick == 0) || (TJTick - FstTick >= AudioLength) || (TJTick < FstTick)) { //If the pattern has completed or TJTick has rolled over to zero, reset FstTick to zero and return.
+        FstTick = 0; 
         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
-        switch (pattern) {
-            case 2: _delay_ms(200); break;
-            case 3: _delay_ms(100); break;
-            case 4: _delay_ms(150); break;
-            case 5: _delay_ms(50); break;
-            case 6: _delay_ms(500); break;
-            case 7: _delay_ms(100); break;
+        return;
+    }
+    // if((TJTick - FstTick) % AudioLength <= OnTicks) {    
+    if((TJTick - FstTick) % (OnTicks + OffTicks) <= OnTicks) {    
+        if (!BuzzerOn) {
+            #ifdef DEBUG 
+            sprintf(debugMsg,"On %d",TJTick);
+            uartPrint(debugMsg); //Print when buzzer is turned on
+            #endif
+            BuzzerOn = true;
         }
     }
+    else {
+        if(BuzzerOn){
+            #ifdef DEBUG
+            sprintf(debugMsg,"Off %d",TJTick);
+            uartPrint(debugMsg); //Print when buzzer is turned on
+            #endif
+            BuzzerOn = false;
+        }
+    }
+
+    if (BuzzerOn) PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
+    else PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
 }
+
+// void Audio(uint8_t pattern){
+//     uint8_t repeatCount = 2; //2 repeats for all but pattern 1
+//     uint8_t i;
+//     // sprintf(debugMsg,"Audio. P:%d",pattern);
+//     // uartPrint(debugMsg);
+
+//     if (pattern ==1) {repeatCount = 1;}  
+//     // if (pattern ==6) {repeatCount = 3;}  //20240625 Use 2 repeats
+//     if (pattern ==7) {repeatCount = 5;}  
+//     //20240528:  _delay_ms() takes a constant argument.  So previous strategy of passsing a parameter to it didn't work.
+//     for (i = 0; i < repeatCount; i++) {
+//         PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
+//         switch (pattern) {
+//             case 1: _delay_ms(100); break;
+//             case 2: _delay_ms(50); break;   // 20240624 Originally 1ms on, 100ms off, repeat 2.  Could that be heard?
+//             case 3: _delay_ms(500); break;  //Initially 500.  Changed to 2500 for testing (20240601).
+//             case 4: _delay_ms(50); break;
+//             case 5: _delay_ms(50); break;
+//             case 6: _delay_ms(500); break;
+//             case 7: _delay_ms(200); break;
+//         }
+//         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
+//         switch (pattern) {
+//             case 2: _delay_ms(200); break;
+//             case 3: _delay_ms(100); break;
+//             case 4: _delay_ms(150); break;
+//             case 5: _delay_ms(50); break;
+//             case 6: _delay_ms(500); break;
+//             case 7: _delay_ms(100); break;
+//         }
+//     }
+// }
 
 void WaitAfterPowerUp() {
     if (FirstTimeLaserOn == 1) {
@@ -784,7 +836,7 @@ void WaitAfterPowerUp() {
 // Sensor interactions
 void WarnLaserOn() {
     if (WarnLaserOnOnce == 1) {
-        Audio(2);
+        Audio2(2,18,8,"WLO");
         WarnLaserOnOnce = 0;
     }
 }
@@ -794,6 +846,7 @@ void StartLaserFlickerInProgMode() {
         SetLaserVoltage(0); // Off 150ms
     } else if (LaserTick == 3) {
         SetLaserVoltage(LaserPower); // On 850ms
+        Audio2(1,1,0,"Flick");
     }    
 }
 
@@ -841,31 +894,31 @@ void ReadAccelerometer() {
     // Convert temperature from raw values to degrees Celsius
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
-    if(!(cnt % 30000)){
-        sprintf(debugMsg,"Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+    if(!(cnt % 10000)){
+        sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
         uartPrint(debugMsg);
     }
 }
 void DecodeAccelerometer() {
-    if (OperationMode == 0) { // Field-1
-        if (Accel_Z.Z_accel < AccelTripPoint) {
+    if (GyroOnFlag){
+        if (OperationMode == 0) { // Field-1
+            if (Accel_Z.Z_accel < AccelTripPoint) {
+                Z_AccelFlag = 1;
+                SystemFaultFlag = true;
+            } else {
+                Z_AccelFlag = 0;
+                SystemFaultFlag = false;
+            }
+        }
+        // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then 
+        if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10) {
             Z_AccelFlag = 1;
             SystemFaultFlag = true;
-        } else {
-            Z_AccelFlag = 0;
+            return;
         }
-    }
-
-    // Similar if onditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then 
-
-    if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10) {
-        Z_AccelFlag = 1;
-        SystemFaultFlag = true;
-        return;
-    }
-
     Z_AccelFlagPrevious = Z_AccelFlag;
     AccelTick = 0;
+    }
 }
 void ClearSerial() {
     while (UCSR0A & (1 << RXC0)) {
@@ -1033,17 +1086,21 @@ void initMPU() {
     Wire.write(0x75); // WHO_AM_I register address
     error = Wire.endTransmission(false); // Restart condition
     if (error) {
-        sprintf(debugMsg, "Error b4 WHO_AM_I: %d", error);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg, "Error b4 WHO_AM_I: %d", error);
+        uartPrintFlash(F("Error b4 WHO_AM_I: "));
+        uartPrint(error);
+        // uartPrintFlash(F("\n"));
         // uartPrint("MPU 5");
     } else {
         Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
         if (Wire.available()) {
             uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
-            sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
+            // sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
+            uartPrintFlash(F("Accel Chip & Gyro address: "));
+            sprintf(debugMsg,"%d, %02x", whoAmI, GyroAddress);
             uartPrint(debugMsg);
         } else {
-            uartPrint("WHO_AM_I read failed");
+            uartPrintFlash(F("WHO_AM_I read failed"));
         }
     }
     // Wake up the MPU
@@ -1052,10 +1109,10 @@ void initMPU() {
     Wire.write(0x00); // Set to zero (wakes up the MPU-6050/6000)
     error = Wire.endTransmission(true);
     if (error) {
-        sprintf(debugMsg, "Error waking MPU: %d", error);
-        uartPrint(debugMsg);
+        uartPrintFlash(F("Error waking MPU: "));
+        uartPrint(error);
     } else {
-        uartPrint("MPU awake");
+        uartPrintFlash(F("MPU awake \n"));
     }
     _delay_ms(300);
     // Reset signal paths
@@ -1065,9 +1122,9 @@ void initMPU() {
     error = Wire.endTransmission(true);
     if (error) {
         // sprintf(debugMsg, "Error resetting signal paths: %d", error);
-        uartPrint("MPU 2");
+        uartPrintFlash(F("MPU 2 \n"));
     } else {
-        uartPrint("Signal paths reset");
+        uartPrintFlash(F("Signal paths reset  \n"));
     }
     _delay_ms(300);
     // Set the slowest sampling rate
@@ -1077,11 +1134,11 @@ void initMPU() {
     Wire.write(0xFF); // 255 for the slowest sample rate
     error = Wire.endTransmission(true);
     if (error) {
-        sprintf(debugMsg, "Error setting sample rate: %d", error);
-        uartPrint(debugMsg);
+        uartPrintFlash(F("Error setting sample rate: \n"));
+        uartPrint(error);
         // uartPrint("MPU 3");
     } else {
-        uartPrint("Sample rate set");
+        uartPrintFlash(F("Sample rate set \n"));
     }
 
     // Set full scale reading to ±16g
@@ -1091,9 +1148,9 @@ void initMPU() {
     error = Wire.endTransmission(true);
     if (error) {
         // sprintf(debugMsg, "Error setting full scale: %d", error);
-        uartPrint("MPU 4");
+        uartPrintFlash(F("MPU 4 \n"));
     } else {
-        uartPrint("Full scale set");
+        uartPrintFlash(F("Full scale set \n"));
     }
 }
 void StartTimer1() {
@@ -1104,13 +1161,13 @@ void StartTimer1() {
     OCR1A= DSS_preload;  //20240614.
 }
 
-void StartTimer3() {
-    // Set prescaler to 256 and start Timer1
-    TCCR3B |= (1 << CS32); 
-    TCCR3B &= ~(1 << CS31);
-    TCCR3B |= (1 << CS30);
-    OCR3A=  780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
-}
+// void StartTimer3() {
+//     // Set prescaler to 256 and start Timer1
+//     TCCR3B |= (1 << CS32); 
+//     TCCR3B &= ~(1 << CS31);
+//     TCCR3B |= (1 << CS30);
+//     OCR3A=  780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
+// }
 void StopTimer3() {
     // Clear all CS1 bits to stop Timer3
     TCCR3B &= ~(1 << CS32);
@@ -1160,7 +1217,7 @@ uint8_t GetZone(uint8_t i) {
             default: return 0;
         }
     } else {
-        uartPrint("GetZone: i out or range.");
+        uartPrintFlash(F("GetZone: i out or range."));
         return 0;
     }
 }
@@ -1307,12 +1364,12 @@ int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a
     int rho = getCartFromTilt(TiltPolar);
     return STEPS_PER_RAD*PanCart/rho;
 }
-// void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
-//     // Using snprintf for safer string formatting and concatenation
-//     snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
-//     uartPrint(debugMsg);
-//     _delay_ms(100);
-// }
+void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
+    // Using snprintf for safer string formatting and concatenation
+    snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    uartPrint(debugMsg);
+    _delay_ms(100);
+}
 void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
@@ -1333,7 +1390,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
         // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-        // printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+        #ifdef DEBUG
+        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+        #endif
         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
             
@@ -1351,7 +1410,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
                 }
-                // printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                #ifdef DEBUG
+                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                #endif
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
         } else { //The fixed tilt, pan only case.
@@ -1364,7 +1425,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 if(j>=MAX_NBR_PERIMETER_PTS) break;
                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
                 Perimeter[1][j] = Vertices[1][i];
-                // printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                #ifdef DEBUG
+                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                #endif
             }   
         }
         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
@@ -1491,8 +1554,6 @@ void ProcessCoordinates() {
 
         if (Dx > Dy) {
             Master_dir = 0; // leading motor moves the most
-            // StepOverRatio = Dx / Dy; // X:Y slope .  20240620: What protection against Dy == 0?
-            // CoPilot advises that BASCOM assigns a large number for an assignment of, for example, 40/0.  C would throw an error.
             StepOverRatio = (Dy == 0) ? Dx : Dx / Dy ;
             StepCount = Dx;
         } else {
@@ -1508,14 +1569,12 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
     static uint16_t MM_n2 = 0;
     if (axis == 0) { // pan
         X = steps;
-        // Y = 0; // Why change Y?  Leave it as it is if you don't want to move it.
     } else { // tilt
-        // X = 0; // Why change X?  Leave it as it is if you don't want to move it.
         Y = steps;
     }
     ProcessCoordinates();
     // CheckTimer1(11);
-    // DSS_preload = HOMING_SPEED;
+    DSS_preload = HOMING_SPEED;
     SteppingStatus = 1;
     StartTimer1();
     if (waitUntilStop == 1) {  //So, if waitUntilStop is not 1, execution returns ?  Yes returns to HomeMotor() where there is a (blocking) {while limit switch is low} condition.
@@ -1523,14 +1582,15 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
         while (SteppingStatus == 1) {
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
             // CheckBlueTooth();  //This should not be necessary.
-            if (!(MM_n % 30000) && false) { //20240624: Use && false to disable periodic printing.
+            if (!(MM_n % 10000)){// && false) { //20240624: Use && false to disable periodic printing.
                 MM_n2++; //Use this to distinguish b/w apparently identical messages.
                 // sprintf(debugMsg,"MM: MM_n2, mode, C, I, axis, PEF, TEF, X, AbsX, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, SetupModeFlag, Command, Instruction, axis, PanEnableFlag, TiltEnableFlag,X, AbsX, DSS_preload, PIND);
                 // uartPrint(debugMsg);
                 // _delay_ms(30);
-                // sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
-                // uartPrint(debugMsg);
-                _delay_ms(30);
+                sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
+                uartPrint(debugMsg);
+                // _delay_ms(30);
+                DoHouseKeeping();
             }
             MM_n++;
         }
@@ -1560,6 +1620,7 @@ void JogMotors(bool prnt) {//
         if(abs(X) >= X_MAX_COUNT ) {
             X_TravelLimitFlag = 1;   
             SystemFaultFlag = true;
+            uartPrintFlash(F("XErr"));
             ProcessError();
         } else {  //20240717: Both flags should be reset if there is no longer an error
             X_TravelLimitFlag = false;       
@@ -1575,7 +1636,9 @@ void JogMotors(bool prnt) {//
         if (Y<=0||Y>=y_maxCount){
             Y_TravelLimitFlag = true;
             SystemFaultFlag=true;
+            uartPrintFlash(F("YErr"));
             ProcessError();
+            StopTimer1();
         } else { //20240717: Both flags should be reset if there is no longer an error
             Y_TravelLimitFlag = false;       
             SystemFaultFlag=false;
@@ -1589,11 +1652,11 @@ void JogMotors(bool prnt) {//
     // been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is 4, MoveMotor() should, given the while loop, increment AbsX 
     // by 4 before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
     
-    if (!(JM_n % 120000) && false) { //20240624: Use && false to disable periodic printing.
-        // sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
-        // uartPrint(debugMsg);
-    }
-    JM_n++;
+    // if (!(JM_n % 120000) && false) { //20240624: Use && false to disable periodic printing.
+    //     // sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
+    //     // uartPrint(debugMsg);
+    // }
+    // JM_n++;
 
     if (PanEnableFlag == 0 && TiltEnableFlag == 0) {  // If both pan and tilt are disabled, stop the motors.
         StopSystem();
@@ -1604,52 +1667,61 @@ void JogMotors(bool prnt) {//
     }
 }
 
-void CalcSpeedZone() {
-    uint8_t Result;
+// void CalcSpeedZone() {
+//     uint8_t Result;
 
-    if (Y < 48) {
-        Zonespeed = SpeedZone[0];
-        Result = 1;
-    } else if (Y < 65) {
-        Zonespeed = SpeedZone[1];
-        Result = 2;
-    } else if (Y < 76) {
-        Zonespeed = SpeedZone[2];
-        Result = 3;
-    } else if (Y < 125) {
-        Zonespeed = SpeedZone[3];
-        Result = 4;
-    } else {
-        Zonespeed = SpeedZone[4];
-        Result = 5;
-    }
+//     if (Y < 48) {
+//         Zonespeed = SpeedZone[0];
+//         Result = 1;
+//     } else if (Y < 65) {
+//         Zonespeed = SpeedZone[1];
+//         Result = 2;
+//     } else if (Y < 76) {
+//         Zonespeed = SpeedZone[2];
+//         Result = 3;
+//     } else if (Y < 125) {
+//         Zonespeed = SpeedZone[3];
+//         Result = 4;
+//     } else {
+//         Zonespeed = SpeedZone[4];
+//         Result = 5;
+//     }
 
-    if (Result != CurrentSpeedZone) {
-        if (BT_ConnectedFlag == 1) {            
-            printToBT(16,Result);
-            // printf("<16:%x>", Result);
-            // _delay_ms(50);
-        }
-        CurrentSpeedZone = Result;
-    }
-}
-uint8_t CalcSpeed() {
-    float Result;
-    float Ratio;
-    float Gain;
+//     if (Result != CurrentSpeedZone) {
+//         if (BT_ConnectedFlag == 1) {            
+//             printToBT(16,Result);
+//             // printf("<16:%x>", Result);
+//             // _delay_ms(50);
+//         }
+//         CurrentSpeedZone = Result;
+//     }
+// }
+// uint8_t CalcSpeed() {
+//     float Result;
+//     float Ratio;
+//     float Gain;
 
-    Gain = 3;
-    Ratio = 0.002;
+//     Gain = 3;
+//     Ratio = 0.002;
 
-    Result = pow(Zonespeed, Gain);
-    Result = Result * Ratio;
-    Result = Result + STEP_RATE_MAX;
+//     Result = pow(Zonespeed, Gain);
+//     Result = Result * Ratio;
+//     Result = Result + STEP_RATE_MAX;
 
-    return STEP_RATE_MAX; // Put speed to maximum for testing.
+//     return STEP_RATE_MAX; // Put speed to maximum for testing.
+// }
+
+uint8_t CalcSpeed(){
+    float res;
+    res = getCartFromTilt(AbsY);
+    if (res<RHO_MIN) return STEP_RATE_MAX;
+    if (res>RHO_MAX) return STEP_RATE_MIN;
+    return ((RHO_MAX-res)*STEP_RATE_MAX +(res-RHO_MIN)*STEP_RATE_MIN)/(RHO_MAX-RHO_MIN);
 }
 
 void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reaches the relevant limit switch.
     // static volatile uint16_t m;
+    uartPrintFlash(F("HomeMotor \n"));
     MoveMotor(axis, steps, 0);
     StartTimer1();  //20240614 This added.  Shouldn't be necessary.
     if (axis == 0) {
@@ -1693,7 +1765,8 @@ void NeutralAxis() {
     // Tilt motor to neutral position
     Y = 500; // Half way down
     MoveLaserMotor();
-    Audio(1);
+    Audio2(1,2,0,"Neut");
+    _delay_ms(AUDIO_DELAY);
 }
 
 void HomeAxis() {
@@ -1703,12 +1776,14 @@ void HomeAxis() {
     // *********PAN AXIS HOME****************
     // CheckTimer1(2);
     if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
+        uartPrintFlash(F("Move from pan stop \n"));
         MoveMotor(0, -300, 1);
     }
     // CheckTimer1(3);
     HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
+        uartPrintFlash(F("Move from tilt stop \n"));
         MoveMotor(1, 300, 1);
     }
     // CheckTimer1(4);
@@ -1726,14 +1801,14 @@ void HomeAxis() {
     // CheckTimer1(6);
     NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
-    Audio(5);
+    Audio2(2,1,1,"HA");
     CmdLaserOnFlag = false;
     IsHome = 1;
 }
 
 void RunSweep(uint8_t zn) {
     uint8_t NbrPts, PatType, i;
-    int last[2],nxt[2],nbrMidPts;
+    int last[2],nxt[2];//,nbrMidPts;
 
     LoadZoneMap(zn);
     GetPerimeter(zn);
@@ -1748,7 +1823,7 @@ void RunSweep(uint8_t zn) {
             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
             // sprintf(debugMsg,"RN %d, x0 %d,y0 %d",AltRndNbr, last[0],last[1]);
             // uartPrint(debugMsg);
-            CalcSpeedZone();
+            // CalcSpeedZone(); // 20240724 No longer used
             DSS_preload = CalcSpeed();
 
             if (Index == 1) {
@@ -1917,14 +1992,16 @@ void PrintConfigData() {
 #pragma endregion Print functions
 #pragma region Mode functions
 void ProgrammingMode() {
+    // uartPrintFlash(F("10:1 Laser0 \n"));
     SetLaserVoltage(0); // Turn off laser
+    // uartPrintFlash(F("10:1 HA \n"));
     HomeAxis();
     printToBT(9, 1);
     _delay_ms(100);  
 }
 
 void OperationModeSetup(int OperationMode) {
-    char* name;
+    const char* name;
     ClearSerial();
     _delay_ms(2000); // Wait for 2 seconds.  TJ 20240614: Why?
     switch(OperationMode) {
@@ -1965,7 +2042,7 @@ void DoHouseKeeping() {
 
     CheckBlueTooth();
     ReadAccelerometer();
-    // DecodeAccelerometer();
+    DecodeAccelerometer();
 
     if (Tick > 4) {
         TransmitData();
@@ -1989,6 +2066,7 @@ void DoHouseKeeping() {
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;
+        uartPrintFlash(F("DHKErr"));
         ProcessError();
         return;
     }
@@ -2023,6 +2101,7 @@ void setup() {
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
     setupTimer1();
     setupTimer3();
+
     setupPeripherals();
     setupWatchdog();
     OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets
@@ -2032,13 +2111,13 @@ void setup() {
     }
     Wire.begin(); // Initialize I2C
     if (!DAC.begin()){
-        uartPrint("DAC.begin() returned false.");
+        uartPrintFlash(F("DAC.begin() returned false."));
         return;
     };  // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
     firstOn();  //Load defaults to EEPROM if first time on.
     ReadEramVars();  //Reads user data from EEPROM to RAM.
-    initMPU();
+    // initMPU();
     PORTE |= (1 << FAN); //Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
         GetBatteryVoltage();   //Load up the battery voltage array
@@ -2046,13 +2125,13 @@ void setup() {
     SetLaserVoltage(0);                                     //Lasers switched off
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
-    Audio(1); //TJ 20240615 Had been using Audio(6)
+    Audio2(7,10,5,"Setup"); 
+    _delay_ms(AUDIO_DELAY);
     HomeAxis();
 }
 int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
     static bool doPrint = true;
-    // static bool firstRun = true; //Needs to be or set passed by cmd10();
     setup();
     while(1) {        
         doPrint = false;
@@ -2067,9 +2146,18 @@ int main() {
             // }
             if (MapTotalPoints > 0){
                 // uartPrint("MTP>0");
+                #ifdef DEBUG
+                uartPrintFlash(F("MapTotalPoints: "));
+                sprintf(debugMsg,"%d", MapTotalPoints);
+                uartPrint(debugMsg);
+                #endif
+                // uartPrint(sprintf(debugMsg,sizeof(debugMsg), "%d",MapTotalPoints));
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                    sprintf(debugMsg,"In runsweep Zn-1: %d",Zn-1);
+                    #ifdef DEBUG
+                    uartPrintFlash(F("About to RunSweep for zn: "));
+                    sprintf(debugMsg,"%d", Zn-1);
                     uartPrint(debugMsg);
+                    #endif
                     if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
                         // uartPrint("Entering RunSweep");
                         RunSweep(Zn-1); //
@@ -2081,7 +2169,7 @@ int main() {
             CalibrateLightSensor();
         }
         DoHouseKeeping();
-    } 
+    }
     return 0;
 }
 

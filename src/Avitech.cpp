@@ -437,11 +437,11 @@ void ProcessError(){
         return;
     }
     if(LaserOverTempFlag){
-        Audio2(2,1,3,"PELas");
+        Audio2(3,1,2,"PELas");
         return;
     }
    if(X_TravelLimitFlag || Y_TravelLimitFlag) {
-        Audio2(2,1,1,"PETravel");
+        Audio2(4,1,1,"PETravel");
         return;
     }
 }
@@ -452,6 +452,10 @@ void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for backgrou
         // processReceivedData();
         char *token;
         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
+         // Clear the buffer and reset the flag immediately after copying the data
+        memset((void*)ReceivedData, 0, sizeof(ReceivedData));
+        DataInBufferFlag = false;
+        
         token = strchr(RecdDataConst, '<');  // Find the start of the command
         if (token != NULL) {
             Command = atoi(token + 1);// Convert the command to an integer
@@ -466,8 +470,6 @@ void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for backgrou
                 }
             }
         }
-        memset((void*)ReceivedData, 0, sizeof(ReceivedData));
-        DataInBufferFlag = false;
     }
 }
 
@@ -746,23 +748,26 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
     AudioLength = cnt * (OnTicks + OffTicks); // Could be cnt * OnTicks + (cnt-1)*OffTicks;
     if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
     #ifdef DEBUG 
-    uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
-    if (debugInfo != nullptr) {
-        sprintf(debugMsg, "%d, %d, %d, %d, %d, %s \n", TJTick, FstTick, cnt, OnPd, OffPd, debugInfo);
-    } else {
-        sprintf(debugMsg, "%d, %d, %d, %d, %d \n", TJTick, FstTick, cnt, OnPd, OffPd);
-    }
-    uartPrint(debugMsg);
+    uartPrint(debugInfo);
     #endif
+    // #ifdef DEBUG 
+    // uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
+    // if (debugInfo != nullptr) {
+    //     sprintf(debugMsg, "%d, %d, %d, %d, %d, %s \n", TJTick, FstTick, cnt, OnPd, OffPd, debugInfo);
+    // } else {
+    //     sprintf(debugMsg, "%d, %d, %d, %d, %d \n", TJTick, FstTick, cnt, OnPd, OffPd);
+    // }
+    // uartPrint(debugMsg);
+    // #endif
 }
 void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by Audio2().
     static bool BuzzerOn = false;
     if(PrevAudioLength != AudioLength){
         PrevAudioLength = AudioLength; 
-        #ifdef DEBUG 
-        sprintf(debugMsg, "A3 %d, %d, %d, %d, %d \n", TJTick, FstTick,AudioLength, OnTicks, OffTicks);
-        uartPrint(debugMsg);
-        #endif
+        // #ifdef DEBUG 
+        // sprintf(debugMsg, "A3 %d, %d, %d, %d, %d \n", TJTick, FstTick,AudioLength, OnTicks, OffTicks);
+        // uartPrint(debugMsg);
+        // #endif
     }
     //If FstTick is not set, there's nothing to do.
     if ((FstTick == 0) || (TJTick - FstTick >= AudioLength) || (TJTick < FstTick)) { //If the pattern has completed or TJTick has rolled over to zero, reset FstTick to zero and return.
@@ -773,19 +778,19 @@ void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by 
     // if((TJTick - FstTick) % AudioLength <= OnTicks) {    
     if((TJTick - FstTick) % (OnTicks + OffTicks) <= OnTicks) {    
         if (!BuzzerOn) {
-            #ifdef DEBUG 
-            sprintf(debugMsg,"On %d",TJTick);
-            uartPrint(debugMsg); //Print when buzzer is turned on
-            #endif
+            // #ifdef DEBUG 
+            // sprintf(debugMsg,"On %d",TJTick);
+            // uartPrint(debugMsg); //Print when buzzer is turned on
+            // #endif
             BuzzerOn = true;
         }
     }
     else {
         if(BuzzerOn){
-            #ifdef DEBUG
-            sprintf(debugMsg,"Off %d",TJTick);
-            uartPrint(debugMsg); //Print when buzzer is turned on
-            #endif
+            // #ifdef DEBUG
+            // sprintf(debugMsg,"Off %d",TJTick);
+            // uartPrint(debugMsg); //Print when buzzer is turned on
+            // #endif
             BuzzerOn = false;
         }
     }
@@ -1390,9 +1395,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
         // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-        #ifdef DEBUG
-        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-        #endif
+        // #ifdef DEBUG
+        // printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+        // #endif
         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
             
@@ -1410,9 +1415,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
                 }
-                #ifdef DEBUG
-                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-                #endif
+                // #ifdef DEBUG
+                // printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                // #endif
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
         } else { //The fixed tilt, pan only case.
@@ -1425,9 +1430,9 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 if(j>=MAX_NBR_PERIMETER_PTS) break;
                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
                 Perimeter[1][j] = Vertices[1][i];
-                #ifdef DEBUG
-                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-                #endif
+                // #ifdef DEBUG
+                // printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                // #endif
             }   
         }
         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
@@ -1582,17 +1587,17 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
         while (SteppingStatus == 1) {
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
             // CheckBlueTooth();  //This should not be necessary.
-            if (!(MM_n % 10000)){// && false) { //20240624: Use && false to disable periodic printing.
-                MM_n2++; //Use this to distinguish b/w apparently identical messages.
+            // if (!(MM_n % 10000)){// && false) { //20240624: Use && false to disable periodic printing.
+                // MM_n2++; //Use this to distinguish b/w apparently identical messages.
                 // sprintf(debugMsg,"MM: MM_n2, mode, C, I, axis, PEF, TEF, X, AbsX, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, SetupModeFlag, Command, Instruction, axis, PanEnableFlag, TiltEnableFlag,X, AbsX, DSS_preload, PIND);
                 // uartPrint(debugMsg);
                 // _delay_ms(30);
-                sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
+                // uartPrint(debugMsg);
                 // _delay_ms(30);
                 DoHouseKeeping();
-            }
-            MM_n++;
+            // }
+            // MM_n++;
         }
     }
 }
@@ -1622,6 +1627,7 @@ void JogMotors(bool prnt) {//
             SystemFaultFlag = true;
             uartPrintFlash(F("XErr"));
             ProcessError();
+            StopTimer1();
         } else {  //20240717: Both flags should be reset if there is no longer an error
             X_TravelLimitFlag = false;       
             SystemFaultFlag=false;
@@ -1645,19 +1651,13 @@ void JogMotors(bool prnt) {//
         }
     }
 
-    pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to 4 steps per cycle through main loop or 1 for slow.  Needs calibration. 20240629: Testing with 40:10.
+    pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
     pos = pos * (dir ? 1 : -1); // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
-    pos += (axis == 0) ?  AbsX : AbsY; //2024620: Add an amount, pos, to AbsX.  This becomes X in MoveMotor so X - AbsX is the increment.  When that is reached, JogMotors would be called
-    //  again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments AbsX (which would have 
-    // been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is 4, MoveMotor() should, given the while loop, increment AbsX 
-    // by 4 before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
+    pos += (axis == 0) ?  AbsX : AbsY; //2024620: Add an amount, pos, to AbsX.  This becomes X (or Y) when MoveMotor is called. So (X - AbsX) is the increment.  When that is reached, 
+    // JogMotors would be called again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments 
+    // AbsX (which would have been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is HIGH_JOG_POS, MoveMotor() should, given 
+    // the while loop, increment AbsX by HIGH_JOG_POS before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
     
-    // if (!(JM_n % 120000) && false) { //20240624: Use && false to disable periodic printing.
-    //     // sprintf(debugMsg,"JM: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
-    //     // uartPrint(debugMsg);
-    // }
-    // JM_n++;
-
     if (PanEnableFlag == 0 && TiltEnableFlag == 0) {  // If both pan and tilt are disabled, stop the motors.
         StopSystem();
     }
@@ -2074,6 +2074,10 @@ void DoHouseKeeping() {
     if (SetupModeFlag == 1) {
         WarnLaserOn();
         StartLaserFlickerInProgMode();
+        //2024725 Although this stop criterion is implemented in JogMotors(), timing indicates that is needed here also.
+        if (PanEnableFlag == 0 && TiltEnableFlag == 0) {  // If both pan and tilt are disabled, stop the motors.
+            StopSystem();
+        }
     }
 
     if (SetupModeFlag == 0) {
@@ -2146,18 +2150,18 @@ int main() {
             // }
             if (MapTotalPoints > 0){
                 // uartPrint("MTP>0");
-                #ifdef DEBUG
-                uartPrintFlash(F("MapTotalPoints: "));
-                sprintf(debugMsg,"%d", MapTotalPoints);
-                uartPrint(debugMsg);
-                #endif
+                // #ifdef DEBUG
+                // uartPrintFlash(F("MapTotalPoints: "));
+                // sprintf(debugMsg,"%d", MapTotalPoints);
+                // uartPrint(debugMsg);
+                // #endif
                 // uartPrint(sprintf(debugMsg,sizeof(debugMsg), "%d",MapTotalPoints));
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                    #ifdef DEBUG
-                    uartPrintFlash(F("About to RunSweep for zn: "));
-                    sprintf(debugMsg,"%d", Zn-1);
-                    uartPrint(debugMsg);
-                    #endif
+                    // #ifdef DEBUG
+                    // uartPrintFlash(F("About to RunSweep for zn: "));
+                    // sprintf(debugMsg,"%d", Zn-1);
+                    // uartPrint(debugMsg);
+                    // #endif
                     if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
                         // uartPrint("Entering RunSweep");
                         RunSweep(Zn-1); //

@@ -84,10 +84,26 @@ typedef struct {
 // Declare the EramPositions array with elements of type EramPos
 extern EramPos EEMEM EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
 
+// extern union {
+//     int Z_accel;
+//     struct {
+//         uint8_t Zl_accel;
+//         uint8_t Zh_accel;
+//     };
+// } Accel_Z;
+
 extern uint16_t Instruction;
 extern uint8_t Command;
 extern bool received39;
 extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
+// 20240726 Tuning parameters - possibly not required in production version
+extern uint16_t Step_Rate_Min;
+extern uint16_t Step_Rate_Max;
+extern uint8_t Rho_Min;
+extern uint8_t Rho_Max;
+extern uint8_t Nbr_Rnd_Pts;
+extern uint8_t Tilt_Sep;
+
 // Functions
 void GetLaserTemperature();
 void ThrottleLaser();

@@ -30,7 +30,7 @@
     // twi.h has #define TW_STATUS		(TWSR & TW_STATUS_MASK).  But TWSR, applicable for ATmega328P should be TWSR0 for ATmega328PB.
     #undef TW_STATUS
     #define TW_STATUS		(TWSR0 & TW_STATUS_MASK)
-// #define DEBUG
+#define DEBUG
 #pragma endregion Include files
 #pragma region Variable definitions
 MCP4725 DAC(0x60);// (MCP4725ADD>>1);
@@ -52,7 +52,7 @@ uint8_t maxYind;
 uint8_t RndNbr, PrevRndNbr, AltRndNbr;
 
 volatile uint16_t StepCount;                                       // How many steps to be executed
-uint16_t DSS_preload = STEP_RATE_MAX;                                     // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
+uint16_t DSS_preload = Step_Rate_Max;                                     // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
 volatile bool SteppingStatus = 0;
 // bool SteppingStatus = 0;  //Shared   // 0 = No stepping in progress. 1= Stepping in progress
 char buffer[20];  //Use for printint to serial (Bluetooth)
@@ -253,6 +253,16 @@ volatile uint8_t CommandLength = 0;
 // uint8_t cnter = 0;
 
 #pragma endregion Variable Definitions
+#pragma region Tuning Variable Definitions
+// 20240726 Tuning parameters - possibly not required in production version
+uint16_t Step_Rate_Min = 2000;
+uint16_t Step_Rate_Max = 75;
+uint8_t Rho_Min = 10;
+uint8_t Rho_Max = 200;
+uint8_t Nbr_Rnd_Pts = 50;
+uint8_t Tilt_Sep = 10;
+uint8_t Max_Nbr_Perimeter_Pts = 100;
+#pragma endregion Tuning Variable Definitions
 #pragma region Function Declarations
 void HomeAxis();
 void DoHouseKeeping();
@@ -907,6 +917,8 @@ void ReadAccelerometer() {
 void DecodeAccelerometer() {
     if (GyroOnFlag){
         if (OperationMode == 0) { // Field-1
+            // sprintf(debugMsg,"Z_accel: %d", Accel_Z.Z_accel);
+            // uartPrint(debugMsg);
             if (Accel_Z.Z_accel < AccelTripPoint) {
                 Z_AccelFlag = 1;
                 SystemFaultFlag = true;
@@ -1198,8 +1210,6 @@ void setupTimer3() {
     OCR3A = 780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
     TIMSK3 |= (1 << OCIE3A);  // Enable the compare match interrupt
 }
-
-
 #pragma endregion Utility functions
 #pragma region Zone functions
 uint8_t GetZone(uint8_t i) {
@@ -1714,14 +1724,14 @@ void JogMotors(bool prnt) {//
 uint8_t CalcSpeed(){
     float res;
     res = getCartFromTilt(AbsY);
-    if (res<RHO_MIN) return STEP_RATE_MAX;
-    if (res>RHO_MAX) return STEP_RATE_MIN;
-    return ((RHO_MAX-res)*STEP_RATE_MAX +(res-RHO_MIN)*STEP_RATE_MIN)/(RHO_MAX-RHO_MIN);
+    if (res<Rho_Min) return Step_Rate_Max;
+    if (res>Rho_Max) return Step_Rate_Min;
+    return ((Rho_Max-res)*Step_Rate_Max +(res-Rho_Min)*Step_Rate_Min)/(Rho_Max-Rho_Min);
 }
 
 void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reaches the relevant limit switch.
     // static volatile uint16_t m;
-    uartPrintFlash(F("HomeMotor \n"));
+    // uartPrintFlash(F("HomeMotor \n"));
     MoveMotor(axis, steps, 0);
     StartTimer1();  //20240614 This added.  Shouldn't be necessary.
     if (axis == 0) {
@@ -1776,14 +1786,14 @@ void HomeAxis() {
     // *********PAN AXIS HOME****************
     // CheckTimer1(2);
     if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
-        uartPrintFlash(F("Move from pan stop \n"));
+        // uartPrintFlash(F("Move from pan stop \n"));
         MoveMotor(0, -300, 1);
     }
     // CheckTimer1(3);
     HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-        uartPrintFlash(F("Move from tilt stop \n"));
+        // uartPrintFlash(F("Move from tilt stop \n"));
         MoveMotor(1, 300, 1);
     }
     // CheckTimer1(4);
@@ -1813,7 +1823,7 @@ void RunSweep(uint8_t zn) {
     LoadZoneMap(zn);
     GetPerimeter(zn);
     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
-        for (uint8_t Index = 0; Index < NbrPerimeterPts + NBR_RND_PTS; Index++) {
+        for (uint8_t Index = 0; Index < NbrPerimeterPts + Nbr_Rnd_Pts; Index++) {
             // Store present point to use in interpolation
             last[0] = X;
             last[1] = Y;
@@ -1821,14 +1831,14 @@ void RunSweep(uint8_t zn) {
             nxt[0] = X;
             nxt[1] = Y;
             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
-            // sprintf(debugMsg,"RN %d, x0 %d,y0 %d",AltRndNbr, last[0],last[1]);
-            // uartPrint(debugMsg);
             // CalcSpeedZone(); // 20240724 No longer used
             DSS_preload = CalcSpeed();
+            sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
+            uartPrint(debugMsg);
 
             if (Index == 1) {
                 CmdLaserOnFlag = false;
-                DSS_preload = STEP_RATE_MAX;
+                DSS_preload = Step_Rate_Max;
             }
 
             if (Index == 2) {
@@ -2039,7 +2049,8 @@ void OperationModeSetup(int OperationMode) {
 }
 #pragma endregion Mode functions
 void DoHouseKeeping() {
-
+    static uint16_t dhkn=0;
+    dhkn++;
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
@@ -2066,7 +2077,7 @@ void DoHouseKeeping() {
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;
-        uartPrintFlash(F("DHKErr"));
+        if(!(dhkn%30000)) uartPrintFlash(F("DHKErr"));
         ProcessError();
         return;
     }

@@ -6,11 +6,10 @@
 #define RAMPING_STEPS 1
 // #define STARTUP_SPEED 100
 #define START_RAMPING_COUNT 100
-#define STEP_RATE_MAX 75
-#define STEP_RATE_MIN 200 //20240724 Arbitrary value 
-#define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
-#define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
-// #define STEP_RATE_MIN 2000
+// #define STEP_RATE_MAX 75
+// #define STEP_RATE_MIN 200 //20240724 Arbitrary value 
+// #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
+// #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
 #define HOMING_SPEED 100
 #define TILT_SLOW_STEP_RATE 1200
 #define TILT_FAST_STEP_RATE 500
@@ -28,8 +27,7 @@
 #define NBR_ZONES 4
 #define MAX_NBR_VERTICES 10  //This is the maximum number of vertices per zone/map
 #define MAX_NBR_MAP_PTS 40   // This is the maximum overall number of vertices
-#define MAX_NBR_PERIMETER_PTS 100
-#define MAX_NBR_PTS 40
+#define MAX_NBR_PERIMETER_PTS 100 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define STEPS_PER_RAD 2052.0 //36 * 57 (36 steps per degree and 57 radians per degree?)
 #define TILT_SEP 10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
@@ -44,7 +42,7 @@
 #define DEF_SLOPE 30000// Extreme number for slope (inverse) when tilt values are close.
 #define X_MAX_COUNT 16000 //Maximum X count. About 4 turns of the head from 0 in +ve direction
 #define MAX_PAN_DIST 20 // 20240702 Approximate maximum panning distance between dense perimeter points 
-#define NBR_RND_PTS 30 // Some arbitrary number of randomly selected perimeter points to traverse before the next pattern.
+// #define NBR_RND_PTS 30 // Some arbitrary number of randomly selected perimeter points to traverse before the next pattern.
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
 #define DEF_MAX_LASER_POWER 120
@@ -59,7 +57,7 @@
 #define DEF_FIRST_TIME_ON 1
 #define DEF_LASER_ID 0
 
-#define DEF_ACCEL_TRIP_POINT 2500 //600
+#define DEF_ACCEL_TRIP_POINT 600
 #define DEF_RESET_SECONDS 3600
 
 #define DEF_USER_LIGHT_TRIP_LEVEL 32
@@ -67,7 +65,7 @@
 #define DEF_LIGHT_TRIGGER_OPERATION 1
 #define DEF_OPERATION_MODE 0
 
-#define WHO_AM_I_MPU6050 0x75
+// #define WHO_AM_I_MPU6050 0x75
 // MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.  
 // These values, 0xD2 and 0xD3, are for version 6.13  Ref sub Initgyro() in BASCOM code.
 // These are not physical pins (and not MCU addresses) but addresses in the relevant I2C devices (MPU and laser power controller)

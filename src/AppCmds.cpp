@@ -29,12 +29,12 @@ void DecodeCommsData() {
         case 12: Cmd12(); break;  // Store the accelerometer trip point
         case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
         case 14: Cmd14(); break;  //Delete last way point
-        case 15: Cmd15(); break;  //Nothing
-        // case 16: Cmd16(); break;  //cmdSpeedZone(0);
-        // case 17: Cmd17(); break;  //cmdSpeedZone(1);    
-        // case 18: Cmd18(); break;  //cmdSpeedZone(2);
-        // case 19: Cmd18(); break;  //cmdSpeedZone(3);
-        // case 20: Cmd20(); break;  //cmdSpeedZone(4);
+        case 15: Cmd15(); break;  //Tilt_Sep
+        case 16: Cmd16(); break;  //Step_Rate_Min
+        case 17: Cmd17(); break;  //Step_Rate_Max
+        case 18: Cmd18(); break;  //Rho_Min;
+        case 19: Cmd19(); break;  //Rho_Max;
+        case 20: Cmd20(); break;  //Nbr_Rnd_Pts
         case 21: Cmd21(); break;  //Update ActiveMapZones (in EEPROM)
         // case 22: Cmd22(); break;
         // case 23: Cmd23(); break;
@@ -278,6 +278,7 @@ void Cmd11() {
         initMPU();
         Audio2(1,2,0,"AC11:8");
     }
+    // sprintf(debugMsg,"Gyro add & val: %p, %02x, z_accel: %d",(void*)&EramGyroAddress, GyroAddress, Accel_Z.Z_accel);  
     sprintf(debugMsg,"Gyro add & val: %p, %02x",(void*)&EramGyroAddress, GyroAddress);  
     uartPrint(debugMsg);  
 }
@@ -325,6 +326,7 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
 }
 
 void Cmd15() {
+    Tilt_Sep = Instruction;
     // Adjust the laser EramMinimumLaserPower
     // EramMinimumLaserPower = Instruction;
     // MinimumLaserPower = Instruction;
@@ -339,22 +341,21 @@ void Cmd15() {
 //     DSS_preload = CalcSpeed(); // Calculate speed from Y tilt value
 //     Audio2(1,2,0);
 // }
-// void Cmd16() {
-//     cmdSpeedZone(0);
-// }
-
-// void Cmd17() {
-//     cmdSpeedZone(1);
-// }
-
-// void Cmd18() {
-//     cmdSpeedZone(2);
-// }
-
-// void Cmd19() {
-//     cmdSpeedZone(3);
-// }
-
+void Cmd16() { //
+    Step_Rate_Min = Instruction;
+}
+void Cmd17() { //
+    Step_Rate_Max = Instruction;
+}
+void Cmd18() { //
+    Rho_Min = Instruction;
+}
+void Cmd19() { //
+    Rho_Max = Instruction;
+}
+void Cmd20() { //
+    Nbr_Rnd_Pts = Instruction;
+}
 // void Cmd20() {
 //     cmdSpeedZone(4);
 // }

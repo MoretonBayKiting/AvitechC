@@ -83,4 +83,10 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
     FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
     LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
+
+    // Step_Rate_Min = eeprom_read_word(&Eram_Step_Rate_Min);
+    // Step_Rate_Max = eeprom_read_word(&Eram_Step_Rate_Max);
+    // Rho_Min = eeprom_read_byte(&Eram_Rho_Min);
+    // Rho_Max = eeprom_read_byte(&Eram_Rho_Max);
+    // Nbr_Rnd_Pts = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
 }

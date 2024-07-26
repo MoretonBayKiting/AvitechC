@@ -255,11 +255,17 @@ volatile uint8_t CommandLength = 0;
 #pragma endregion Variable Definitions
 #pragma region Tuning Variable Definitions
 // 20240726 Tuning parameters - possibly not required in production version
+uint16_t EEMEM Eram_Step_Rate_Min;
 uint16_t Step_Rate_Min = 2000;
+uint16_t EEMEM Eram_Step_Rate_Max;
 uint16_t Step_Rate_Max = 75;
+uint8_t EEMEM Eram_Rho_Min;
 uint8_t Rho_Min = 10;
+uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
+uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 uint8_t Nbr_Rnd_Pts = 50;
+uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 10;
 uint8_t Max_Nbr_Perimeter_Pts = 100;
 #pragma endregion Tuning Variable Definitions
@@ -1404,7 +1410,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         dirn = 0;
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
-        // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
+        printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
         // #ifdef DEBUG
         // printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
         // #endif
@@ -1426,7 +1432,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
                 }
                 // #ifdef DEBUG
-                // printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
                 // #endif
                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
             }
@@ -1441,7 +1447,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
                 Perimeter[1][j] = Vertices[1][i];
                 // #ifdef DEBUG
-                // printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
                 // #endif
             }   
         }
@@ -1833,7 +1839,8 @@ void RunSweep(uint8_t zn) {
             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
             // CalcSpeedZone(); // 20240724 No longer used
             DSS_preload = CalcSpeed();
-            sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
+            // sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
+            sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
             uartPrint(debugMsg);
 
             if (Index == 1) {

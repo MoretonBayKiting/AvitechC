@@ -97,11 +97,17 @@ extern uint8_t Command;
 extern bool received39;
 extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 // 20240726 Tuning parameters - possibly not required in production version
+extern uint16_t EEMEM Eram_Step_Rate_Min;
 extern uint16_t Step_Rate_Min;
+extern uint16_t EEMEM Eram_Step_Rate_Max;
 extern uint16_t Step_Rate_Max;
+extern uint8_t EEMEM Eram_Rho_Min;
 extern uint8_t Rho_Min;
+extern uint8_t EEMEM Eram_Rho_Max;
 extern uint8_t Rho_Max;
+extern uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 extern uint8_t Nbr_Rnd_Pts;
+extern uint8_t EEMEM Eram_Tilt_Sep;
 extern uint8_t Tilt_Sep;
 
 // Functions

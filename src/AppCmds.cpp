@@ -342,18 +342,23 @@ void Cmd15() {
 //     Audio2(1,2,0);
 // }
 void Cmd16() { //
+    eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
     Step_Rate_Min = Instruction;
 }
 void Cmd17() { //
+    eeprom_update_word(&Eram_Step_Rate_Max, Instruction);
     Step_Rate_Max = Instruction;
 }
 void Cmd18() { //
+    eeprom_update_byte(&Eram_Rho_Min, Instruction);
     Rho_Min = Instruction;
 }
 void Cmd19() { //
+    eeprom_update_byte(&Eram_Rho_Max, Instruction);
     Rho_Max = Instruction;
 }
 void Cmd20() { //
+    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
     Nbr_Rnd_Pts = Instruction;
 }
 // void Cmd20() {

@@ -7,6 +7,9 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
+// #define DEBUG
+// #define PRINT_EEPROM
+#define PRINT_CMD9
 // Variables
 extern uint8_t TiltSpeed;
 extern uint8_t EramUserLaserPower;
@@ -52,7 +55,7 @@ extern uint8_t SpeedZone[]; //Leave out size?
 extern uint16_t DSS_preload;
 extern uint8_t EramActiveMapZones;
 extern uint8_t ActiveMapZones;
-extern uint16_t EEMEM EramResetSeconds;  //NOLINT
+extern uint16_t EramResetSeconds;  //NOLINT
 extern uint16_t ResetSeconds;
 extern uint8_t EramLaser2OperateFlag;
 extern uint8_t Laser2OperateFlag;
@@ -70,7 +73,7 @@ extern float VoltPerStep;
 extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
 extern bool GyroOnFlag; 
-extern uint8_t EEMEM EramGyroAddress;
+extern uint8_t EramGyroAddress;
 
 extern uint32_t JM_n; 
 extern uint32_t MM_n;
@@ -82,7 +85,7 @@ typedef struct {
     uint16_t EramY;             // Y map location 2 bytes. Operation data is also stored in this variable in the first 4 bits
 } EramPos;
 // Declare the EramPositions array with elements of type EramPos
-extern EramPos EEMEM EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
+extern EramPos EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
 
 // extern union {
 //     int Z_accel;
@@ -97,18 +100,22 @@ extern uint8_t Command;
 extern bool received39;
 extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 // 20240726 Tuning parameters - possibly not required in production version
-extern uint16_t EEMEM Eram_Step_Rate_Min;
+extern uint16_t Eram_Step_Rate_Min;
 extern uint16_t Step_Rate_Min;
-extern uint16_t EEMEM Eram_Step_Rate_Max;
+extern uint16_t Eram_Step_Rate_Max;
 extern uint16_t Step_Rate_Max;
-extern uint8_t EEMEM Eram_Rho_Min;
+extern uint8_t Eram_Rho_Min;
 extern uint8_t Rho_Min;
-extern uint8_t EEMEM Eram_Rho_Max;
+extern uint8_t Eram_Rho_Max;
 extern uint8_t Rho_Max;
-extern uint8_t EEMEM Eram_Nbr_Rnd_Pts;
+extern uint8_t Eram_Nbr_Rnd_Pts;
 extern uint8_t Nbr_Rnd_Pts;
-extern uint8_t EEMEM Eram_Tilt_Sep;
+extern uint8_t Eram_Tilt_Sep;
 extern uint8_t Tilt_Sep;
+extern uint8_t EramSpeedScale;
+extern uint8_t SpeedScale;
+extern uint8_t EramLaserHt;
+extern uint8_t LaserHt;
 
 // Functions
 void GetLaserTemperature();
@@ -120,7 +127,7 @@ void ProgrammingMode();
 void setupWatchdog();
 void PrintConfigData();
 void CalcSpeedZone();
-uint8_t CalcSpeed();
+uint16_t CalcSpeed();
 // void SetLaserVoltage(uint8_t voltage);
 void SetLaserVoltage(uint16_t voltage);
 void testLaserPower();
@@ -136,5 +143,6 @@ void StopTimer3();
 void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 
+void PrintEramVars();
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue); 
 #endif // SHARED_VARS_H

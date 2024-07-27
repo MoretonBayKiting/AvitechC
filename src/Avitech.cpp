@@ -30,7 +30,7 @@
     // twi.h has #define TW_STATUS		(TWSR & TW_STATUS_MASK).  But TWSR, applicable for ATmega328P should be TWSR0 for ATmega328PB.
     #undef TW_STATUS
     #define TW_STATUS		(TWSR0 & TW_STATUS_MASK)
-#define DEBUG
+
 #pragma endregion Include files
 #pragma region Variable definitions
 MCP4725 DAC(0x60);// (MCP4725ADD>>1);
@@ -80,7 +80,7 @@ uint8_t Command;                                         // Holds the Command va
 uint16_t Instruction;                                     // Holds the data value fron the RS232 comms string.See documentation on the Comms data string build
 
 EramPos EEMEM EramPositions[MAX_NBR_MAP_PTS];               // Use eeprom for waypoints
-uint8_t EEMEM EramMapTotalPoints; //May not be used
+uint8_t EEMEM EramMapTotalPoints; 
 uint8_t MapTotalPoints;                                 
 bool X_TravelLimitFlag = false;                                // Over travel flag
 bool Y_TravelLimitFlag = false;                                // Over travel flag
@@ -264,9 +264,14 @@ uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
-uint8_t Nbr_Rnd_Pts = 50;
+uint8_t Nbr_Rnd_Pts = 20;
 uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 10;
+uint8_t EEMEM EramSpeedScale;
+uint8_t SpeedScale = 100; //Treat as percentage
+uint8_t EEMEM EramLaserHt;
+uint8_t LaserHt = 50;//Units are decimetres.  50 => 5metres
+
 uint8_t Max_Nbr_Perimeter_Pts = 100;
 #pragma endregion Tuning Variable Definitions
 #pragma region Function Declarations
@@ -916,8 +921,8 @@ void ReadAccelerometer() {
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
     if(!(cnt % 10000)){
-        sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+        // uartPrint(debugMsg);
     }
 }
 void DecodeAccelerometer() {
@@ -1271,9 +1276,9 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
                 MapCount[0][i] = MapIndex - MapCount[1][i-1] + 1;
             }
         }
-        // sprintf(debugMsg,"MapIndex: %d zone: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
-        // uartPrint(debugMsg);
-        // _delay_ms(100);
+        sprintf(debugMsg,"MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
+        uartPrint(debugMsg);
+        _delay_ms(100);
         Prev_i = i;
     }
 }
@@ -1334,18 +1339,27 @@ void LoadZoneMap(uint8_t zn) {
         }
     }
 }
+void floatToString(char* buffer, float value, int precision) {
+    dtostrf(value, 0, precision, buffer);
+}
+
 int getCartFromTilt(int t) {
     float a = (float)t/STEPS_PER_RAD;
     float b = tan(a);
-    float c = LASER_HT/b;
-    // sprintf(debugMsg,"100a %d, 100b %d, c %d, t %d",100*a, 100*b, c, t);
+    float c = (float)LaserHt/(b*10);//LaserHt is in decimetres rather than metres.  So divide by 10 to get back to metres.
+    
+    // char aStr[10], bStr[10], cStr[10];
+    // floatToString(aStr, a, 2);
+    // floatToString(bStr, b, 2);
+    // floatToString(cStr, c, 2);
+    
+    // sprintf(debugMsg, "t: %d, a: %s, b: %s, c: %s", t, aStr, bStr, cStr);
     // uartPrint(debugMsg);
-    // sprintf(debugMsg,"a %0.4f, b %0.4f, c %0.4f, t %d",a, b, c, t);
-    // uartPrint(debugMsg);
+    // _delay_ms(50);
     return (int)(c + 0.5); // rounding to the nearest integer before casting
 }
 int getTiltFromCart(int rho) {
-    float a = LASER_HT/(float)rho;
+    float a = (float)LaserHt/((float)rho*10.0);
     float b = atan(a);
     // sprintf(debugMsg,"100a %d, b %d, rho %d",100 * a, 100 * b, rho);
     // uartPrint(debugMsg);
@@ -1359,13 +1373,10 @@ int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target s
 //    sprintf(debugMsg,"rho %d, thisTilt %d", rho, thisTilt);
 //    uartPrint(debugMsg);
    if (dirn == 1) {
-      rho = rho - TILT_SEP;
+      rho = rho - Tilt_Sep;
    } else {
-      rho = rho + TILT_SEP;
+      rho = rho + Tilt_Sep;
    }
-//    sprintf(debugMsg,"From gNTV: thisTilt: %d, dirn: %d, rho: %d, newTilt: %d",thisTilt, dirn, rho, getTiltFromCart(rho));
-//    uartPrint(debugMsg);
-//    _delay_ms(1000);
    return getTiltFromCart(rho);
 }
 void getCart(int p, int t, int thisres[2]) {
@@ -1402,7 +1413,8 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     uint8_t dirn = 0;
     uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
 
-    for (uint8_t i = 0; i < MapCount[0][zn_1] - 1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone z.
+    for (uint8_t i = 0; i < MapCount[0][zn_1]-1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone zn.
+        // 20240727: Changed upper limit from i < MapCount[0][zn_1]-1 to i < MapCount[0][zn_1].  Bad result (ref Debug20240727B.txt)
         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
         Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
         // sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
@@ -1412,11 +1424,10 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
         printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
         // #ifdef DEBUG
-        // printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
         // #endif
         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
-            
             nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
             testBit = false;
             if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
@@ -1440,7 +1451,8 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
             int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
             if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
                 nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
-            }
+            } else nbrPts = 0; //20240727.  Ref Debug20240727N.txt.
+
             for (uint8_t a = 1; a<=nbrPts; a++){
                 j++;
                 if(j>=MAX_NBR_PERIMETER_PTS) break;
@@ -1454,8 +1466,11 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
         if(j>=MAX_NBR_PERIMETER_PTS) break;
     }
-        
-    NbrPerimeterPts = j - 1; //Subtract last increment (which is nevertheless necessary so that next segment starts right)
+    // 20240727: Add the repeated vertex and increase NbrPerimeterPts to accomodate that.
+    Perimeter[0][j] = Vertices[0][MapCount[0][zn_1]-1];
+    Perimeter[1][j] = Vertices[1][MapCount[0][zn_1]-1];
+    NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
+    // j++; //This is necessary so that next segment starts at right value/index.
 }
 // Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
 void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
@@ -1683,56 +1698,26 @@ void JogMotors(bool prnt) {//
     }
 }
 
-// void CalcSpeedZone() {
-//     uint8_t Result;
-
-//     if (Y < 48) {
-//         Zonespeed = SpeedZone[0];
-//         Result = 1;
-//     } else if (Y < 65) {
-//         Zonespeed = SpeedZone[1];
-//         Result = 2;
-//     } else if (Y < 76) {
-//         Zonespeed = SpeedZone[2];
-//         Result = 3;
-//     } else if (Y < 125) {
-//         Zonespeed = SpeedZone[3];
-//         Result = 4;
-//     } else {
-//         Zonespeed = SpeedZone[4];
-//         Result = 5;
-//     }
-
-//     if (Result != CurrentSpeedZone) {
-//         if (BT_ConnectedFlag == 1) {            
-//             printToBT(16,Result);
-//             // printf("<16:%x>", Result);
-//             // _delay_ms(50);
-//         }
-//         CurrentSpeedZone = Result;
-//     }
-// }
-// uint8_t CalcSpeed() {
-//     float Result;
-//     float Ratio;
-//     float Gain;
-
-//     Gain = 3;
-//     Ratio = 0.002;
-
-//     Result = pow(Zonespeed, Gain);
-//     Result = Result * Ratio;
-//     Result = Result + STEP_RATE_MAX;
-
-//     return STEP_RATE_MAX; // Put speed to maximum for testing.
-// }
-
-uint8_t CalcSpeed(){
-    float res;
-    res = getCartFromTilt(AbsY);
-    if (res<Rho_Min) return Step_Rate_Max;
-    if (res>Rho_Max) return Step_Rate_Min;
-    return ((Rho_Max-res)*Step_Rate_Max +(res-Rho_Min)*Step_Rate_Min)/(Rho_Max-Rho_Min);
+uint16_t CalcSpeed() {
+    uint16_t s = 0;
+    // uint8_t res = getCartFromTilt(AbsY);
+    int res = getCartFromTilt(AbsY);
+    if (res < Rho_Min) {
+        s = Step_Rate_Max;
+    } else if (res > Rho_Max) {
+        s = Step_Rate_Min;
+    } else {
+        long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
+        long den = (long)(Rho_Max - Rho_Min);
+        s = (uint16_t)(num / den);
+        // sprintf(debugMsg, "num: %ld, den: %ld, s: %d", num, den, s);
+        // uartPrint(debugMsg);
+        // _delay_ms(50);
+    }
+    s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
+    // s *= SpeedScale;
+    // s /= 100;
+    return s;
 }
 
 void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reaches the relevant limit switch.
@@ -1825,7 +1810,7 @@ void HomeAxis() {
 void RunSweep(uint8_t zn) {
     uint8_t NbrPts, PatType, i;
     int last[2],nxt[2];//,nbrMidPts;
-
+    SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
     GetPerimeter(zn);
     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
@@ -1843,12 +1828,10 @@ void RunSweep(uint8_t zn) {
             sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
             uartPrint(debugMsg);
 
-            if (Index == 1) {
+            if (Index == 0) { //20240727: Change to zero (from 1). So laser is off as it moves towards 0th point of cycle.
                 CmdLaserOnFlag = false;
                 DSS_preload = Step_Rate_Max;
-            }
-
-            if (Index == 2) {
+            } else{
                 CmdLaserOnFlag = true;
             }
 
@@ -2155,6 +2138,13 @@ int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
     static bool doPrint = true;
     setup();
+    #ifdef PRINT_EEPROM
+    while(1){
+        DoHouseKeeping();
+    }
+    #endif
+
+    #ifndef PRINT_EEPROM
     while(1) {        
         doPrint = false;
         if (SetupModeFlag == 1) {
@@ -2192,6 +2182,7 @@ int main() {
         }
         DoHouseKeeping();
     }
+    #endif
     return 0;
 }
 

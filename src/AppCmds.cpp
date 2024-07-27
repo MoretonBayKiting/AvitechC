@@ -22,7 +22,7 @@ void DecodeCommsData() {
         case 5: Cmd5(); break; //Update LaserID (in EEPROM)
         case 6: Cmd6(); break; // X = Instruction;  Start timer1.
         case 7: Cmd7(); break; // Y = Instruction;  Start timer1.
-        // case 8: Cmd8(); break;  //Not used
+        case 8: Cmd8(); break;  //Print EEPROM values to serial output.  Need PRINT_EEPROM defined.
         case 9: Cmd9(); break;  //Store way point
         case 10: Cmd10(); break; //Setup/Run mode selection. Delete all map points. Cold restart
         case 11: Cmd11(); break;  // Process the Send Diagnostic Data register or Process the full reset flag on next restart
@@ -36,8 +36,8 @@ void DecodeCommsData() {
         case 19: Cmd19(); break;  //Rho_Max;
         case 20: Cmd20(); break;  //Nbr_Rnd_Pts
         case 21: Cmd21(); break;  //Update ActiveMapZones (in EEPROM)
-        // case 22: Cmd22(); break;
-        // case 23: Cmd23(); break;
+        case 22: Cmd22(); break;  //SpeedScale
+        case 23: Cmd23(); break;  //LaserHt
         // case 24: Cmd24(); break;
         // case 25: Cmd25(); break;
         // case 26: Cmd26(); break;
@@ -133,6 +133,11 @@ void Cmd7() {
     // StartTimer1();
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
+void Cmd8(){
+    #ifdef PRINT_EEPROM
+    PrintEramVars();
+    #endif
+    }
 
 void Cmd9() {
     // Debug message to indicate function entry and show received Instruction
@@ -145,7 +150,8 @@ void Cmd9() {
 
     StopTimer3();  //20240628 Don't want interrupt getting in the way of EEPROM write?
     // Get the Operation Zone data from the received data
-    OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
+    // OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
+    OperationZone = Instruction & 0xF00; // Get raw Operation Zone from Instruction
     OperationZone >>= 8; // Position the Operation Zone bits
     // Debug message for Operation Zone extraction
     // sprintf(debugMsg, "Extracted OperationZone: %d", OperationZone);
@@ -162,8 +168,13 @@ void Cmd9() {
     // sprintf(debugMsg, "Decoded OperationZone: %d", OperationZone);
     // uartPrint(debugMsg);
     
-    uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
+    // uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
+    uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0xFF); // Get Map Point number from Instruction
+    sprintf(debugMsg,"MPNbr: %d",MapPointNumber);
+    uartPrint(debugMsg);
+    _delay_ms(50); //20240727: Output (through BT snooper) clashes with next print (MapPoint:) with no delay.  Ref AndDebug20240726Q_SPP.csv
     MapTotalPoints = MapPointNumber;
+    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);//20240726 This had not been included
     // Debug message for Map Point Number extraction
     // sprintf(debugMsg, "Extracted MapPointNumber: %d", MapPointNumber);
     // uartPrint(debugMsg);
@@ -175,25 +186,29 @@ void Cmd9() {
     ZoneY = ((Instruction & 0b111100000000) <<4) | abs(Y); //20240628. eg <9:257. => 0b0001 0000 0001 .  This is point 1 in zone 1.  <9:518> =>  0b0010 0000 0110 would be point 6 in zone 2.
     // Compounding with Y only works if the first byte of Y (4 bytes, first being highest) is 0 (which is where zone is encoded).
     // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);    
-
-    // Debug message before EEPROM update
-    // sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y,Instruction, ZoneY);
-    // uartPrint(debugMsg);
-
+    #ifdef PRINT_CMD9 
+    sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y,Instruction, ZoneY);
+    uartPrint(debugMsg);
+    #endif
     // Update EEPROM with X and Y values.  Note that index for EramPositions is zero based whereas app treats as 1 based.  Hence MapPointNumber-1
     uint16_t eepromAddress = (uint16_t)&EramPositions[MapPointNumber-1].EramX;
-    // sprintf(debugMsg, "EEPROM address for X: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramX);
-    // uartPrint(debugMsg);
     eeprom_update_word((uint16_t*)eepromAddress, X);
+    #ifdef PRINT_CMD9 
+        sprintf(debugMsg, "X: %04x,%d", eepromAddress,X);
+        uartPrint(debugMsg);
+    #endif
+    
     eepromAddress = (uint16_t)&EramPositions[MapPointNumber-1].EramY;
-    // sprintf(debugMsg, "EEPROM address for Y: %04x", (uint16_t)&EramPositions[MapTotalPoints].EramY);
-    // uartPrint(debugMsg);
     eeprom_update_word((uint16_t*)eepromAddress, ZoneY);
+    #ifdef PRINT_CMD9
+        sprintf(debugMsg, "Y: %04x,%d", eepromAddress,Y);
+        uartPrint(debugMsg);
+    #endif
+
     Audio2(1,2,0,"AC9");
     // Debug message to indicate function completion
     // sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x", X, Y, OperationZone, Command, Instruction);
     // uartPrint(debugMsg);
-
     setupTimer3();
 }
 
@@ -326,21 +341,13 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
 }
 
 void Cmd15() {
+    eeprom_update_byte(&Eram_Tilt_Sep, Instruction);
     Tilt_Sep = Instruction;
     // Adjust the laser EramMinimumLaserPower
     // EramMinimumLaserPower = Instruction;
     // MinimumLaserPower = Instruction;
     // Audio2(1,2,0);
 }
-
-// void cmdSpeedZone(uint8_t i){
-//     // Adjust Zone i X & Y speed
-//     eeprom_update_byte(&EramSpeedZone[i], Instruction);
-//     SpeedZone[i] = Instruction;
-//     CalcSpeedZone();
-//     DSS_preload = CalcSpeed(); // Calculate speed from Y tilt value
-//     Audio2(1,2,0);
-// }
 void Cmd16() { //
     eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
     Step_Rate_Min = Instruction;
@@ -371,7 +378,19 @@ void Cmd21() {
     // LoadActiveMapZones(); //Does this need to be run?
     Audio2(1,2,0,"AC21");
 }
+void Cmd22() { //
+    eeprom_update_byte(&EramSpeedScale, Instruction);
+    SpeedScale = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0,"AC22");
+}
 
+void Cmd23() { //
+    eeprom_update_byte(&EramLaserHt, Instruction);
+    LaserHt = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0,"AC23");
+}
 void Cmd30() {
     eeprom_update_word(&EramResetSeconds, Instruction);
     ResetSeconds = Instruction;

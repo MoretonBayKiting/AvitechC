@@ -20,9 +20,9 @@ void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if the
     eeprom_update_byte(&EramLaser2OperateFlag, DEF_LASER_2_OPERATE_FLAG);
     // Map Settings
     eeprom_update_byte(&EramMapTotalPoints, DEF_MAP_TOTAL_PTS);
-    for(int i = 0; i < 5; i++) {
-        eeprom_update_byte(&EramSpeedZone[i], DEF_SPEED);
-    }
+    // for(int i = 0; i < 5; i++) {
+    //     eeprom_update_byte(&EramSpeedZone[i], DEF_SPEED);
+    // }
     
     eeprom_update_byte(&EramActiveMapZones, DEF_ACTIVE_MAP_ZONES);
     eeprom_update_word(&EramLaserID, DEF_LASER_ID);
@@ -83,10 +83,43 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
     FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
     LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
-
-    // Step_Rate_Min = eeprom_read_word(&Eram_Step_Rate_Min);
-    // Step_Rate_Max = eeprom_read_word(&Eram_Step_Rate_Max);
-    // Rho_Min = eeprom_read_byte(&Eram_Rho_Min);
-    // Rho_Max = eeprom_read_byte(&Eram_Rho_Max);
-    // Nbr_Rnd_Pts = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
 }
+
+#ifdef PRINT_EEPROM
+void PrintEramVars(){
+    sprintf(debugMsg,"UserLaserPower:  %p, %d",(void*)&EramUserLaserPower, eeprom_read_byte(&EramUserLaserPower));  
+    uartPrint(debugMsg);  
+    sprintf(debugMsg,"MaxLaserPower:  %p, %d",(void*)&EramMaxLaserPower, eeprom_read_byte(&EramMaxLaserPower));  
+    uartPrint(debugMsg);  
+    // Laser2TempTrip = eeprom_read_byte(&EramLaser2TempTrip);
+    // Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
+    // Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
+    sprintf(debugMsg,"MapTotalPoints:  %p, %d",(void*)&EramMapTotalPoints, eeprom_read_byte(&EramMapTotalPoints));  
+    uartPrint(debugMsg);  
+    sprintf(debugMsg,"Gyro address:  %02x", (void*)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));  
+    uartPrint(debugMsg);  
+    MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
+    for (uint8_t i=0;i<MapTotalPoints;i++){
+        sprintf(debugMsg,"WPi: %u x: %u y: %u",i, eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY));  
+        uartPrint(debugMsg);  
+    }
+    // for(int i = 0; i < 5; i++) {
+    //     SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
+    // }
+    sprintf(debugMsg,"ActiveMapZones:  %p, : %d",(void*)&EramActiveMapZones, eeprom_read_byte(&EramActiveMapZones));  
+    uartPrint(debugMsg);  
+
+    // LaserID = eeprom_read_word(&EramLaserID);
+    sprintf(debugMsg, "AccelTrip: %p, %d", (void*)&EramAccelTripPoint, eeprom_read_word(&EramAccelTripPoint));
+    uartPrint(debugMsg);  
+
+    // ResetSeconds = eeprom_read_word(&EramResetSeconds);  //NOLINT
+    sprintf(debugMsg, "OperationMode: %p, %d", (void*)&EramOperationMode, eeprom_read_byte(&EramOperationMode));
+    uartPrint(debugMsg);  
+    sprintf(debugMsg, "FirstTimeOn: %p, %d", (void*)&EramFirstTimeOn, eeprom_read_byte(&EramFirstTimeOn));
+    uartPrint(debugMsg);  
+    // UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
+    // FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
+    // LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
+}
+#endif

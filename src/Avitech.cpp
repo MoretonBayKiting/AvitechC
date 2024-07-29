@@ -84,6 +84,7 @@ uint8_t EEMEM EramMapTotalPoints;
 uint8_t MapTotalPoints;                                 
 bool X_TravelLimitFlag = false;                                // Over travel flag
 bool Y_TravelLimitFlag = false;                                // Over travel flag
+bool JogFlag = false;                    //Set this if jogging motors.  This to allow testing boudaries.
 uint16_t y_maxCount;                                   // Max Count Y can have. This changes for different mode as more or less tilt is required in different modes
 uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[2][i] is cumulative of MapCount[1][i]
 uint8_t Zn;
@@ -921,8 +922,8 @@ void ReadAccelerometer() {
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
     if(!(cnt % 10000)){
-        // sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
-        // uartPrint(debugMsg);
+        sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+        uartPrint(debugMsg);
     }
 }
 void DecodeAccelerometer() {
@@ -933,6 +934,7 @@ void DecodeAccelerometer() {
             if (Accel_Z.Z_accel < AccelTripPoint) {
                 Z_AccelFlag = 1;
                 SystemFaultFlag = true;
+                uartPrintFlash(F("AccelTripPoint error. \n"));
             } else {
                 Z_AccelFlag = 0;
                 SystemFaultFlag = false;
@@ -1123,7 +1125,6 @@ void initMPU() {
         Wire.requestFrom(GyroAddress, (uint8_t)1); // Request 1 byte
         if (Wire.available()) {
             uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
-            // sprintf(debugMsg, "Accel Chip %02x Gyro address: %02x", whoAmI, GyroAddress);
             uartPrintFlash(F("Accel Chip & Gyro address: "));
             sprintf(debugMsg,"%d, %02x", whoAmI, GyroAddress);
             uartPrint(debugMsg);
@@ -1413,6 +1414,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     uint8_t dirn = 0;
     uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
 
+
     for (uint8_t i = 0; i < MapCount[0][zn_1]-1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone zn.
         // 20240727: Changed upper limit from i < MapCount[0][zn_1]-1 to i < MapCount[0][zn_1].  Bad result (ref Debug20240727B.txt)
         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
@@ -1469,6 +1471,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
     // 20240727: Add the repeated vertex and increase NbrPerimeterPts to accomodate that.
     Perimeter[0][j] = Vertices[0][MapCount[0][zn_1]-1];
     Perimeter[1][j] = Vertices[1][MapCount[0][zn_1]-1];
+    printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], j);
     NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
     // j++; //This is necessary so that next segment starts at right value/index.
 }
@@ -1537,7 +1540,7 @@ uint8_t getExtremeY(bool upDown) {//Get the index of the maximum (upDown true) o
 }
 // Positioning and motor control 
 void getXY(uint8_t ind, uint8_t pat, uint8_t z) {
-    if (ind < NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
+    if (ind <= NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
         X = Perimeter[0][ind];
         Y = Perimeter[1][ind];
     } else {
@@ -1640,10 +1643,43 @@ void StopSystem() {
     Y = AbsY;
 }
 
+void avoidLimits(bool axis){
+    if (JogFlag){
+        uint8_t TOLERANCE = 10;
+        if(!axis){
+            if(abs(AbsX) >= X_MAX_COUNT) {
+                X_TravelLimitFlag = 1;   
+                SystemFaultFlag = true;
+                uartPrintFlash(F("AbsX: "));
+                uartPrint(AbsX);
+                ProcessError();
+                StopTimer1();
+            } else {  //20240717: Both flags should be reset if there is no longer an error
+                X_TravelLimitFlag = false;       
+                SystemFaultFlag=false;
+            }
+        } else {
+            if (AbsY<=0 ||AbsY>=y_maxCount){
+                Y_TravelLimitFlag = true;
+                SystemFaultFlag=true;
+                uartPrintFlash(F("AbsY: "));
+                uartPrint(AbsY);
+                ProcessError();
+                StopTimer1();
+            } else { //20240717: Both flags should be reset if there is no longer an error
+                Y_TravelLimitFlag = false;       
+                SystemFaultFlag=false;
+            }
+        }
+    }
+
+}
+
 void JogMotors(bool prnt) {//
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
+    JogFlag = true;
     int pos = 0;
 
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
@@ -1653,16 +1689,7 @@ void JogMotors(bool prnt) {//
         speed = PanSpeed;
         dir = PanDirection;
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
-        if(abs(X) >= X_MAX_COUNT ) {
-            X_TravelLimitFlag = 1;   
-            SystemFaultFlag = true;
-            uartPrintFlash(F("XErr"));
-            ProcessError();
-            StopTimer1();
-        } else {  //20240717: Both flags should be reset if there is no longer an error
-            X_TravelLimitFlag = false;       
-            SystemFaultFlag=false;
-        }
+        avoidLimits(false);
     }
     if (TiltEnableFlag == 1) {
         SteppingStatus = 1;
@@ -1670,16 +1697,7 @@ void JogMotors(bool prnt) {//
         speed = TiltSpeed;
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
-        if (Y<=0||Y>=y_maxCount){
-            Y_TravelLimitFlag = true;
-            SystemFaultFlag=true;
-            uartPrintFlash(F("YErr"));
-            ProcessError();
-            StopTimer1();
-        } else { //20240717: Both flags should be reset if there is no longer an error
-            Y_TravelLimitFlag = false;       
-            SystemFaultFlag=false;
-        }
+        avoidLimits(true);
     }
 
     pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
@@ -1696,6 +1714,7 @@ void JogMotors(bool prnt) {//
         StartTimer1();  //20240620.  Could be only if necessary?
         MoveMotor(axis, pos, 1);
     }
+    JogFlag = false;
 }
 
 uint16_t CalcSpeed() {
@@ -1814,6 +1833,7 @@ void RunSweep(uint8_t zn) {
     LoadZoneMap(zn);
     GetPerimeter(zn);
     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
+        HomeAxis(); //20240729
         for (uint8_t Index = 0; Index < NbrPerimeterPts + Nbr_Rnd_Pts; Index++) {
             // Store present point to use in interpolation
             last[0] = X;
@@ -2044,7 +2064,8 @@ void DoHouseKeeping() {
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
-
+    avoidLimits(true); //20240729 
+    avoidLimits(false);
     if (Tick > 4) {
         TransmitData();
         PrintAppData();
@@ -2130,7 +2151,7 @@ void setup() {
     SetLaserVoltage(0);                                     //Lasers switched off
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
-    Audio2(7,10,5,"Setup"); 
+    Audio2(5,1,1,"Setup"); 
     _delay_ms(AUDIO_DELAY);
     HomeAxis();
 }

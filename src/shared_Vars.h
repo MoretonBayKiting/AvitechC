@@ -140,6 +140,7 @@ void uartPrint(const char* str);
 void printToBT(uint8_t cmd, uint16_t inst);
 void StopTimer1();
 void StopTimer3();
+void setupTimer1();
 void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 

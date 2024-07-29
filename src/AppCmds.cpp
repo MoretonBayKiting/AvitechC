@@ -75,6 +75,7 @@ void Cmd1() {
 
 void Cmd2() {
     // Process Pan Stop/Start Register
+    setupTimer1(); //20240729: Start Timer 1 - it may have been stopped by going outside boundary.
     TiltEnableFlag = 0;  //20240620: Added by TJ.
     PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Pan Direction Register
@@ -89,6 +90,7 @@ void Cmd2() {
 
 void Cmd3() {
     // Process Tilt Stop/Start Register
+    setupTimer1();
     PanEnableFlag = 0; //20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Tilt Direction Register
@@ -399,7 +401,7 @@ void Cmd30() {
 
 void Cmd31() {
     eeprom_update_byte(&EramMapTotalPoints, 0);
-    // MapTotalPoints = 0;
+    MapTotalPoints = 0;
     Audio2(2,1,3,"AC31");
 }
 

@@ -1424,7 +1424,7 @@ void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone,
         dirn = 0;
         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
-        printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
+        // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
         // #ifdef DEBUG
         printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
         // #endif
@@ -1539,8 +1539,8 @@ uint8_t getExtremeY(bool upDown) {//Get the index of the maximum (upDown true) o
     return ind;
 }
 // Positioning and motor control 
-void getXY(uint8_t ind, uint8_t pat, uint8_t z) {
-    if (ind <= NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
+void getXY(uint8_t ind, uint8_t pat) {//, uint8_t z) {  Zn is not passed as Perimeter() is loaded with the relevant zone data.
+    if (ind < NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
         X = Perimeter[0][ind];
         Y = Perimeter[1][ind];
     } else {
@@ -1771,6 +1771,7 @@ void MoveLaserMotor() {
     SteppingStatus = 1;
     StartTimer1();
     while (SteppingStatus == 1) { // do nothing while motor moves 
+        DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
     }
     StopTimer1(); // Stop the motor from stepping as sensor has been triggered.  20240615: The sensor has not been triggered. This is called when the target position is reached.
     StepCount = 0; // Clear the step count
@@ -1794,22 +1795,19 @@ void HomeAxis() {
     StartTimer1(); //Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
     // *********PAN AXIS HOME****************
-    // CheckTimer1(2);
     if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
         // uartPrintFlash(F("Move from pan stop \n"));
         MoveMotor(0, -300, 1);
     }
-    // CheckTimer1(3);
     HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
         // uartPrintFlash(F("Move from tilt stop \n"));
         MoveMotor(1, 300, 1);
     }
-    // CheckTimer1(4);
+    CmdLaserOnFlag = false; //20240731
     HomeMotor(1, -5000);  //Tilt motor homing position
     // --**Move Tilt into final position**--
-    // CheckTimer1(5);
     switch (OperationMode) {
         case 0: Correctionstepping = 100; break;
         case 1: Correctionstepping = -220; break;
@@ -1818,7 +1816,7 @@ void HomeAxis() {
         default: Correctionstepping = 100; break;
     }
     MoveMotor(1, Correctionstepping, 1);
-    // CheckTimer1(6);
+    CmdLaserOnFlag = false; //20240731
     NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
     Audio2(2,1,1,"HA");
@@ -1838,7 +1836,7 @@ void RunSweep(uint8_t zn) {
             // Store present point to use in interpolation
             last[0] = X;
             last[1] = Y;
-            getXY(Index, PatType, zn);
+            getXY(Index, PatType);
             nxt[0] = X;
             nxt[1] = Y;
             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);

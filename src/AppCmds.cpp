@@ -64,7 +64,7 @@ void Cmd1() {
 
     GetLaserTemperature();
     ThrottleLaser();
-    Audio2(1,2,0,"AC1");
+    Audio2(1,2,0);//,"AC1");
     _delay_ms(100);
 }
 
@@ -75,22 +75,20 @@ void Cmd1() {
 
 void Cmd2() {
     // Process Pan Stop/Start Register
-    setupTimer1(); //20240729: Start Timer 1 - it may have been stopped by going outside boundary.
     TiltEnableFlag = 0;  //20240620: Added by TJ.
     PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Pan Direction Register
     PanDirection = (Instruction & 0b00000010) ? 1 : 0;
     // Process Pan Speed Register
     PanSpeed  = (Instruction & 0b00000100) ? 1 : 0;
-    // sprintf(debugMsg,"Cmd2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
-    // uartPrint(debugMsg);
-    // _delay_ms(30);
-    // resetDebugCounters();
+    // Reset PanEnableFlag to zero if outside range.
+    if (PanDirection ==1 & JogFlag== 1) PanEnableFlag == 0;
+    if (PanDirection ==0 & JogFlag== 2) PanEnableFlag == 0;
+    setupTimer1(); //20240729: Start Timer 1 - it may have been stopped by going outside boundary.
 }
 
 void Cmd3() {
     // Process Tilt Stop/Start Register
-    setupTimer1();
     PanEnableFlag = 0; //20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
     // Process Tilt Direction Register
@@ -98,10 +96,9 @@ void Cmd3() {
     //20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
     // Process Tilt Speed Register
     TiltSpeed  = (Instruction & 0b00000100) ? 1 : 0;
-    // sprintf(debugMsg,"Cmd3: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %#04x",X, Y, Dx, Dy, AbsX, AbsY, PIND);
-    // uartPrint(debugMsg);
-    // _delay_ms(30);
-    // resetDebugCounters();
+    if (TiltDirection ==1 & JogFlag== 3) TiltEnableFlag == 0;
+    if (TiltDirection ==0 & JogFlag== 4) TiltEnableFlag == 0;
+    setupTimer1();
 }
 
 void Cmd4() {
@@ -109,20 +106,20 @@ void Cmd4() {
     MaxLaserPower = Instruction;  //#define DEF_MAX_LASER_POWER 120
     GetLaserTemperature();
     ThrottleLaser();
-    Audio2(1,2,0,"AC4");
+    Audio2(1,2,0);//,"AC4");
 }
 
 void Cmd5() {
     eeprom_update_word(&EramLaserID, Instruction);
     LaserID = Instruction;
-    Audio2(1,2,0,"AC5");
+    Audio2(1,2,0);//,"AC5");
 }
 
 void Cmd6() {
     X = Instruction;
     ProcessCoordinates();
     SteppingStatus = 1;
-    Audio2(1,2,0,"AC6");
+    Audio2(1,2,0);//,"AC6");
     // StartTimer1();
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
@@ -131,7 +128,7 @@ void Cmd7() {
     Y = Instruction;
     ProcessCoordinates();
     SteppingStatus = 1;
-    Audio2(1,2,0,"AC7");
+    Audio2(1,2,0);//,"AC7");
     // StartTimer1();
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
@@ -207,7 +204,7 @@ void Cmd9() {
         uartPrint(debugMsg);
     #endif
 
-    Audio2(1,2,0,"AC9");
+    Audio2(1,2,0);//,"AC9");
     // Debug message to indicate function completion
     // sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x", X, Y, OperationZone, Command, Instruction);
     // uartPrint(debugMsg);
@@ -228,18 +225,18 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     if (A == 0b00000001) {   //Program Mode  <10:1>
         WarnLaserOnOnce = 1; //Enable laser warning when Program Mode button is pressed
         SetupModeFlag = 1;
-        Audio2(2,2,2,"AC10:1");
+        Audio2(2,2,2);//,"AC10:1");
         ProgrammingMode();   //Home machine ready for programming in points
     }
 
     if (A == 0b00000100) {  //Full cold restart of device <10:4>
-        Audio2(1,2,0,"AC10:4");
+        Audio2(1,2,0);//,"AC10:4");
         setupWatchdog();
         _delay_ms(1000);
     }
 
     if (A == 0b00001000) {  //Setup light sensor mode    <10:8>
-        Audio2(1,2,0,"AC10:8");
+        Audio2(1,2,0);//,"AC10:8");
         SetupModeFlag = 2;
         _delay_ms(1000);
     }
@@ -248,7 +245,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
         if (SetupModeFlag == 2 && LightLevel < 100) {
             eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
             FactoryLightTripLevel = LightLevel;
-            Audio2(1,2,0,"AC10:16");
+            Audio2(1,2,0);//,"AC10:16");
             _delay_ms(1);
         }
     }
@@ -256,13 +253,13 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     if (A == 0b00100000) {      //App telling the micro that the bluetooth is connected
         BT_ConnectedFlag = 1;
         SendDataFlag = 0;       //Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-        Audio2(1,2,0,"AC10:32");
+        Audio2(1,2,0);//,"AC10:32");
         PrintConfigData();      //Send area data back to the app for user to see
     }
 
     if (A == 0b01000000) {      //App telling the micro that the bluetooth is disconnected
         BT_ConnectedFlag = 0;
-        Audio2(1,2,0,"AC10:64");
+        Audio2(1,2,0);//,"AC10:64");
     }
 }
 
@@ -271,13 +268,13 @@ void Cmd11() {
     if (Instruction == 0b00000001) {
         SendDataFlag ^= 1;  //Toggle value of SendDataFlag
         SendSetupDataFlag = 0;
-        Audio2(1,2,0,"AC11:1");
+        Audio2(1,2,0);//,"AC11:1");
     }
 
     // Process the full reset flag on next restart
     if (Instruction == 0b00000010) {
         eeprom_update_byte(&EramFirstTimeOn, 0xFF);
-        Audio2(1,2,0,"AC11:2");
+        Audio2(1,2,0);//,"AC11:2");
     }
 
     if (Instruction == 0b00000100) { // Set GyroAddress to true
@@ -285,7 +282,7 @@ void Cmd11() {
         GyroAddress = MPU6050_ADDRESS;
         GyroOnFlag = true;
         initMPU();
-        Audio2(1,2,0,"AC11:4");
+        Audio2(1,2,0);//,"AC11:4");
     }
 
     if (Instruction == 0b00001000) { // Set GyroAddress to false
@@ -293,7 +290,7 @@ void Cmd11() {
         GyroAddress = MPU6000_ADDRESS;
         GyroOnFlag = true;
         initMPU();
-        Audio2(1,2,0,"AC11:8");
+        Audio2(1,2,0);//,"AC11:8");
     }
     // sprintf(debugMsg,"Gyro add & val: %p, %02x, z_accel: %d",(void*)&EramGyroAddress, GyroAddress, Accel_Z.Z_accel);  
     sprintf(debugMsg,"Gyro add & val: %p, %02x",(void*)&EramGyroAddress, GyroAddress);  
@@ -304,7 +301,7 @@ void Cmd12() {
     // Store the accelerometer trip point
     eeprom_update_word(&EramAccelTripPoint, Instruction);
     AccelTripPoint = Instruction;
-    Audio2(3,4,2,"AC12");
+    Audio2(3,4,2);//,"AC12");
     sprintf(debugMsg,"AccelTripPoint: %d",AccelTripPoint);
     uartPrint(debugMsg);
 }
@@ -339,7 +336,7 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
     printToBT(19, OpZone);
     MapTotalPoints -= 1;
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
-    Audio2(1,2,0,"AC14");
+    Audio2(1,2,0);//,"AC14");
 }
 
 void Cmd15() {
@@ -378,61 +375,61 @@ void Cmd21() {
     eeprom_update_byte(&EramActiveMapZones, Instruction);
     ActiveMapZones = Instruction;
     // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0,"AC21");
+    Audio2(1,2,0);//,"AC21");
 }
 void Cmd22() { //
     eeprom_update_byte(&EramSpeedScale, Instruction);
     SpeedScale = Instruction;
     // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0,"AC22");
+    Audio2(1,2,0);//,"AC22");
 }
 
 void Cmd23() { //
     eeprom_update_byte(&EramLaserHt, Instruction);
     LaserHt = Instruction;
     // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0,"AC23");
+    Audio2(1,2,0);//,"AC23");
 }
 void Cmd30() {
     eeprom_update_word(&EramResetSeconds, Instruction);
     ResetSeconds = Instruction;
-    Audio2(1,2,0,"AC30");
+    Audio2(1,2,0);//,"AC30");
 }
 
 void Cmd31() {
     eeprom_update_byte(&EramMapTotalPoints, 0);
     MapTotalPoints = 0;
-    Audio2(2,1,3,"AC31");
+    Audio2(2,1,3);//,"AC31");
 }
 
 void Cmd32() {
     eeprom_update_byte(&EramLaser2OperateFlag, Instruction);
     Laser2OperateFlag = Instruction;
-    Audio2(1,2,0,"AC32");
+    Audio2(1,2,0);//,"AC32");
 }
 
 void Cmd33() {
     eeprom_update_byte(&EramLaser2BattTrip, Instruction);
     Laser2BattTrip = Instruction;
-    Audio2(1,2,0,"AC33");
+    Audio2(1,2,0);//,"AC33");
 }
 
 void Cmd34() {
     eeprom_update_byte(&EramLaser2TempTrip, Instruction);
     Laser2TempTrip = Instruction;
-    Audio2(1,2,0,"AC34");
+    Audio2(1,2,0);//,"AC34");
 }
 
 void Cmd35() {
     eeprom_update_byte(&EramUserLightTripLevel, Instruction);
     UserLightTripLevel = Instruction;
-    Audio2(1,2,0,"AC35");
+    Audio2(1,2,0);//,"AC35");
 }
 
 void Cmd36() {
     eeprom_update_byte(&EramLightTriggerOperation, Instruction);
     LightTriggerOperation = Instruction;
-    Audio2(1,2,0,"AC36");
+    Audio2(1,2,0);//,"AC36");
 }
 
 void Cmd37() {
@@ -448,13 +445,13 @@ void Cmd37() {
     printToBT(26, HexResult);
     _delay_ms(50);
     // Clear serial input buffer
-    Audio2(1,2,0,"AC37");
+    Audio2(1,2,0);//,"AC37");
 }
 
 void Cmd38() {
     eeprom_update_byte(&EramFactoryLightTripLevel, Instruction);
     FactoryLightTripLevel = Instruction;
-    Audio2(1,2,0,"AC38");
+    Audio2(1,2,0);//,"AC38");
 }
 
 void Cmd39(){

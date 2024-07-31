@@ -84,8 +84,9 @@ uint8_t EEMEM EramMapTotalPoints;
 uint8_t MapTotalPoints;                                 
 bool X_TravelLimitFlag = false;                                // Over travel flag
 bool Y_TravelLimitFlag = false;                                // Over travel flag
-bool JogFlag = false;                    //Set this if jogging motors.  This to allow testing boudaries.
-uint16_t y_maxCount;                                   // Max Count Y can have. This changes for different mode as more or less tilt is required in different modes
+//Use JogFlag to stop jogging if device is out of range.  0: allow jogging.  1: AbsX>X_MAXCOUNT; 2: AbsX<>>X_MINCOUNT; 3: AbsY > y_maxcount; 4: AbsY < 0; 
+uint8_t JogFlag = 0;                    
+uint16_t y_maxCount;// = 1800;                                   // Max Count Y can have. This changes for different mode as more or less tilt is required in different modes
 uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[2][i] is cumulative of MapCount[1][i]
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
@@ -456,10 +457,11 @@ ISR(USART0_RX_vect) {
 void ProcessError(){
     if(Z_AccelFlag){
         Audio2(2,1,1,"PEAF");
+        // Audio2(2,1,1);
         return;
     }
     if(LaserOverTempFlag){
-        Audio2(3,1,2,"PELas");
+        Audio2(3,1,2);//,"PELas");
         return;
     }
    if(X_TravelLimitFlag || Y_TravelLimitFlag) {
@@ -765,12 +767,17 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd) {
 }
 // Overloaded version with debugInfo
 void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
+// void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const __FlashStringHelper* debugInfo) {    
     OnTicks = OnPd;
     OffTicks = OffPd;
     AudioLength = cnt * (OnTicks + OffTicks); // Could be cnt * OnTicks + (cnt-1)*OffTicks;
     if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
     #ifdef DEBUG 
-    uartPrint(debugInfo);
+    if (debugInfo != nullptr) {
+        if(debugInfo!="Flick") uartPrint(debugInfo);
+    } else {
+        uartPrint("Debug null");
+    }
     #endif
     // #ifdef DEBUG 
     // uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
@@ -863,7 +870,7 @@ void WaitAfterPowerUp() {
 // Sensor interactions
 void WarnLaserOn() {
     if (WarnLaserOnOnce == 1) {
-        Audio2(2,18,8,"WLO");
+        Audio2(2,18,8);//,"WLO");
         WarnLaserOnOnce = 0;
     }
 }
@@ -1615,7 +1622,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
     // CheckTimer1(11);
     DSS_preload = HOMING_SPEED;
     SteppingStatus = 1;
-    StartTimer1();
+    setupTimer1();
     if (waitUntilStop == 1) {  //So, if waitUntilStop is not 1, execution returns ?  Yes returns to HomeMotor() where there is a (blocking) {while limit switch is low} condition.
         // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
         while (SteppingStatus == 1) {
@@ -1644,42 +1651,59 @@ void StopSystem() {
 }
 
 void avoidLimits(bool axis){
-    if (JogFlag){
-        uint8_t TOLERANCE = 10;
-        if(!axis){
-            if(abs(AbsX) >= X_MAX_COUNT) {
-                X_TravelLimitFlag = 1;   
-                SystemFaultFlag = true;
-                uartPrintFlash(F("AbsX: "));
-                uartPrint(AbsX);
-                ProcessError();
-                StopTimer1();
-            } else {  //20240717: Both flags should be reset if there is no longer an error
-                X_TravelLimitFlag = false;       
-                SystemFaultFlag=false;
+    JogFlag=0;
+    // if(SetupModeFlag == 1){
+    // uint8_t TOLERANCE = 2;
+        if(!axis){ //Pan axis case
+            if(AbsX >= X_MAXCOUNT) {
+                JogFlag = 1;
+                // sprintf(debugMsg,"X_Max:AbsY %d, Y %d",AbsX, X);
+                // uartPrint(debugMsg);
+            } else if(AbsX <= X_MINCOUNT) {
+                JogFlag = 2;
+                // StopTimer1();
+                }
+            // X_TravelLimitFlag = 1;   //20240731: Allow JogFlag to control this error - don't set this flag or others.
+            // SystemFaultFlag = true;
+            // uartPrintFlash(F("AbsX: "));
+            // uartPrint(AbsX);
+            // ProcessError();
+            // StopTimer1();
+            // else {  //20240717: Flags should be reset if there is no longer an error
+            //     JogFlag = 0;
+            //     // X_TravelLimitFlag = false;       
+            //     // SystemFaultFlag=false;
+            // }
+        } else { //Tilt axis
+            if (AbsY>=y_maxCount) {
+                JogFlag = 3;
+                sprintf(debugMsg,"Y_Max:AbsY %d, Y %d, y_maxcount %d",AbsY, Y, y_maxCount);
+                uartPrint(debugMsg);
+                // StopTimer1();
+            } else if (AbsY<=0) {
+                JogFlag = 4;
+                sprintf(debugMsg,"Y_Min:AbsY %d, Y %d",AbsY, Y);
+                uartPrint(debugMsg);
+                // StopTimer1();
             }
-        } else {
-            if (AbsY<=0 ||AbsY>=y_maxCount){
-                Y_TravelLimitFlag = true;
-                SystemFaultFlag=true;
-                uartPrintFlash(F("AbsY: "));
-                uartPrint(AbsY);
-                ProcessError();
-                StopTimer1();
-            } else { //20240717: Both flags should be reset if there is no longer an error
-                Y_TravelLimitFlag = false;       
-                SystemFaultFlag=false;
-            }
+            // Y_TravelLimitFlag = true;
+            // SystemFaultFlag=true;
+            // uartPrintFlash(F("AbsY: "));
+            // uartPrint(AbsY);
+            // ProcessError();
+            // else { //20240717: Flags should be reset if there is no longer an error
+            // JogFlag = 0;
+            // Y_TravelLimitFlag = false;       
+            // SystemFaultFlag=false;
         }
-    }
-
+    // }
 }
 
 void JogMotors(bool prnt) {//
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
-    JogFlag = true;
+    JogFlag = 0;
     int pos = 0;
 
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
@@ -1711,10 +1735,10 @@ void JogMotors(bool prnt) {//
         StopSystem();
     }
     else {
-        StartTimer1();  //20240620.  Could be only if necessary?
+        setupTimer1();  //20240620.  Could be only if necessary?
         MoveMotor(axis, pos, 1);
     }
-    JogFlag = false;
+    JogFlag = 0;
 }
 
 uint16_t CalcSpeed() {
@@ -1769,9 +1793,10 @@ void MoveLaserMotor() {
     ProcessCoordinates(); // Drive motors to the coordinates
     DSS_preload = HOMING_SPEED; // Set speed rate
     SteppingStatus = 1;
-    StartTimer1();
+    setupTimer1();
     while (SteppingStatus == 1) { // do nothing while motor moves 
-        DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
+        // uartPrintFlash(F("In MLM"));
+        // DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
     }
     StopTimer1(); // Stop the motor from stepping as sensor has been triggered.  20240615: The sensor has not been triggered. This is called when the target position is reached.
     StepCount = 0; // Clear the step count
@@ -1781,10 +1806,14 @@ void NeutralAxis() {
     // Neutral Position: (-4000,1000)
     // Pan motor to neutral position
     X = -4000; // Clockwise 90 deg pan
+    sprintf(debugMsg,"AbsX %d, X %d",AbsX, X);
+    uartPrint(debugMsg);
     MoveLaserMotor();
     // TILT AXIS HOME
     // Tilt motor to neutral position
     Y = 500; // Half way down
+    sprintf(debugMsg,"AbsY %d, Y %d",AbsX, X);
+    uartPrint(debugMsg);
     MoveLaserMotor();
     Audio2(1,2,0,"Neut");
     _delay_ms(AUDIO_DELAY);
@@ -1792,7 +1821,7 @@ void NeutralAxis() {
 
 void HomeAxis() {
     int Correctionstepping;
-    StartTimer1(); //Probably not necessary.
+    setupTimer1(); //Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
     // *********PAN AXIS HOME****************
     if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
@@ -1810,7 +1839,7 @@ void HomeAxis() {
     // --**Move Tilt into final position**--
     switch (OperationMode) {
         case 0: Correctionstepping = 100; break;
-        case 1: Correctionstepping = -220; break;
+        case 1: Correctionstepping = 0; break; // 20240801: Has beenb -220.  But this is <0 so breaches AvoidLimits().
         case 2: Correctionstepping = 100; break;
         case 3: Correctionstepping = -220; break;
         default: Correctionstepping = 100; break;
@@ -1831,7 +1860,7 @@ void RunSweep(uint8_t zn) {
     LoadZoneMap(zn);
     GetPerimeter(zn);
     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
-        HomeAxis(); //20240729
+        // HomeAxis(); //20240729
         for (uint8_t Index = 0; Index < NbrPerimeterPts + Nbr_Rnd_Pts; Index++) {
             // Store present point to use in interpolation
             last[0] = X;
@@ -1845,6 +1874,7 @@ void RunSweep(uint8_t zn) {
             // sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
             sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
             uartPrint(debugMsg);
+            _delay_ms(50); //20240831  Add this to separate it from next prints.
 
             if (Index == 0) { //20240727: Change to zero (from 1). So laser is off as it moves towards 0th point of cycle.
                 CmdLaserOnFlag = false;
@@ -1871,11 +1901,15 @@ void RunSweep(uint8_t zn) {
                 // uartPrint(debugMsg);
 
                 SteppingStatus = 1;
-                StartTimer1();
+                uartPrintFlash(F("<T1 RS"));
+                setupTimer1();
 
                 while (SteppingStatus == 1) {
+                    uartPrintFlash(F("<DHK RS \n"));
                     DoHouseKeeping();
+                    uartPrintFlash(F(">DHK RS \n"));
                     if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
+                        uartPrintFlash(F("SUM1 RS \n"));
                         StopTimer1();
                         StepCount = 0;
                         SteppingStatus = 0;
@@ -2030,7 +2064,7 @@ void OperationModeSetup(int OperationMode) {
             break;
         case 1:
             name = "Roof-i";
-            y_maxCount = 4095;
+            y_maxCount = 3250;
             strcpy(OpModeTxt,"1:Roof-i");
             break;
         case 2:
@@ -2062,8 +2096,8 @@ void DoHouseKeeping() {
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
-    avoidLimits(true); //20240729 
-    avoidLimits(false);
+    // avoidLimits(true); //20240731 
+    // avoidLimits(false);
     if (Tick > 4) {
         TransmitData();
         PrintAppData();
@@ -2149,7 +2183,7 @@ void setup() {
     SetLaserVoltage(0);                                     //Lasers switched off
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
-    Audio2(5,1,1,"Setup"); 
+    Audio2(5,1,1);//,"Setup"); 
     _delay_ms(AUDIO_DELAY);
     HomeAxis();
 }

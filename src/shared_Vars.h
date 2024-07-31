@@ -7,7 +7,7 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-// #define DEBUG
+#define DEBUG
 // #define PRINT_EEPROM
 #define PRINT_CMD9
 // Variables
@@ -20,6 +20,7 @@ extern uint8_t LaserPower;
 extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
+extern uint8_t JogFlag;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
 extern uint8_t PanSpeed;

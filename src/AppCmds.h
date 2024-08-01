@@ -21,7 +21,7 @@ void Cmd11(void);
 void Cmd12(void);
 void Cmd13(void);
 void Cmd14(void);
-void Cmd15(void);
+// void Cmd15(void);
 void cmdSpeedZone(uint8_t i);
 void Cmd16(void);
 void Cmd17(void);
@@ -47,6 +47,16 @@ void Cmd36(void);
 void Cmd37(void);
 void Cmd38(void);
 void Cmd39(void);
+
+void Cmd45(void);
+void Cmd46(void);
+void Cmd47(void);
+void Cmd48(void);
+void Cmd49(void);
+void Cmd50(void);
+void Cmd51(void);
+void Cmd52(void);
+void Cmd53(void);
 
 void DecodeCommsData(void);
 #endif // APPCMDS_H

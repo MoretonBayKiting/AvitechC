@@ -24,20 +24,13 @@ void DecodeCommsData() {
         case 7: Cmd7(); break; // Y = Instruction;  Start timer1.
         case 8: Cmd8(); break;  //Print EEPROM values to serial output.  Need PRINT_EEPROM defined.
         case 9: Cmd9(); break;  //Store way point
-        case 10: Cmd10(); break; //Setup/Run mode selection. Delete all map points. Cold restart
+        case 10: Cmd10(); break; //Setup/Run mode selection. Cold restart
         case 11: Cmd11(); break;  // Process the Send Diagnostic Data register or Process the full reset flag on next restart
         case 12: Cmd12(); break;  // Store the accelerometer trip point
         case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
         case 14: Cmd14(); break;  //Delete last way point
-        case 15: Cmd15(); break;  //Tilt_Sep
-        case 16: Cmd16(); break;  //Step_Rate_Min
-        case 17: Cmd17(); break;  //Step_Rate_Max
-        case 18: Cmd18(); break;  //Rho_Min;
-        case 19: Cmd19(); break;  //Rho_Max;
-        case 20: Cmd20(); break;  //Nbr_Rnd_Pts
-        case 21: Cmd21(); break;  //Update ActiveMapZones (in EEPROM)
-        case 22: Cmd22(); break;  //SpeedScale
-        case 23: Cmd23(); break;  //LaserHt
+        // case 15: Cmd15(); break;  //MinimumLaserPower - needs attention
+        case 21: Cmd21(); break;  //Needed, as null, to listen to bespoke app.
         // case 24: Cmd24(); break;
         // case 25: Cmd25(); break;
         // case 26: Cmd26(); break;
@@ -45,7 +38,7 @@ void DecodeCommsData() {
         // case 28: Cmd28(); break;
         // case 29: Cmd29(); break;
         case 30: Cmd30(); break;  //Update ResetSeconds (in EEPROM)
-        case 31: Cmd31(); break;  //Update MapTotalPoints (in EEPROM)
+        case 31: Cmd31(); break;  //Delete all MapTotalPoints (put EramMapTotalPoints and MapTotalPoints to zero.)
         case 32: Cmd32(); break;  //Update Laser2OperateFlag (in EEPROM)
         case 33: Cmd33(); break;  //Update Laser2BattTrip (in EEPROM) 
         case 34: Cmd34(); break;  //Update Laser2TempTrip (in EEPROM)
@@ -54,6 +47,16 @@ void DecodeCommsData() {
         case 37: Cmd37(); break;  //getLightLevel()
         case 38: Cmd38(); break;  //Update FactoryLightTripLevel (in EEPROM)
         case 39: Cmd39(); break;  //20240612: Test function set up by TJ
+
+        case 45: Cmd45(); break;  //Tilt_Sep
+        case 46: Cmd46(); break;  //Step_Rate_Min
+        case 47: Cmd47(); break;  //Step_Rate_Max
+        case 48: Cmd48(); break;  //Rho_Min;
+        case 49: Cmd49(); break;  //Rho_Max;
+        case 50: Cmd50(); break;  //Nbr_Rnd_Pts
+        case 51: Cmd51(); break;  //Update ActiveMapZones (in EEPROM)
+        case 52: Cmd52(); break;  //SpeedScale
+        case 53: Cmd53(); break;  //LaserHt
     }
 }
 
@@ -82,8 +85,6 @@ void Cmd2() {
     // Process Pan Speed Register
     PanSpeed  = (Instruction & 0b00000100) ? 1 : 0;
     // Reset PanEnableFlag to zero if outside range.
-    if (PanDirection ==1 & JogFlag== 1) PanEnableFlag == 0;
-    if (PanDirection ==0 & JogFlag== 2) PanEnableFlag == 0;
     setupTimer1(); //20240729: Start Timer 1 - it may have been stopped by going outside boundary.
 }
 
@@ -96,8 +97,6 @@ void Cmd3() {
     //20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
     // Process Tilt Speed Register
     TiltSpeed  = (Instruction & 0b00000100) ? 1 : 0;
-    if (TiltDirection ==1 & JogFlag== 3) TiltEnableFlag == 0;
-    if (TiltDirection ==0 & JogFlag== 4) TiltEnableFlag == 0;
     setupTimer1();
 }
 
@@ -218,14 +217,16 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
     if (A == 0b00000000) {   //Run mode   <10:0>
         eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); //Setting to run mode indicates completion of setup so store MapTotalPoints.
         WarnLaserOnOnce = 1; //Enable laser warning when Run Mode button is pressed
+        PrevSetupModeFlag = SetupModeFlag;
         SetupModeFlag = 0;
-        PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
+        // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
     }
 
     if (A == 0b00000001) {   //Program Mode  <10:1>
         WarnLaserOnOnce = 1; //Enable laser warning when Program Mode button is pressed
+        PrevSetupModeFlag = SetupModeFlag;
         SetupModeFlag = 1;
-        Audio2(2,2,2);//,"AC10:1");
+        // Audio2(2,2,2);//,"AC10:1");
         ProgrammingMode();   //Home machine ready for programming in points
     }
 
@@ -339,56 +340,27 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
     Audio2(1,2,0);//,"AC14");
 }
 
-void Cmd15() {
-    eeprom_update_byte(&Eram_Tilt_Sep, Instruction);
-    Tilt_Sep = Instruction;
-    // Adjust the laser EramMinimumLaserPower
-    // EramMinimumLaserPower = Instruction;
-    // MinimumLaserPower = Instruction;
-    // Audio2(1,2,0);
-}
-void Cmd16() { //
-    eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
-    Step_Rate_Min = Instruction;
-}
-void Cmd17() { //
-    eeprom_update_word(&Eram_Step_Rate_Max, Instruction);
-    Step_Rate_Max = Instruction;
-}
-void Cmd18() { //
-    eeprom_update_byte(&Eram_Rho_Min, Instruction);
-    Rho_Min = Instruction;
-}
-void Cmd19() { //
-    eeprom_update_byte(&Eram_Rho_Max, Instruction);
-    Rho_Max = Instruction;
-}
-void Cmd20() { //
-    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
-    Nbr_Rnd_Pts = Instruction;
-}
-// void Cmd20() {
-//     cmdSpeedZone(4);
+// void Cmd15(){
+//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+//     // MinimumLaserPower = Instruction;
+// }
+// void Cmd16(){
+//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+//     // MinimumLaserPower = Instruction;
+// }
+// void Cmd17(){
+//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+//     // MinimumLaserPower = Instruction;
+// }
+// void Cmd18(){
+//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+//     // MinimumLaserPower = Instruction;
 // }
 
-void Cmd21() {
-    eeprom_update_byte(&EramActiveMapZones, Instruction);
-    ActiveMapZones = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC21");
-}
-void Cmd22() { //
-    eeprom_update_byte(&EramSpeedScale, Instruction);
-    SpeedScale = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC22");
-}
-
-void Cmd23() { //
-    eeprom_update_byte(&EramLaserHt, Instruction);
-    LaserHt = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC23");
+void Cmd21() { //Need to listen for this from app.  Was previously something to do with map zones.
+    // eeprom_update_word(&EramResetSeconds, Instruction);
+    // ResetSeconds = Instruction;
+    // Audio2(1,2,0);//,"AC30");
 }
 void Cmd30() {
     eeprom_update_word(&EramResetSeconds, Instruction);
@@ -462,3 +434,50 @@ void Cmd39(){
     uartPrint(debugMsg);
 }
 
+void Cmd45() {
+    eeprom_update_byte(&Eram_Tilt_Sep, Instruction);
+    Tilt_Sep = Instruction;
+}
+void Cmd46() { //
+    eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
+    Step_Rate_Min = Instruction;
+}
+void Cmd47() { //
+    eeprom_update_word(&Eram_Step_Rate_Max, Instruction);
+    Step_Rate_Max = Instruction;
+}
+void Cmd48() { //
+    eeprom_update_byte(&Eram_Rho_Min, Instruction);
+    Rho_Min = Instruction;
+}
+void Cmd49() { //
+    eeprom_update_byte(&Eram_Rho_Max, Instruction);
+    Rho_Max = Instruction;
+}
+void Cmd50() { //
+    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
+    Nbr_Rnd_Pts = Instruction;
+}
+// void Cmd20() {
+//     cmdSpeedZone(4);
+// }
+
+void Cmd51() {
+    eeprom_update_byte(&EramActiveMapZones, Instruction);
+    ActiveMapZones = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0);//,"AC21");
+}
+void Cmd52() { //
+    eeprom_update_byte(&EramSpeedScale, Instruction);
+    SpeedScale = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0);//,"AC22");
+}
+
+void Cmd53() { //
+    eeprom_update_byte(&EramLaserHt, Instruction);
+    LaserHt = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0);//,"AC23");
+}

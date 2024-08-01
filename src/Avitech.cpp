@@ -86,7 +86,8 @@ bool X_TravelLimitFlag = false;                                // Over travel fl
 bool Y_TravelLimitFlag = false;                                // Over travel flag
 //Use JogFlag to stop jogging if device is out of range.  0: allow jogging.  1: AbsX>X_MAXCOUNT; 2: AbsX<>>X_MINCOUNT; 3: AbsY > y_maxcount; 4: AbsY < 0; 
 uint8_t JogFlag = 0;                    
-uint16_t y_maxCount;// = 1800;                                   // Max Count Y can have. This changes for different mode as more or less tilt is required in different modes
+uint16_t y_maxCount;// = 1800;
+int y_minCount = -220;// = 1800;                                   // Max Count Y can have. This changes for different mode as more or less tilt is required in different modes
 uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[2][i] is cumulative of MapCount[1][i]
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
@@ -125,7 +126,7 @@ uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
 bool CmdLaserOnFlag = false;
 
 uint8_t SetupModeFlag = 0; // Should this be set to 1 (setup mode - 0 is run mode) as default? 0 in BASCOM version.
-
+uint8_t PrevSetupModeFlag = 10;//Initialise with silly high number so that first run will be different.
 uint8_t Laser2StateFlag; // Sets the current state if the laser 2 is working. 0=off 1=on
 
 uint8_t EEMEM EramLaser2OperateFlag;
@@ -189,11 +190,10 @@ uint8_t SendDataFlag = 0;                                      // Diagnostic mod
 uint8_t SendSetupDataFlag;                                 // Send config data back to user.  20240522: Not used 
 
 uint8_t FirstTimeLaserOn;
-uint8_t WarnLaserOnOnce;
+uint8_t WarnLaserOnOnce = 0; //20240801 Default value of 0 added - perhaps it should be 1?
 uint8_t IsHome;
 
 long Secondsfromreset;                                     // Variable to hold the reset current count
-
 bool SystemFaultFlag;
 uint8_t Index;
 
@@ -456,7 +456,7 @@ ISR(USART0_RX_vect) {
 
 void ProcessError(){
     if(Z_AccelFlag){
-        Audio2(2,1,1,"PEAF");
+        Audio2(2,1,1);//,"PEAF");
         // Audio2(2,1,1);
         return;
     }
@@ -465,10 +465,37 @@ void ProcessError(){
         return;
     }
    if(X_TravelLimitFlag || Y_TravelLimitFlag) {
-        Audio2(4,1,1,"PETravel");
+        Audio2(4,1,1);//,"PETravel");
         return;
     }
 }
+
+// void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
+    
+//     if (DataInBufferFlag == true) { // We have got something
+//         // processReceivedData();
+//         char *token;
+//         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
+//          // Clear the buffer and reset the flag immediately after copying the data
+//         memset((void*)ReceivedData, 0, sizeof(ReceivedData));
+//         DataInBufferFlag = false;
+        
+//         token = strchr(RecdDataConst, '<');  // Find the start of the command
+//         if (token != NULL) {
+//             Command = atoi(token + 1);// Convert the command to an integer
+//             token = strchr(token, ':');  // Find the start of the instruction
+
+//             if (token != NULL) {
+//                 char *end = strchr(token, '>');
+//                 if (end != NULL) {
+//                     *end = '\0'; // Replace '>' with '\0' to end the string
+//                     Instruction = atoi(token + 1);
+//                     DecodeCommsData();  // Process the command and instruction
+//                 }
+//             }
+//         }
+//     }
+// }
 
 void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
     
@@ -481,22 +508,24 @@ void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for backgrou
         DataInBufferFlag = false;
         
         token = strchr(RecdDataConst, '<');  // Find the start of the command
-        if (token != NULL) {
-            Command = atoi(token + 1);// Convert the command to an integer
-            token = strchr(token, ':');  // Find the start of the instruction
-
-            if (token != NULL) {
-                char *end = strchr(token, '>');
-                if (end != NULL) {
-                    *end = '\0'; // Replace '>' with '\0' to end the string
-                    Instruction = atoi(token + 1);
+        while (token != NULL) {
+            char *end = strchr(token, '>');  // Find the end of the command
+            if (end != NULL) {
+                *end = '\0'; // Replace '>' with '\0' to end the string
+                char *colon = strchr(token, ':');  // Find the start of the instruction
+                if (colon != NULL) {
+                    *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
+                    Command = atoi(token + 1); // Convert the command to an integer
+                    Instruction = atoi(colon + 1); // Convert the instruction to an integer
                     DecodeCommsData();  // Process the command and instruction
                 }
+                token = strchr(end + 1, '<');  // Find the start of the next command
+            } else {
+                break; // No more complete commands in the buffer
             }
         }
     }
 }
-
 void uartRead(char* buffer, int length) { //20240618.  This is not called.  ISR used instead.
     int i = 0;
     while (uartAvailable() && i < length - 1) {
@@ -774,10 +803,11 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
     if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
     #ifdef DEBUG 
     if (debugInfo != nullptr) {
-        if(debugInfo!="Flick") uartPrint(debugInfo);
-    } else {
-        uartPrint("Debug null");
-    }
+        uartPrint(debugInfo);
+    } 
+    // else {
+    //     uartPrint("Debug null");
+    // }
     #endif
     // #ifdef DEBUG 
     // uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
@@ -823,7 +853,6 @@ void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by 
             BuzzerOn = false;
         }
     }
-
     if (BuzzerOn) PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
     else PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
 }
@@ -870,7 +899,7 @@ void WaitAfterPowerUp() {
 // Sensor interactions
 void WarnLaserOn() {
     if (WarnLaserOnOnce == 1) {
-        Audio2(2,18,8);//,"WLO");
+        Audio2(2,1,8,"WLO");
         WarnLaserOnOnce = 0;
     }
 }
@@ -880,13 +909,13 @@ void StartLaserFlickerInProgMode() {
         SetLaserVoltage(0); // Off 150ms
     } else if (LaserTick == 3) {
         SetLaserVoltage(LaserPower); // On 850ms
-        Audio2(1,1,0,"Flick");
+        Audio2(2,2,1);//,"Flick");
     }    
 }
 
 void GetLaserTemperature() {
     unsigned int SensorReading = 0;
-    unsigned int Result = 0;
+    unsigned int Result = 0; 
     uint8_t LoopCount = 0;
 
     for (LoopCount = 1; LoopCount <= NUM_TEMP_READINGS; LoopCount++) {
@@ -1260,9 +1289,6 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
     uint8_t i, Prev_i; // Prev_i_1;
     i = 0;
     Prev_i = 0;
-    // sprintf(debugMsg,"in GetMapPtCounts.  MapTotalPoints: %d",MapTotalPoints);
-    // uartPrint(debugMsg);
-    // MapCount[0][i] is incremental amount for zone i (i 0 based); MapCount[1][i] is cumulative.  Incremental repeats 1st point at end.
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++) {// 20240628: Start at MapIndex = 1.  Pass MapIndex -1 to GetZone as that looks up EramMapPositions[] which is zero based. 
         i = GetZone(MapIndex-1)-1;  //Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
         if (i > 0) {//If i == 0 (ie 1st zone), don't do anything. Assignments for that zone either when Prev_i = 0 or at total when there is only one zone.
@@ -1284,9 +1310,11 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
                 MapCount[0][i] = MapIndex - MapCount[1][i-1] + 1;
             }
         }
-        sprintf(debugMsg,"MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
-        uartPrint(debugMsg);
-        _delay_ms(100);
+        if(doPrint){
+            sprintf(debugMsg,"MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
+            uartPrint(debugMsg);
+            _delay_ms(50);
+        }
         Prev_i = i;
     }
 }
@@ -1663,6 +1691,9 @@ void avoidLimits(bool axis){
                 JogFlag = 2;
                 // StopTimer1();
                 }
+            if (PanDirection ==1 && JogFlag== 1) PanEnableFlag = 0;
+            if (PanDirection ==0 && JogFlag== 2) PanEnableFlag = 0;
+
             // X_TravelLimitFlag = 1;   //20240731: Allow JogFlag to control this error - don't set this flag or others.
             // SystemFaultFlag = true;
             // uartPrintFlash(F("AbsX: "));
@@ -1675,17 +1706,23 @@ void avoidLimits(bool axis){
             //     // SystemFaultFlag=false;
             // }
         } else { //Tilt axis
-            if (AbsY>=y_maxCount) {
+            if (AbsY>=static_cast<int>(y_maxCount)) { //20240801  Elements of comparison need to be same type.
                 JogFlag = 3;
-                sprintf(debugMsg,"Y_Max:AbsY %d, Y %d, y_maxcount %d",AbsY, Y, y_maxCount);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg,"Y_Max:AbsY %d, Y %d, y_maxcount %d",AbsY, Y, y_maxCount);
+                // uartPrint(debugMsg);
                 // StopTimer1();
-            } else if (AbsY<=0) {
+            } else if (AbsY<=y_minCount) {
                 JogFlag = 4;
-                sprintf(debugMsg,"Y_Min:AbsY %d, Y %d",AbsY, Y);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg,"Y_Min:AbsY %d, Y %d",AbsY, Y);
+                // uartPrint(debugMsg);
                 // StopTimer1();
             }
+            if (TiltDirection ==1 && JogFlag== 3) TiltEnableFlag = 0;
+            if (TiltDirection ==0 && JogFlag== 4) TiltEnableFlag = 0;
+            // sprintf(debugMsg,"TD %d JF: %d TEF: %d",TiltDirection, JogFlag, TiltEnableFlag);
+            // uartPrint(debugMsg);
+            _delay_ms(50);
+
             // Y_TravelLimitFlag = true;
             // SystemFaultFlag=true;
             // uartPrintFlash(F("AbsY: "));
@@ -1705,7 +1742,8 @@ void JogMotors(bool prnt) {//
     uint8_t dir = 0;
     JogFlag = 0;
     int pos = 0;
-
+    avoidLimits(false);
+    avoidLimits(true);
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
     if (PanEnableFlag == 1) {
         SteppingStatus = 1;
@@ -1713,7 +1751,6 @@ void JogMotors(bool prnt) {//
         speed = PanSpeed;
         dir = PanDirection;
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
-        avoidLimits(false);
     }
     if (TiltEnableFlag == 1) {
         SteppingStatus = 1;
@@ -1721,7 +1758,6 @@ void JogMotors(bool prnt) {//
         speed = TiltSpeed;
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
-        avoidLimits(true);
     }
 
     pos =  (speed ==1) ? HIGH_JOG_POS:LOW_JOG_POS; //Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
@@ -1767,7 +1803,7 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
     // static volatile uint16_t m;
     // uartPrintFlash(F("HomeMotor \n"));
     MoveMotor(axis, steps, 0);
-    StartTimer1();  //20240614 This added.  Shouldn't be necessary.
+    setupTimer1();  //20240614 This added.  Shouldn't be necessary.
     if (axis == 0) {
         while (!(PINB & (1 << PAN_STOP))){  //While pan_stop pin is low.
             // do nothing while motor moves
@@ -1806,17 +1842,17 @@ void NeutralAxis() {
     // Neutral Position: (-4000,1000)
     // Pan motor to neutral position
     X = -4000; // Clockwise 90 deg pan
-    sprintf(debugMsg,"AbsX %d, X %d",AbsX, X);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"AbsX %d, X %d",AbsX, X);
+    // uartPrint(debugMsg);
     MoveLaserMotor();
     // TILT AXIS HOME
     // Tilt motor to neutral position
     Y = 500; // Half way down
-    sprintf(debugMsg,"AbsY %d, Y %d",AbsX, X);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg,"AbsY %d, Y %d",AbsX, X);
+    // uartPrint(debugMsg);
     MoveLaserMotor();
     Audio2(1,2,0,"Neut");
-    _delay_ms(AUDIO_DELAY);
+    // _delay_ms(AUDIO_DELAY);
 }
 
 void HomeAxis() {
@@ -1839,7 +1875,7 @@ void HomeAxis() {
     // --**Move Tilt into final position**--
     switch (OperationMode) {
         case 0: Correctionstepping = 100; break;
-        case 1: Correctionstepping = 0; break; // 20240801: Has beenb -220.  But this is <0 so breaches AvoidLimits().
+        case 1: Correctionstepping = -220; break; // 20240801: Has been -220.  But this is <0 so breaches AvoidLimits().
         case 2: Correctionstepping = 100; break;
         case 3: Correctionstepping = -220; break;
         default: Correctionstepping = 100; break;
@@ -1848,7 +1884,7 @@ void HomeAxis() {
     CmdLaserOnFlag = false; //20240731
     NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
-    Audio2(2,1,1,"HA");
+    // Audio2(2,1,1,"HA");
     CmdLaserOnFlag = false;
     IsHome = 1;
 }
@@ -1901,15 +1937,15 @@ void RunSweep(uint8_t zn) {
                 // uartPrint(debugMsg);
 
                 SteppingStatus = 1;
-                uartPrintFlash(F("<T1 RS"));
+                // uartPrintFlash(F("<T1 RS"));
                 setupTimer1();
 
                 while (SteppingStatus == 1) {
-                    uartPrintFlash(F("<DHK RS \n"));
+                    // uartPrintFlash(F("<DHK RS \n"));
                     DoHouseKeeping();
-                    uartPrintFlash(F(">DHK RS \n"));
+                    // uartPrintFlash(F(">DHK RS \n"));
                     if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
-                        uartPrintFlash(F("SUM1 RS \n"));
+                        // uartPrintFlash(F("SUM1 RS \n"));
                         StopTimer1();
                         StepCount = 0;
                         SteppingStatus = 0;
@@ -2049,7 +2085,7 @@ void ProgrammingMode() {
     // uartPrintFlash(F("10:1 HA \n"));
     HomeAxis();
     printToBT(9, 1);
-    _delay_ms(100);  
+    // _delay_ms(100);  
 }
 
 void OperationModeSetup(int OperationMode) {
@@ -2102,7 +2138,6 @@ void DoHouseKeeping() {
         TransmitData();
         PrintAppData();
         GetLaserTemperature();
-
         if (Z_AccelFlag == 0) {
             ThrottleLaser();
         }
@@ -2128,7 +2163,7 @@ void DoHouseKeeping() {
     if (SetupModeFlag == 1) {
         WarnLaserOn();
         StartLaserFlickerInProgMode();
-        //2024725 Although this stop criterion is implemented in JogMotors(), timing indicates that is needed here also.
+        //20240725 Although this stop criterion is implemented in JogMotors(), timing indicates that it is also needed here.
         if (PanEnableFlag == 0 && TiltEnableFlag == 0) {  // If both pan and tilt are disabled, stop the motors.
             StopSystem();
         }
@@ -2144,7 +2179,7 @@ void DoHouseKeeping() {
             SetLaserVoltage(0);
             GetLightLevel();
         }
-        }
+    }
 
     if (Tod_tick > NIGHT_TRIP_TIME_FROM_STARTUP) {
         if (BT_ConnectedFlag == 0 && LightSensorModeFlag == 1) {
@@ -2183,7 +2218,7 @@ void setup() {
     SetLaserVoltage(0);                                     //Lasers switched off
     PORTD &= ~(1 << X_ENABLEPIN); //Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); //Enable tilt motor.
-    Audio2(5,1,1);//,"Setup"); 
+    // Audio2(5,1,1);//,"Setup"); 
     _delay_ms(AUDIO_DELAY);
     HomeAxis();
 }
@@ -2198,33 +2233,34 @@ int main() {
     #endif
 
     #ifndef PRINT_EEPROM
-    while(1) {        
-        doPrint = false;
+    while(1) {                
+        // if(PrevSetupModeFlag != SetupModeFlag) {
+        //     sprintf(debugMsg,"Mode change %d, %d",PrevSetupModeFlag,SetupModeFlag);
+        //     uartPrint(debugMsg);
+        //     // PrevSetupModeFlag = SetupModeFlag;
+        // }
+        doPrint = true;
         if (SetupModeFlag == 1) {
+            if (PrevSetupModeFlag != SetupModeFlag) {
+                Audio2(2,18,8);//,"ToMode1");
+                _delay_ms(2000);
+                PrevSetupModeFlag = SetupModeFlag;
+            }   
            JogMotors(doPrint); 
         }
         if (SetupModeFlag == 0) {  //In run mode
-            // if (firstRun) {
-                eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
+            if (PrevSetupModeFlag != SetupModeFlag) {
+                // eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
                 getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
+                Audio2(3,10,5);//,"ToMode0");
+                _delay_ms(2000);
+                PrevSetupModeFlag = SetupModeFlag;            }
                 // firstRun = false;
             // }
             if (MapTotalPoints > 0){
-                // uartPrint("MTP>0");
-                // #ifdef DEBUG
-                // uartPrintFlash(F("MapTotalPoints: "));
-                // sprintf(debugMsg,"%d", MapTotalPoints);
-                // uartPrint(debugMsg);
-                // #endif
-                // uartPrint(sprintf(debugMsg,sizeof(debugMsg), "%d",MapTotalPoints));
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                    // #ifdef DEBUG
-                    // uartPrintFlash(F("About to RunSweep for zn: "));
-                    // sprintf(debugMsg,"%d", Zn-1);
-                    // uartPrint(debugMsg);
-                    // #endif
                     if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
-                        // uartPrint("Entering RunSweep");
+                        MapRunning = Zn; //But map index in app is 1 based.
                         RunSweep(Zn-1); //
                     }
                 }
@@ -2233,7 +2269,7 @@ int main() {
         if (SetupModeFlag == 2) {
             CalibrateLightSensor();
         }
-        DoHouseKeeping();
+        DoHouseKeeping();         
     }
     #endif
     return 0;

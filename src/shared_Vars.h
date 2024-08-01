@@ -7,11 +7,10 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define DEBUG
+// #define DEBUG
 // #define PRINT_EEPROM
 #define PRINT_CMD9
 // Variables
-extern uint8_t TiltSpeed;
 extern uint8_t EramUserLaserPower;
 extern uint8_t UserLaserPower;
 extern uint8_t EramMaxLaserPower;
@@ -38,6 +37,7 @@ extern int AbsX;
 extern int AbsY;
 extern uint8_t WarnLaserOnOnce;
 extern uint8_t SetupModeFlag;
+extern uint8_t PrevSetupModeFlag;
 extern uint8_t EramFactoryLightTripLevel;
 extern uint8_t FactoryLightTripLevel;
 extern uint8_t BT_ConnectedFlag;

@@ -49,7 +49,7 @@ int Dx;                                              // Used to calulate how man
 bool rndLadBit;                                        // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
 uint8_t maxYind;
-uint8_t RndNbr, PrevRndNbr, AltRndNbr;
+uint8_t RndNbr;//, PrevRndNbr, AltRndNbr;
 
 volatile uint16_t StepCount;                                       // How many steps to be executed
 uint16_t DSS_preload = Step_Rate_Max;                                     // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
@@ -245,8 +245,8 @@ uint16_t Frame_size;
 uint16_t ResetSeconds;
 bool received39;
 int Vertices[3][MAX_NBR_VERTICES]; //Columns: X, Y, Slope?
-int Perimeter[2][MAX_NBR_PERIMETER_PTS];
-uint8_t NbrPerimeterPts;
+// int Perimeter[2][MAX_NBR_PERIMETER_PTS];
+// uint8_t NbrPerimeterPts;
 int res[2];  //Global variables to be used in cartesian/polar conversions:Input and results.
 volatile char ReceivedData[BUFFER_SIZE];
 char RecdDataConst[BUFFER_SIZE];  
@@ -266,15 +266,15 @@ uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
-uint8_t Nbr_Rnd_Pts = 20;
+uint8_t Nbr_Rnd_Pts = 30;
 uint8_t EEMEM Eram_Tilt_Sep;
-uint8_t Tilt_Sep = 10;
+uint8_t Tilt_Sep = 1;
 uint8_t EEMEM EramSpeedScale;
 uint8_t SpeedScale = 100; //Treat as percentage
 uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50;//Units are decimetres.  50 => 5metres
 
-uint8_t Max_Nbr_Perimeter_Pts = 100;
+// uint8_t Max_Nbr_Perimeter_Pts = 100;
 #pragma endregion Tuning Variable Definitions
 #pragma region Function Declarations
 void HomeAxis();
@@ -284,6 +284,7 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd);// Declaration of Audio2 w
 void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// Declaration of Audio2, overloaded, with debugInfo
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper* message);
+void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
 #pragma endregion Function Declarations
 #pragma region Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
 void setupPeripherals(){
@@ -340,7 +341,7 @@ void StartBuzzerInProgMode() {
 void TickCounter_50ms_isr() {
     Counter50ms++;
     TJTick++;
-    Audio3();
+    // Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0) {
         // StartBuzzerInProgMode();
         BuzzerTick++;
@@ -957,10 +958,10 @@ void ReadAccelerometer() {
     // Convert temperature from raw values to degrees Celsius
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
-    if(!(cnt % 10000)){
-        sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
-        uartPrint(debugMsg);
-    }
+    // if(!(cnt % 10000)){
+    //     sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+    //     uartPrint(debugMsg);
+    // }
 }
 void DecodeAccelerometer() {
     if (GyroOnFlag){
@@ -1311,8 +1312,10 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
             }
         }
         if(doPrint){
+            #ifdef BASE_PRINT
             sprintf(debugMsg,"MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
             uartPrint(debugMsg);
+            #endif
             _delay_ms(50);
         }
         Prev_i = i;
@@ -1346,10 +1349,10 @@ void LoadZoneMap(uint8_t zn) {
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        // sprintf(debugMsg,"V MI: %d X: %d Y: %d AddX: %p AddY: %p",MapIndex, Vertices[0][MapIndex],Vertices[1][MapIndex],
-        //                                                                 (void*)&EramPositions[MI].EramX,(void*)&EramPositions[MI].EramY);
-        // uartPrint(debugMsg);    
-    }
+        #ifdef BASE_PRINT
+        printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
+        #endif
+     } //snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
     Vertices[0][MapIndex] = Vertices[0][0];
     Vertices[1][MapIndex] = Vertices[1][0];
@@ -1379,27 +1382,16 @@ void floatToString(char* buffer, float value, int precision) {
     dtostrf(value, 0, precision, buffer);
 }
 
-int getCartFromTilt(int t) {
-    float a = (float)t/STEPS_PER_RAD;
+int getCartFromTilt(int t) {//Estimate a cartesian distance to the laser point based only on tilt (in steps) and LaserHt
+    float a = (float)t/STEPS_PER_RAD; //Angle in radians.
     float b = tan(a);
-    float c = (float)LaserHt/(b*10);//LaserHt is in decimetres rather than metres.  So divide by 10 to get back to metres.
-    
-    // char aStr[10], bStr[10], cStr[10];
-    // floatToString(aStr, a, 2);
-    // floatToString(bStr, b, 2);
-    // floatToString(cStr, c, 2);
-    
-    // sprintf(debugMsg, "t: %d, a: %s, b: %s, c: %s", t, aStr, bStr, cStr);
-    // uartPrint(debugMsg);
-    // _delay_ms(50);
-    return (int)(c + 0.5); // rounding to the nearest integer before casting
+    float c = (float)LaserHt/(b*10);//LaserHt is in decimetres rather than metres.  So divide by 10 to get back to metres.    
+    return (int)(c + 0.5); // rounding to the nearest integer before casting.  Return value is in metres.
 }
 int getTiltFromCart(int rho) {
-    float a = (float)LaserHt/((float)rho*10.0);
-    float b = atan(a);
-    // sprintf(debugMsg,"100a %d, b %d, rho %d",100 * a, 100 * b, rho);
-    // uartPrint(debugMsg);
-    // sprintf(debugMsg,"a %0.4f, b %0.4f, rho %d",a, b, rho);
+    // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
+    float b = atan2(LaserHt,rho*10);
+    // sprintf(debugMsg,"Ht %d, rho %d, ret %d",LaserHt, rho, (int)(b*STEPS_PER_RAD + 0.5));
     // uartPrint(debugMsg);
     return (int)(b*STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
@@ -1415,18 +1407,23 @@ int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target s
    }
    return getTiltFromCart(rho);
 }
-void getCart(int p, int t, int thisres[2]) {
-   int r;
-   r = getCartFromTilt(t);
-   thisres[0] = r*cos(p/STEPS_PER_RAD);
+void getCart(int p, int t, int (&thisres)[2]) {//Take pan(t) and tilt(t) for a polar point and return the cartesian equivalent (thisres)
+   int r = getCartFromTilt(t);
+   thisres[0] = r*cos(p/STEPS_PER_RAD); //1st coord (x) is r at pan = 0 and 2nd coord (y) is zero.
    thisres[1] = r*sin(p/STEPS_PER_RAD);
 }
 void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as input, return, via thisRes[2], polars.
-   long r = c1 * c1 + c2 * c2;  //Get the distance from the laser to the point by pythagoras.
-   r = sqrt(r);  
-   double temp = atan2((double)c2, (double)c1) * STEPS_PER_RAD;  //Pan is atan(c2/c1)
-   thisRes[0] = (int)temp; //pan
-   thisRes[1] = getTiltFromCart((int)r); //tilt.
+    long r = c1 * c1 + c2 * c2;  //Get the distance from the laser to the point by pythagoras.
+    r = sqrt(r);  
+    //First argument of atan2 is opp, second is adj.  Ref https://cplusplus.com/reference/cmath/atan2/.  
+    double angle = atan2(static_cast<double>(c2), static_cast<double>(c1));  //Pan is atan(c2/c1).  atan2 assumes arguments are doubles. 
+    int temp = static_cast<int>(angle *  STEPS_PER_RAD);//pan
+    thisRes[0] = temp;
+    thisRes[1] = getTiltFromCart(static_cast<int>(r)); //tilt.
+    #ifdef DEBUG
+    sprintf(debugMsg,"r  %d, res0 %d, res1 %d",r, thisRes[0], thisRes[1]);
+    uartPrint(debugMsg);
+    #endif
 }
 int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a specified tilt angle (steps) and cartesian pan distance.
     int rho = getCartFromTilt(TiltPolar);
@@ -1438,167 +1435,291 @@ void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_
     uartPrint(debugMsg);
     _delay_ms(100);
 }
-void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
-    // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
-    // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
-    // is intended to reflect an approximately constant Cartesian tilt axis offset.
-    uint8_t j = 0;
-    int nextTilt = 0, lastTilt = 0; 
-    bool testBit = false;
-    int nbrPts =0;
-    uint8_t dirn = 0;
-    uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
 
-
-    for (uint8_t i = 0; i < MapCount[0][zn_1]-1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone zn.
-        // 20240727: Changed upper limit from i < MapCount[0][zn_1]-1 to i < MapCount[0][zn_1].  Bad result (ref Debug20240727B.txt)
-        Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
-        Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
-        // sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
-        // uartPrint(debugMsg);
-        dirn = 0;
-        if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
-        if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
-        // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-        // #ifdef DEBUG
-        printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-        // #endif
-        if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
-            // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
-            nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
-            testBit = false;
-            if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
-            while (testBit) { 
-                j++;
-                if(j>=MAX_NBR_PERIMETER_PTS) break;
-                Perimeter[1][j] = nextTilt;
-                Perimeter[0][j] = (Perimeter[1][j] - Vertices[1][i]) * Vertices[2][i]; // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
-                Perimeter[0][j] = Vertices[0][i] + Perimeter[0][j]/10; // Add delta x to x(i)
-                lastTilt = nextTilt;
-                nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
-                if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
-                    nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
-                }
-                // #ifdef DEBUG
-                printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-                // #endif
-                if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
-            }
-        } else { //The fixed tilt, pan only case.
-            int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
-            if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
-                nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
-            } else nbrPts = 0; //20240727.  Ref Debug20240727N.txt.
-
-            for (uint8_t a = 1; a<=nbrPts; a++){
-                j++;
-                if(j>=MAX_NBR_PERIMETER_PTS) break;
-                Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
-                Perimeter[1][j] = Vertices[1][i];
-                // #ifdef DEBUG
-                printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-                // #endif
-            }   
+void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt) {
+    // Initialize minY and maxY with extreme values
+    minTilt = Vertices[1][0];
+    maxTilt = Vertices[1][0];
+    // Iterate through the vertices
+    for (int i = 1; i < nbrZnPts; i++) {
+        int y = Vertices[1][i]; // Assuming y values are stored in the second column of Vertices
+        if (y < minTilt) {
+            minTilt = y;
         }
-        j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
-        if(j>=MAX_NBR_PERIMETER_PTS) break;
+        if (y > maxTilt) {
+            maxTilt = y;
+        }
     }
-    // 20240727: Add the repeated vertex and increase NbrPerimeterPts to accomodate that.
-    Perimeter[0][j] = Vertices[0][MapCount[0][zn_1]-1];
-    Perimeter[1][j] = Vertices[1][MapCount[0][zn_1]-1];
-    printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], j);
-    NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
-    // j++; //This is necessary so that next segment starts at right value/index.
 }
-// Take 2 polar specified points, convert to cartesian, interpolate ((i + 1)/n), and return polars of interpolated point.
-void CartesianInterpolate(int last[2], int nxt[2], uint8_t i, int n, int thisRes[2]) {
-    int c1[2], c2[2]; //The cartesian end points.
+uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin){//, int &rhoMax, int &rhoMin){
+    rhoMin = getCartFromTilt(maxTilt);
+    int rhoMax = getCartFromTilt(minTilt);
+    int temp = static_cast<uint8_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
+    #ifdef DEBUG
+    sprintf(debugMsg,"rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ",rhoMax,rhoMin, minTilt, maxTilt,Tilt_Sep, temp);
+    uartPrint(debugMsg);
+    #endif
+    return (uint8_t)temp;
+}
 
-    getCart(last[0], last[1], c1);
+uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) { //Get 
+    for (uint8_t i = fstInd; i < nbrZnPts; i++) {
+        if ((Vertices[1][i] <= tilt && Vertices[1][i + 1] > tilt) ||
+            (Vertices[1][i] > tilt && Vertices[1][i + 1] <= tilt)) {
+            return i;
+        }
+    }
+}
+
+
+// void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
+//     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
+//     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
+//     // is intended to reflect an approximately constant Cartesian tilt axis offset.
+//     uint8_t j = 0;
+//     int nextTilt = 0, lastTilt = 0; 
+//     bool testBit = false;
+//     int nbrPts =0;
+//     uint8_t dirn = 0;
+//     uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
+
+
+//     for (uint8_t i = 0; i < MapCount[0][zn_1]-1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone zn.
+//         // 20240727: Changed upper limit from i < MapCount[0][zn_1]-1 to i < MapCount[0][zn_1].  Bad result (ref Debug20240727B.txt)
+//         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
+//         Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
+//         // sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
+//         // uartPrint(debugMsg);
+//         dirn = 0;
+//         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
+//         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
+//         // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
+//         // #ifdef DEBUG
+//         printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+//         // #endif
+//         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
+//             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
+//             nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
+//             testBit = false;
+//             if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
+//             while (testBit) { 
+//                 j++;
+//                 if(j>=MAX_NBR_PERIMETER_PTS) break;
+//                 Perimeter[1][j] = nextTilt;
+//                 Perimeter[0][j] = (Perimeter[1][j] - Vertices[1][i]) * Vertices[2][i]; // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
+//                 Perimeter[0][j] = Vertices[0][i] + Perimeter[0][j]/10; // Add delta x to x(i)
+//                 lastTilt = nextTilt;
+//                 nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
+//                 if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
+//                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
+//                 }
+//                 // #ifdef DEBUG
+//                 printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+//                 // #endif
+//                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
+//             }
+//         } else { //The fixed tilt, pan only case.
+//             int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
+//             if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
+//                 nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
+//             } else nbrPts = 0; //20240727.  Ref Debug20240727N.txt.
+
+//             for (uint8_t a = 1; a<=nbrPts; a++){
+//                 j++;
+//                 if(j>=MAX_NBR_PERIMETER_PTS) break;
+//                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
+//                 Perimeter[1][j] = Vertices[1][i];
+//                 // #ifdef DEBUG
+//                 printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
+//                 // #endif
+//             }   
+//         }
+//         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
+//         if(j>=MAX_NBR_PERIMETER_PTS) break;
+//     }
+//     // 20240727: Add the repeated vertex and increase NbrPerimeterPts to accomodate that.
+//     Perimeter[0][j] = Vertices[0][MapCount[0][zn_1]-1];
+//     Perimeter[1][j] = Vertices[1][MapCount[0][zn_1]-1];
+//     printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], j);
+//     NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
+//     // j++; //This is necessary so that next segment starts at right value/index.
+// }
+// Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate ((i + 1)/n), and return polars of interpolated point (thisRes).
+int sign(int x) {
+    return (x > 0) - (x < 0);
+}
+void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]){
+    uint16_t temp = num * abs(nxt[0] - last[0]);
+    res[0] = last[0] + temp/den *sign(nxt[0] - last[0]); 
+    temp = num * abs(nxt[1] - last[1]);
+    res[1] = last[1] + temp/den *sign(nxt[1] - last[1]); 
+    #ifdef DEBUG
+    sprintf(debugMsg,"num %d, den %d, x0 %d, y0 %d, x1 %d, y1 %d, res0 %d, res1 %d",num , den, last[0],last[1],nxt[0],nxt[1],res[0],res[1]);
+    uartPrint(debugMsg);
+    #endif
+}
+void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]) {
+    int c1[2], c2[2]; //The cartesian end points.
+    getCart(last[0], last[1], c1); //Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-    // Do the Cartesian interpolation, storing results in Res (which is global)
-    float ratio = (i + 1) / (float)n;
-    res[0] = c1[0] + ratio * (c1[0] - c2[0]);
-    res[1] = c1[1] + ratio * (c1[1] - c2[1]);
+    sprintf(debugMsg,"C10 %d, C20 %d, C11 %d, C21 %d",c1[0],c2[0],c1[1],c2[1]);
+    uartPrint(debugMsg);
+    // Do the Cartesian interpolation, storing results in thisRes
+    uint16_t temp = num * abs(c2[0] - c1[0]);
+    res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
+    sprintf(debugMsg,"X temp: %d res: %d",temp,res[0]);
+    uartPrint(debugMsg);
+    temp = num * abs(c2[1] - c1[1]);
+    res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
+    sprintf(debugMsg,"Y temp: %d res: %d",temp,res[1]);
+    uartPrint(debugMsg);
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
     getPolars(res[0],res[1], res);
 }
 #pragma endregion Zone functions
 #pragma region Movement functions
-uint8_t getRndLadInd(uint8_t rnd) {  //Get the perimeter point reasonably close to horizontally opposite (ie panwise opposite - ie a "rung") the input point.
-    uint8_t tempInd;
-    if (minYind > maxYind) { // Change MinY and MaxY to ensure minY <= maxY
-        tempInd = minYind;
-        minYind = maxYind;
-        maxYind = tempInd;
-    }
+// uint8_t getRndLadInd(uint8_t rnd) {  //Get the perimeter point reasonably close to horizontally opposite (ie panwise opposite - ie a "rung") the input point.
+//     uint8_t tempInd;
+//     if (minYind > maxYind) { // Change MinY and MaxY to ensure minY <= maxY
+//         tempInd = minYind;
+//         minYind = maxYind;
+//         maxYind = tempInd;
+//     }
 
-    if (rnd >= minYind && rnd <= maxYind) { //
-        tempInd = 2 * maxYind;
-        tempInd = tempInd - rnd;
-        if (tempInd > NbrPerimeterPts) {
-            tempInd = tempInd - NbrPerimeterPts;
-        }
-    } else if (rnd < minYind) {
-        tempInd = 2 * minYind;
-        tempInd = tempInd - rnd;
-    } else { // rnd > maxY
-        tempInd = 2 * maxYind;
-        tempInd = tempInd - rnd;
-    }
+//     if (rnd >= minYind && rnd <= maxYind) { //
+//         tempInd = 2 * maxYind;
+//         tempInd = tempInd - rnd;
+//         if (tempInd > NbrPerimeterPts) {
+//             tempInd = tempInd - NbrPerimeterPts;
+//         }
+//     } else if (rnd < minYind) {
+//         tempInd = 2 * minYind;
+//         tempInd = tempInd - rnd;
+//     } else { // rnd > maxY
+//         tempInd = 2 * maxYind;
+//         tempInd = tempInd - rnd;
+//     }
 
-    if (rnd == minYind || rnd == maxYind) tempInd = rnd - 1;
-    if (tempInd == 0) tempInd = 2;
-    if (tempInd < 1) tempInd = 1;
-    if (tempInd >= NbrPerimeterPts) tempInd = NbrPerimeterPts - 1;
+//     if (rnd == minYind || rnd == maxYind) tempInd = rnd - 1;
+//     if (tempInd == 0) tempInd = 2;
+//     if (tempInd < 1) tempInd = 1;
+//     if (tempInd >= NbrPerimeterPts) tempInd = NbrPerimeterPts - 1;
 
-    return tempInd;
-}
-uint8_t getExtremeY(bool upDown) {//Get the index of the maximum (upDown true) or minimum (upDown false) value of the Y values of the perimeter.
-    //There is a much better way to do this using modern C++ iterators etc....Ask CoPilot.
-    int val = 0;
-    uint8_t i, ind;
-    int maxval = -30000;
-    ind = 1;
+//     return tempInd;
+// }
+// uint8_t getExtremeY(bool upDown) {//Get the index of the maximum (upDown true) or minimum (upDown false) value of the Y values of the perimeter.
+//     //There is a much better way to do this using modern C++ iterators etc....Ask CoPilot.
+//     int val = 0;
+//     uint8_t i, ind;
+//     int maxval = -30000;
+//     ind = 1;
 
-    for (i = 1; i < NbrPerimeterPts; i++) {
-        val = Perimeter[1][i];
-        if (upDown) {
-            val = -val;
-        }
-        if (val > maxval) {
-            maxval = val;
-            ind = i;
-        }
-    }
-    return ind;
-}
+//     for (i = 1; i < NbrPerimeterPts; i++) {
+//         val = Perimeter[1][i];
+//         if (upDown) {
+//             val = -val;
+//         }
+//         if (val > maxval) {
+//             maxval = val;
+//             ind = i;
+//         }
+//     }
+//     return ind;
+// }
 // Positioning and motor control 
-void getXY(uint8_t ind, uint8_t pat) {//, uint8_t z) {  Zn is not passed as Perimeter() is loaded with the relevant zone data.
-    if (ind < NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
-        X = Perimeter[0][ind];
-        Y = Perimeter[1][ind];
-    } else {
-        PrevRndNbr = RndNbr;
-        RndNbr = rand() % NbrPerimeterPts; // equivalent to Rnd(NbrPerimeterPts)
-        if (RndNbr == 0) {
-            RndNbr = 1;
-        }
-        AltRndNbr = RndNbr;
+// 20240802: First version of getXY() was based on Perimeter() being populated with dense perimeter points.  Keep that, commented out, and replace with a new version.
+// void getXY(uint8_t ind, uint8_t pat) {//, uint8_t z) {  Zn is not passed as Perimeter() is loaded with the relevant zone data.
+//     if (ind < NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
+//         X = Perimeter[0][ind];
+//         Y = Perimeter[1][ind];
+//     } else {
+//         PrevRndNbr = RndNbr;
+//         RndNbr = rand() % NbrPerimeterPts; // equivalent to Rnd(NbrPerimeterPts)
+//         if (RndNbr == 0) {
+//             RndNbr = 1;
+//         }
+//         AltRndNbr = RndNbr;
 
-        if (pat == 2) { // This is the random ladder case when the opposite side of the rung is needed.
-            if (rndLadBit == 1) {
-                minYind = getExtremeY(true);//
-                maxYind = getExtremeY(false);
-                AltRndNbr = getRndLadInd(PrevRndNbr);
-                rndLadBit = 0;
-            } else {
-                rndLadBit = 1;
-            }
+//         if (pat == 2) { // This is the random ladder case when the opposite side of the rung is needed.
+//             if (rndLadBit == 1) {
+//                 minYind = getExtremeY(true);//
+//                 maxYind = getExtremeY(false);
+//                 AltRndNbr = getRndLadInd(PrevRndNbr);
+//                 rndLadBit = 0;
+//             } else {
+//                 rndLadBit = 1;
+//             }
+//         }
+//         X = Perimeter[0][AltRndNbr];
+//         Y = Perimeter[1][AltRndNbr];
+//     }
+// }
+
+void midPt(int tilt, uint8_t seg,int (&res)[2]){
+    // uint8_t ratio = 0;
+    int den = 0;
+    int num = abs(tilt-Vertices[1][seg]);
+    // sprintf(debugMsg,"S0 %d, S1 %d, diff %d", Vertices[1][seg], Vertices[1][seg+1],abs(Vertices[1][seg]-Vertices[1][seg+1]));
+    // uartPrint(debugMsg);
+    den = abs(Vertices[1][seg] - Vertices[1][seg+1]);
+    if(den>0){
+        // ratio = (tilt * 100) / den;
+        int last[2] ={Vertices[0][seg], Vertices[1][seg]};
+        int nxt[2] ={Vertices[0][seg+1], Vertices[1][seg+1]};
+        PolarInterpolate(last, nxt, num, den, res);
+        // CartesianInterpolate(Vertices[seg], Vertices[seg+1], num, den, res);
+        } else {
+            res[0]=Vertices[0][seg];
+            res[1]=Vertices[1][seg];
         }
-        X = Perimeter[0][AltRndNbr];
-        Y = Perimeter[1][AltRndNbr];
+    // sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
+    #ifdef DEBUG
+    sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,num, den, seg,res[0],res[1]);
+    uartPrint(debugMsg);
+    #endif
+}
+
+bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRungs) {  
+    // 20240802 At least initially don't bother tracing the perimeter.
+    static int thisRes[2];
+    static int nextRes[2];
+    static bool startRung=true;
+    if (ind < MapCount[0][zn]-1) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
+        X = Vertices[0][ind];
+        Y = Vertices[1][ind];
+    } else {
+        if(startRung){
+            // PrevRndNbr = RndNbr;
+            RndNbr = rand() % nbrRungs; // 
+            if (RndNbr == 0) {
+                RndNbr = 1;
+            }
+            // AltRndNbr = RndNbr;
+            int temp = rhoMin + RndNbr * Tilt_Sep;
+            int tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);
+            uint8_t fstSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, 0);
+            uint8_t sndSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, fstSeg+1);
+            #ifdef DEBUG
+            sprintf(debugMsg,"rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d",RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg);
+            uartPrint(debugMsg);            
+            #endif
+            // For each segment get the interpolated point in the segment needed for the new rung.
+            midPt(tilt, fstSeg, thisRes);
+            midPt(tilt, sndSeg, nextRes);
+
+            X = thisRes[0];
+            Y = thisRes[1];
+        } else {
+            X = nextRes[0];
+            Y = nextRes[1];
+        }
+        startRung = !startRung;
     }
+    #ifdef DEBUG
+    sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
+    uartPrint(debugMsg);
+    #endif
+    return startRung; //Use this to set laser speed.
 }
 void ProcessCoordinates() {
     StepOverRatio = 0;
@@ -1777,25 +1898,27 @@ void JogMotors(bool prnt) {//
     JogFlag = 0;
 }
 
-uint16_t CalcSpeed() {
+uint16_t CalcSpeed(bool fst) {
     uint16_t s = 0;
     // uint8_t res = getCartFromTilt(AbsY);
-    int res = getCartFromTilt(AbsY);
-    if (res < Rho_Min) {
-        s = Step_Rate_Max;
-    } else if (res > Rho_Max) {
-        s = Step_Rate_Min;
-    } else {
-        long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
-        long den = (long)(Rho_Max - Rho_Min);
-        s = (uint16_t)(num / den);
-        // sprintf(debugMsg, "num: %ld, den: %ld, s: %d", num, den, s);
-        // uartPrint(debugMsg);
-        // _delay_ms(50);
-    }
-    s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
-    // s *= SpeedScale;
-    // s /= 100;
+    if (!fst){
+        int res = getCartFromTilt(AbsY);
+        if (res < Rho_Min) {
+            s = Step_Rate_Max;
+        } else if (res > Rho_Max) {
+            s = Step_Rate_Min;
+        } else {
+            long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
+            long den = (long)(Rho_Max - Rho_Min);
+            s = (uint16_t)(num / den);
+            // sprintf(debugMsg, "num: %ld, den: %ld, s: %d", num, den, s);
+            // uartPrint(debugMsg);
+            // _delay_ms(50);
+        }
+        s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
+        // s *= SpeedScale;
+        // s /= 100;
+    } else s = HOMING_SPEED;
     return s;
 }
 
@@ -1888,75 +2011,135 @@ void HomeAxis() {
     CmdLaserOnFlag = false;
     IsHome = 1;
 }
+// 20240802.  Keep old version of RunSweep (used with dense perimeter)
+// void  RunSweep(uint8_t zn) {
+//     uint8_t NbrPts, PatType, i;
+//     int last[2],nxt[2];//,nbrMidPts;
+//     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
+//     LoadZoneMap(zn);
+//     GetPerimeter(zn);
 
+//     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
+//         // HomeAxis(); //20240729
+//         for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
+//             // Store present point to use in interpolation
+//             last[0] = X;
+//             last[1] = Y;
+//             getXY(Index, PatType);
+//             nxt[0] = X;
+//             nxt[1] = Y;
+//             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
+//             // CalcSpeedZone(); // 20240724 No longer used
+//             DSS_preload = CalcSpeed();
+//             // sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
+//             sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
+//             uartPrint(debugMsg);
+//             _delay_ms(50); //20240831  Add this to separate it from next prints.
+
+//             if (Index == 0) { //20240727: Change to zero (from 1). So laser is off as it moves towards 0th point of cycle.
+//                 CmdLaserOnFlag = false;
+//                 DSS_preload = Step_Rate_Max;
+//             } else{
+//                 CmdLaserOnFlag = true;
+//             }
+
+//             // nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
+//             // for (i = 0; i <= nbrMidPts; i++) {
+//                 // if (nbrMidPts > 0) {
+//                 //     if (i == nbrMidPts) {
+//                 //         X = nxt[0];
+//                 //         Y = nxt[1];
+//                 //     } else {
+//                 //         CartesianInterpolate(last,nxt,i, nbrMidPts, res);
+//                 //         getPolars(res[1], res[2], res);  //Pass res as input 
+//                 //         X = res[1];
+//                 //         Y = res[2];
+//                 //     }
+//                 // }
+//                 ProcessCoordinates();
+//                 // sprintf(debugMsg,"X: %d, Y: %d, Index: %d", X, Y, Index);
+//                 // uartPrint(debugMsg);
+
+//                 SteppingStatus = 1;
+//                 // uartPrintFlash(F("<T1 RS"));
+//                 setupTimer1();
+
+//                 while (SteppingStatus == 1) {
+//                     // uartPrintFlash(F("<DHK RS \n"));
+//                     DoHouseKeeping();
+//                     // uartPrintFlash(F(">DHK RS \n"));
+//                     if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
+//                         // uartPrintFlash(F("SUM1 RS \n"));
+//                         StopTimer1();
+//                         StepCount = 0;
+//                         SteppingStatus = 0;
+//                         return;
+//                     }
+//                 // }
+//             }
+//         }
+//     }
+//     ResetTiming();
+// }
 void RunSweep(uint8_t zn) {
     uint8_t NbrPts, PatType, i;
     int last[2],nxt[2];//,nbrMidPts;
+    int minTilt = 0;
+    int maxTilt = 0;
+    int rhoMin = 0;
+    bool startRung = true;
+
     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
-    GetPerimeter(zn);
-    for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
-        // HomeAxis(); //20240729
-        for (uint8_t Index = 0; Index < NbrPerimeterPts + Nbr_Rnd_Pts; Index++) {
+    getExtremeTilt(MapCount[0][zn],minTilt,maxTilt);
+    uint8_t nbrRungs = getNbrRungs(maxTilt,minTilt,rhoMin);//rhoMin is set by this function
+    // sprintf(debugMsg,"Rungs %d rhoMin %d",nbrRungs,rhoMin);
+    // uartPrint(debugMsg);
+    for (PatType = 1; PatType <= 2; PatType++) {
+        #ifdef BASE_PRINT
+        sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
+        uartPrint(debugMsg);
+        #endif
+        for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
             // Store present point to use in interpolation
-            last[0] = X;
-            last[1] = Y;
-            getXY(Index, PatType);
-            nxt[0] = X;
-            nxt[1] = Y;
-            // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
-            // CalcSpeedZone(); // 20240724 No longer used
-            DSS_preload = CalcSpeed();
-            // sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
-            sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
+            startRung = getXY(PatType, zn, Index, rhoMin, nbrRungs);
+            #ifdef BASE_PRINT
+            sprintf(debugMsg,"Ind: %d Rnd: %d X: %d Y: %d",Index, RndNbr, X,Y);
             uartPrint(debugMsg);
-            _delay_ms(50); //20240831  Add this to separate it from next prints.
-
-            if (Index == 0) { //20240727: Change to zero (from 1). So laser is off as it moves towards 0th point of cycle.
+            #endif
+            if (Index == 0 && PatType == 1) { //20240727:Laser off as it moves towards 0th point of cycle.
                 CmdLaserOnFlag = false;
                 DSS_preload = Step_Rate_Max;
-            } else{
-                CmdLaserOnFlag = true;
+            } else {
+                if ((PatType == 1) || (PatType==2 && startRung)){
+                    CmdLaserOnFlag = true;//Laser off if start of rung or pat 1
+                    DSS_preload = CalcSpeed(false);
+                } else {
+                    CmdLaserOnFlag = false;
+                    DSS_preload = CalcSpeed(true);
+                }
             }
+            ProcessCoordinates();
+            SteppingStatus = 1;
+            setupTimer1();
 
-            // nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
-            // for (i = 0; i <= nbrMidPts; i++) {
-                // if (nbrMidPts > 0) {
-                //     if (i == nbrMidPts) {
-                //         X = nxt[0];
-                //         Y = nxt[1];
-                //     } else {
-                //         CartesianInterpolate(last,nxt,i, nbrMidPts, res);
-                //         getPolars(res[1], res[2], res);  //Pass res as input 
-                //         X = res[1];
-                //         Y = res[2];
-                //     }
-                // }
-                ProcessCoordinates();
-                // sprintf(debugMsg,"X: %d, Y: %d, Index: %d", X, Y, Index);
-                // uartPrint(debugMsg);
-
-                SteppingStatus = 1;
-                // uartPrintFlash(F("<T1 RS"));
-                setupTimer1();
-
-                while (SteppingStatus == 1) {
-                    // uartPrintFlash(F("<DHK RS \n"));
-                    DoHouseKeeping();
-                    // uartPrintFlash(F(">DHK RS \n"));
-                    if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
-                        // uartPrintFlash(F("SUM1 RS \n"));
-                        StopTimer1();
-                        StepCount = 0;
-                        SteppingStatus = 0;
-                        return;
-                    }
-                // }
+            while (SteppingStatus == 1) {
+                // uartPrintFlash(F("<DHK RS \n"));
+                DoHouseKeeping();
+                // uartPrintFlash(F(">DHK RS \n"));
+                if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
+                    // uartPrintFlash(F("SUM1 RS \n"));
+                    StopTimer1();
+                    StepCount = 0;
+                    SteppingStatus = 0;
+                    return;
+                }
             }
         }
     }
     ResetTiming();
 }
+
 #pragma endregion Movement functions
 #pragma region Print functions
 void TransmitData() {

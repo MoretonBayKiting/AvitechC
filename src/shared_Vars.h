@@ -7,6 +7,7 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
+#define BASE_PRINT
 // #define DEBUG
 // #define PRINT_EEPROM
 #define PRINT_CMD9
@@ -127,7 +128,7 @@ void ProcessCoordinates();
 void ProgrammingMode();
 void setupWatchdog();
 void PrintConfigData();
-void CalcSpeedZone();
+// void CalcSpeedZone();
 uint16_t CalcSpeed();
 // void SetLaserVoltage(uint8_t voltage);
 void SetLaserVoltage(uint16_t voltage);

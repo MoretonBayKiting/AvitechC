@@ -1312,10 +1312,8 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
             }
         }
         if(doPrint){
-            #ifdef BASE_PRINT
             sprintf(debugMsg,"MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i],MapCount[1][i]);
             uartPrint(debugMsg);
-            #endif
             _delay_ms(50);
         }
         Prev_i = i;
@@ -1667,7 +1665,7 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
         int last[2] ={Vertices[0][seg], Vertices[1][seg]};
         int nxt[2] ={Vertices[0][seg+1], Vertices[1][seg+1]};
         PolarInterpolate(last, nxt, num, den, res);
-        // CartesianInterpolate(Vertices[seg], Vertices[seg+1], num, den, res);
+        // CartesianInterpolate(last, nxt, num, den, res);
         } else {
             res[0]=Vertices[0][seg];
             res[1]=Vertices[1][seg];
@@ -1680,46 +1678,53 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
 }
 
 bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRungs) {  
-    // 20240802 At least initially don't bother tracing the perimeter.
     static int thisRes[2];
     static int nextRes[2];
     static bool startRung=true;
-    if (ind < MapCount[0][zn]-1) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
+    static bool pat3=true; //
+    static uint8_t rung=0;
+    if (ind < MapCount[0][zn]) { //First cycle around the boundary
         X = Vertices[0][ind];
         Y = Vertices[1][ind];
     } else {
-        if(startRung){
-            // PrevRndNbr = RndNbr;
+        if(startRung){ //If a rung is not set, calculate both end points for a new rung.  Set x,y to the start of the segment.
             RndNbr = rand() % nbrRungs; // 
-            if (RndNbr == 0) {
-                RndNbr = 1;
+            if(pat == 4){// Sequentially cross the zone with rungs, not randomly 
+                RndNbr = rung++;
+                if(RndNbr==nbrRungs) rung = 0;
             }
-            // AltRndNbr = RndNbr;
-            int temp = rhoMin + RndNbr * Tilt_Sep;
-            int tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);
-            uint8_t fstSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, 0);
-            uint8_t sndSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, fstSeg+1);
+            if (RndNbr == 0) RndNbr = 1;
+            int tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);//Argument is Cartesian offset from laser.  Get tilt angle for this.
+            uint8_t fstSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, 0); //Fist segment which includes specified/chosen tilt
+            uint8_t sndSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, fstSeg+1); //Opposite segment which includes specified/chosen tilt
             #ifdef DEBUG
             sprintf(debugMsg,"rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d",RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg);
             uartPrint(debugMsg);            
             #endif
             // For each segment get the interpolated point in the segment needed for the new rung.
-            midPt(tilt, fstSeg, thisRes);
-            midPt(tilt, sndSeg, nextRes);
-
+            midPt(tilt, fstSeg, thisRes); //Intercept of pan for given tilt with fstSeg
+            midPt(tilt, sndSeg, nextRes); //Intercept of pan for given tilt with sndSeg
             X = thisRes[0];
             Y = thisRes[1];
-        } else {
-            X = nextRes[0];
+        } else { //If a rung is set, and this is the 2nd pass for that rung, set x,y to the end of the segment.
+            X = nextRes[0]; 
             Y = nextRes[1];
         }
         startRung = !startRung;
+        if (pat == 3) {
+            startRung = true;//Don't do horizontal rungs.  Just get random points for pattern 3.
+            pat3 = !pat3;
+            if (!pat3) {//thisRes is on one side of zone and nextRes is on other side. Need sequential points to be from opposite sides.
+                X = nextRes[0];
+                Y = nextRes[1];
+            }
+        }
     }
     #ifdef DEBUG
     sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
     uartPrint(debugMsg);
     #endif
-    return startRung; //Use this to set laser speed.
+    return startRung; //Use this to set speed and (possibly) laser on.
 }
 void ProcessCoordinates() {
     StepOverRatio = 0;
@@ -2095,7 +2100,7 @@ void RunSweep(uint8_t zn) {
     uint8_t nbrRungs = getNbrRungs(maxTilt,minTilt,rhoMin);//rhoMin is set by this function
     // sprintf(debugMsg,"Rungs %d rhoMin %d",nbrRungs,rhoMin);
     // uartPrint(debugMsg);
-    for (PatType = 1; PatType <= 2; PatType++) {
+    for (PatType = 1; PatType <= 4; PatType++) {
         #ifdef BASE_PRINT
         sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
         uartPrint(debugMsg);
@@ -2104,19 +2109,19 @@ void RunSweep(uint8_t zn) {
             // Store present point to use in interpolation
             startRung = getXY(PatType, zn, Index, rhoMin, nbrRungs);
             #ifdef BASE_PRINT
-            sprintf(debugMsg,"Ind: %d Rnd: %d X: %d Y: %d",Index, RndNbr, X,Y);
+            sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
             uartPrint(debugMsg);
             #endif
             if (Index == 0 && PatType == 1) { //20240727:Laser off as it moves towards 0th point of cycle.
                 CmdLaserOnFlag = false;
                 DSS_preload = Step_Rate_Max;
             } else {
-                if ((PatType == 1) || (PatType==2 && startRung)){
-                    CmdLaserOnFlag = true;//Laser off if start of rung or pat 1
-                    DSS_preload = CalcSpeed(false);
-                } else {
+                if ((PatType==2 && startRung)){ //Laser off and high speed if going to start of rung in pat 2
                     CmdLaserOnFlag = false;
-                    DSS_preload = CalcSpeed(true);
+                    DSS_preload = CalcSpeed(true); //Passing true makes the speed fast, independent of tilt angle.
+                } else {
+                    CmdLaserOnFlag = true;
+                    DSS_preload = CalcSpeed(false);//Passing false makes the speed depend on tilt angle.
                 }
             }
             ProcessCoordinates();
@@ -2124,11 +2129,8 @@ void RunSweep(uint8_t zn) {
             setupTimer1();
 
             while (SteppingStatus == 1) {
-                // uartPrintFlash(F("<DHK RS \n"));
                 DoHouseKeeping();
-                // uartPrintFlash(F(">DHK RS \n"));
                 if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
-                    // uartPrintFlash(F("SUM1 RS \n"));
                     StopTimer1();
                     StepCount = 0;
                     SteppingStatus = 0;
@@ -2434,10 +2436,11 @@ int main() {
         if (SetupModeFlag == 0) {  //In run mode
             if (PrevSetupModeFlag != SetupModeFlag) {
                 // eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
-                getMapPtCounts(doPrint);  //Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
+                getMapPtCounts(false);  //Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
                 Audio2(3,10,5);//,"ToMode0");
                 _delay_ms(2000);
-                PrevSetupModeFlag = SetupModeFlag;            }
+                PrevSetupModeFlag = SetupModeFlag;            
+                }
                 // firstRun = false;
             // }
             if (MapTotalPoints > 0){

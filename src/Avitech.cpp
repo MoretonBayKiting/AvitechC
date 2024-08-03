@@ -1365,14 +1365,9 @@ void LoadZoneMap(uint8_t zn) {
             } else {
                 // uartPrint("Abs(den)<1");
             }
-            // float res  = ((float)((Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10 ))/ ((float)(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]));
             Vertices[2][MapIndex - 1] = res;
-            // sprintf(debugMsg, "Slope MI: %d, num %f, den %f, 100res %f",MapIndex,num, den, 100 * res);
-            // sprintf(debugMsg, "Slope MI: %d, num %d, den %d, 100res %d",MapIndex,(int)num, (int)den, (int)(100 * res));
-            // uartPrint(debugMsg);
         } else {
             Vertices[2][MapIndex - 1] = DEF_SLOPE ; //Set an extreme value where delta(x) is potentially large and delta(y) is small.
-            // It needs to be dealt with as a speical case in GetPerimeter().
         }
     }
 }
@@ -1381,7 +1376,7 @@ void floatToString(char* buffer, float value, int precision) {
 }
 
 int getCartFromTilt(int t) {//Estimate a cartesian distance to the laser point based only on tilt (in steps) and LaserHt
-    float a = (float)t/STEPS_PER_RAD; //Angle in radians.
+    float a = (float)t/TILT_STEPS_PER_RAD; //Angle in radians.
     float b = tan(a);
     float c = (float)LaserHt/(b*10);//LaserHt is in decimetres rather than metres.  So divide by 10 to get back to metres.    
     return (int)(c + 0.5); // rounding to the nearest integer before casting.  Return value is in metres.
@@ -1391,7 +1386,7 @@ int getTiltFromCart(int rho) {
     float b = atan2(LaserHt,rho*10);
     // sprintf(debugMsg,"Ht %d, rho %d, ret %d",LaserHt, rho, (int)(b*STEPS_PER_RAD + 0.5));
     // uartPrint(debugMsg);
-    return (int)(b*STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
+    return (int)(b*TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
 int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.  
     // getNextTiltVal() should calculate the required tilt value to get the specified separation.  TILT_SEP will need calibration.
@@ -1407,15 +1402,15 @@ int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target s
 }
 void getCart(int p, int t, int (&thisres)[2]) {//Take pan(t) and tilt(t) for a polar point and return the cartesian equivalent (thisres)
    int r = getCartFromTilt(t);
-   thisres[0] = r*cos(p/STEPS_PER_RAD); //1st coord (x) is r at pan = 0 and 2nd coord (y) is zero.
-   thisres[1] = r*sin(p/STEPS_PER_RAD);
+   thisres[0] = r*cos(p/PAN_STEPS_PER_RAD); //1st coord (x) is r at pan = 0 and 2nd coord (y) is zero.
+   thisres[1] = r*sin(p/PAN_STEPS_PER_RAD);
 }
 void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as input, return, via thisRes[2], polars.
     long r = c1 * c1 + c2 * c2;  //Get the distance from the laser to the point by pythagoras.
     r = sqrt(r);  
     //First argument of atan2 is opp, second is adj.  Ref https://cplusplus.com/reference/cmath/atan2/.  
     double angle = atan2(static_cast<double>(c2), static_cast<double>(c1));  //Pan is atan(c2/c1).  atan2 assumes arguments are doubles. 
-    int temp = static_cast<int>(angle *  STEPS_PER_RAD);//pan
+    int temp = static_cast<int>(angle * PAN_STEPS_PER_RAD);//pan
     thisRes[0] = temp;
     thisRes[1] = getTiltFromCart(static_cast<int>(r)); //tilt.
     #ifdef DEBUG
@@ -1425,7 +1420,7 @@ void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as
 }
 int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a specified tilt angle (steps) and cartesian pan distance.
     int rho = getCartFromTilt(TiltPolar);
-    return STEPS_PER_RAD*PanCart/rho;
+    return PAN_STEPS_PER_RAD*PanCart/rho;
 }
 void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
     // Using snprintf for safer string formatting and concatenation
@@ -1560,19 +1555,29 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     int c1[2], c2[2]; //The cartesian end points.
     getCart(last[0], last[1], c1); //Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-    sprintf(debugMsg,"C10 %d, C20 %d, C11 %d, C21 %d",c1[0],c2[0],c1[1],c2[1]);
+    #ifdef DEBUG
+    sprintf(debugMsg,"l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d",last[0],last[1],nxt[0],nxt[1],c1[0],c2[0],c1[1],c2[1]);
     uartPrint(debugMsg);
+    #endif
     // Do the Cartesian interpolation, storing results in thisRes
     uint16_t temp = num * abs(c2[0] - c1[0]);
     res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
-    sprintf(debugMsg,"X temp: %d res: %d",temp,res[0]);
-    uartPrint(debugMsg);
+    // #ifdef DEBUG
+    // sprintf(debugMsg,"X temp: %d res: %d",temp,res[0]);
+    // uartPrint(debugMsg);
+    // #endif
     temp = num * abs(c2[1] - c1[1]);
     res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
-    sprintf(debugMsg,"Y temp: %d res: %d",temp,res[1]);
+    #ifdef DEBUG
+    sprintf(debugMsg,"Y num: %d den: %d temp: %d res0: %d res1: %d",num, den, temp,res[0],res[1]);
     uartPrint(debugMsg);
+    #endif
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
     getPolars(res[0],res[1], res);
+    #ifdef DEBUG
+    sprintf(debugMsg,"After getPolars. res0: %d res1: %d",res[0],res[1]);
+    uartPrint(debugMsg);
+    #endif
 }
 #pragma endregion Zone functions
 #pragma region Movement functions
@@ -1661,11 +1666,10 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
     // uartPrint(debugMsg);
     den = abs(Vertices[1][seg] - Vertices[1][seg+1]);
     if(den>0){
-        // ratio = (tilt * 100) / den;
         int last[2] ={Vertices[0][seg], Vertices[1][seg]};
         int nxt[2] ={Vertices[0][seg+1], Vertices[1][seg+1]};
-        PolarInterpolate(last, nxt, num, den, res);
-        // CartesianInterpolate(last, nxt, num, den, res);
+        // PolarInterpolate(last, nxt, num, den, res);
+        CartesianInterpolate(last, nxt, num, den, res);//Calculates res[2] from last[2], nxt[2], num and den.
         } else {
             res[0]=Vertices[0][seg];
             res[1]=Vertices[1][seg];

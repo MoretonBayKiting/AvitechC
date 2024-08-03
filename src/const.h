@@ -28,7 +28,8 @@
 #define MAX_NBR_VERTICES 10  //This is the maximum number of vertices per zone/map
 #define MAX_NBR_MAP_PTS 40   // This is the maximum overall number of vertices
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
-#define STEPS_PER_RAD 2052.0 //36 * 57 (36 steps per degree and 57 radians per degree?)
+#define TILT_STEPS_PER_RAD 2052.0 //36 * 57 (36 steps per degree and 57 radians per degree?)
+#define PAN_STEPS_PER_RAD 2546.0 //20240803: 4000 steps for 90°
 // #define TILT_SEP 10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.

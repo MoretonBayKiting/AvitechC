@@ -802,14 +802,14 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
     OffTicks = OffPd;
     AudioLength = cnt * (OnTicks + OffTicks); // Could be cnt * OnTicks + (cnt-1)*OffTicks;
     if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
-    #ifdef DEBUG 
-    if (debugInfo != nullptr) {
-        uartPrint(debugInfo);
-    } 
+    // #ifdef DEBUG 
+    // if (debugInfo != nullptr) {
+    //     uartPrint(debugInfo);
+    // } 
     // else {
     //     uartPrint("Debug null");
     // }
-    #endif
+    // #endif
     // #ifdef DEBUG 
     // uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
     // if (debugInfo != nullptr) {
@@ -1413,10 +1413,10 @@ void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as
     int temp = static_cast<int>(angle * PAN_STEPS_PER_RAD);//pan
     thisRes[0] = temp;
     thisRes[1] = getTiltFromCart(static_cast<int>(r)); //tilt.
-    #ifdef DEBUG
-    sprintf(debugMsg,"r  %d, res0 %d, res1 %d",r, thisRes[0], thisRes[1]);
-    uartPrint(debugMsg);
-    #endif
+    // #ifdef DEBUG
+    // sprintf(debugMsg,"r  %d, res0 %d, res1 %d",r, thisRes[0], thisRes[1]);
+    // uartPrint(debugMsg);
+    // #endif
 }
 int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a specified tilt angle (steps) and cartesian pan distance.
     int rho = getCartFromTilt(TiltPolar);
@@ -1537,10 +1537,11 @@ uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) { //Get
 //     NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
 //     // j++; //This is necessary so that next segment starts at right value/index.
 // }
-// Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate ((i + 1)/n), and return polars of interpolated point (thisRes).
+
 int sign(int x) {
     return (x > 0) - (x < 0);
 }
+
 void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]){
     uint16_t temp = num * abs(nxt[0] - last[0]);
     res[0] = last[0] + temp/den *sign(nxt[0] - last[0]); 
@@ -1551,6 +1552,8 @@ void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]){
     uartPrint(debugMsg);
     #endif
 }
+// Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate ((i + 1)/n), and return polars of interpolated point (thisRes).
+// Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate (num/den), and return polars of interpolated point (thisRes).
 void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]) {
     int c1[2], c2[2]; //The cartesian end points.
     getCart(last[0], last[1], c1); //Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
@@ -1568,16 +1571,16 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     // #endif
     temp = num * abs(c2[1] - c1[1]);
     res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
-    #ifdef DEBUG
-    sprintf(debugMsg,"Y num: %d den: %d temp: %d res0: %d res1: %d",num, den, temp,res[0],res[1]);
-    uartPrint(debugMsg);
-    #endif
+    // #ifdef DEBUG
+    // sprintf(debugMsg,"Y num: %d den: %d temp: %d res0: %d res1: %d",num, den, temp,res[0],res[1]);
+    // uartPrint(debugMsg);
+    // #endif
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
     getPolars(res[0],res[1], res);
-    #ifdef DEBUG
-    sprintf(debugMsg,"After getPolars. res0: %d res1: %d",res[0],res[1]);
-    uartPrint(debugMsg);
-    #endif
+    // #ifdef DEBUG
+    // sprintf(debugMsg,"After getPolars. res0: %d res1: %d",res[0],res[1]);
+    // uartPrint(debugMsg);
+    // #endif
 }
 #pragma endregion Zone functions
 #pragma region Movement functions
@@ -1681,15 +1684,87 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
     #endif
 }
 
+uint16_t cartDistance(int pt1[2], int pt2[2]) {
+    uint32_t dx = static_cast<uint32_t>(abs(pt2[0] - pt1[0]));
+    uint32_t dy = static_cast<uint32_t>(abs(pt2[1] - pt1[1]));
+    #ifdef DEBUG
+    sprintf(debugMsg,"dx %lu, dy %lu", dx, dy);
+    uartPrint(debugMsg);            
+    #endif
+    uint32_t sqr = dx * dx + dy * dy;
+    double dist = sqrt(sqr);
+    #ifdef DEBUG
+    sprintf(debugMsg,"pt20 %d, pt10 %d, pt21 %d, pt11 %d, sqr %lu, dist %u", pt2[0], pt1[0], pt2[1], pt1[1], sqr, static_cast<uint16_t>(dist));
+    uartPrint(debugMsg);            
+    #endif
+
+    return static_cast<uint16_t>(dist); // Convert the distance to uint16_t
+}
+
+uint16_t distance(int pt1[2], int pt2[2]) {
+    uint16_t dx = static_cast<uint16_t>(abs(pt2[0] - pt1[0]));
+    uint16_t dy = static_cast<uint16_t>(abs(pt2[1] - pt1[1]));
+    // uint16_t dist = std::max(dx,dy);
+    uint16_t dist = (dx > dy) ? dx : dy;
+    #ifdef DEBUG
+    sprintf(debugMsg,"pt20 %d, pt10 %d, pt21 %d, pt11 %d, dist %u, dx %u, dy %u", pt2[0], pt1[0], pt2[1], pt1[1],dist, dx, dy);
+    uartPrint(debugMsg);            
+    #endif
+    return dist;
+}
+
 bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRungs) {  
     static int thisRes[2];
     static int nextRes[2];
     static bool startRung=true;
     static bool pat3=true; //
+    static uint8_t lastPat = 0;
     static uint8_t rung=0;
-    if (ind < MapCount[0][zn]) { //First cycle around the boundary
-        X = Vertices[0][ind];
-        Y = Vertices[1][ind];
+
+    static uint8_t nbrSegPts = 0;
+    static uint8_t seg = 0;
+    static uint8_t segPt = 0;
+    static int pt1[2];
+    static int pt2[2];
+    #define SEG_LENGTH 100 //Length (in steps) between straightening points along boundary segments.    
+    // if (ind < MapCount[0][zn]) { //First, cycle around the boundary
+    if(pat!=lastPat){//Test for a new pattern and, if so, reset seg.
+        seg = 0;
+    }
+    lastPat = pat;
+    if(seg < MapCount[0][zn]){ //Use seg to count segments.  Use segPt to count intermediate points in a segment.
+        if (segPt == 0){
+            pt1[0] = Vertices[0][seg];
+            pt1[1] = Vertices[1][seg];
+            if(seg == MapCount[0][zn] - 1){//Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
+                pt2[0] = Vertices[0][0];
+                pt2[1] = Vertices[1][0];
+            } else {
+                pt2[0] = Vertices[0][seg+1];
+                pt2[1] = Vertices[1][seg+1];
+            }
+            #ifdef DEBUG
+            sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
+            uartPrint(debugMsg);            
+            #endif
+            nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);
+            X = Vertices[0][seg];
+            Y = Vertices[1][seg];
+        } else{ 
+            CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
+            X = res[0];
+            Y = res[1];
+        } 
+        segPt++;
+        if(segPt >= nbrSegPts){
+            seg++;
+            segPt = 0;
+        }
+        #ifdef DEBUG
+        sprintf(debugMsg,"seg %d, segPt %d,nbrSegPts %d, ind %d", seg, segPt, nbrSegPts, ind);
+        uartPrint(debugMsg);            
+        #endif
+    //Now deal with the rungs - above is just boundary.
     } else {
         if(startRung){ //If a rung is not set, calculate both end points for a new rung.  Set x,y to the start of the segment.
             RndNbr = rand() % nbrRungs; // 

@@ -56,6 +56,8 @@ uint16_t DSS_preload = Step_Rate_Max;                                     // TCC
 volatile bool SteppingStatus = 0;
 // bool SteppingStatus = 0;  //Shared   // 0 = No stepping in progress. 1= Stepping in progress
 char buffer[20];  //Use for printint to serial (Bluetooth)
+// char CurrentBuffer[BUFFER_SIZE]; //20240924 - for double buffering bluetooth messages
+// char ProcessingBuffer[BUFFER_SIZE];
 #ifndef NDEBUG
 char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
 #endif
@@ -147,7 +149,6 @@ uint8_t Laser2BattTripFlag;
 //----------Communication Variables--------------------
 uint8_t A;
 char S[10];//20240607: This should only need to be char[4] // Variables to decode data coming in from the RS232 data stream from the phone Commands
-bool DataInBufferFlag; // Flag for there is data in the RS232 comms buffer
 
 //----------Speed Zone Variables--------------------
 uint8_t SpeedZone[5];
@@ -248,8 +249,14 @@ int Vertices[3][MAX_NBR_VERTICES]; //Columns: X, Y, Slope?
 // int Perimeter[2][MAX_NBR_PERIMETER_PTS];
 // uint8_t NbrPerimeterPts;
 int res[2];  //Global variables to be used in cartesian/polar conversions:Input and results.
-volatile char ReceivedData[BUFFER_SIZE];
-char RecdDataConst[BUFFER_SIZE];  
+// volatile char ReceivedData[BUFFER_SIZE];
+// char RecdDataConst[BUFFER_SIZE];  
+// volatile bool DataInBufferFlag = false; // Flag for there is data in the RS232 comms buffer
+char Buffer1[BUFFER_SIZE];
+char Buffer2[BUFFER_SIZE];
+volatile bool bufferFlag = false; // false -> Buffer1, true -> Buffer2
+volatile bool Buffer1Ready = false;
+volatile bool Buffer2Ready = false;
 volatile int DataCount = 0;
 volatile uint8_t CommandLength = 0;
 // uint8_t cnter = 0;
@@ -425,29 +432,61 @@ char uartGetChar(void) {
     while (!(UCSR0A & (1 << RXC0)));  /* Wait for data to be received */
     return UDR0;  /* Get and return received data from buffer */
 }
+
+// ISR(USART0_RX_vect) {
+//     char c = UDR0;
+//     if (c == '\r' || c == '\n') {
+//         // Do nothing
+//     } else {
+//         if (DataCount == 0 && c != '<') {
+//             // Do nothing
+//         } else {
+//             ReceivedData[DataCount] = c;
+//             DataCount++;
+//             if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
+//                 DataCount = 0;
+//             }
+//             if (c == '>') { // Set the flag when a complete command is received
+//                 ReceivedData[DataCount] = '\0'; // Add null terminator
+//                 DataInBufferFlag = true;
+//                 CommandLength = DataCount; // Store the length of the command
+//                 DataCount = 0;
+//             }
+//         }
+//     }
+// }
+//20240924.  This version to be used with double buffering CheckBlueTooth().  Reverted to old for short term.
 ISR(USART0_RX_vect) {
-    char c = UDR0;
+    char c = UDR0; // Read the received character from the UART data register
+    // uartPutChar(c);  // 20240929: Echo the received data back to the serial monitor for testing.
     if (c == '\r' || c == '\n') {
-        // Do nothing
+        // Ignore carriage return and newline characters
     } else {
+        char* currentBuffer = bufferFlag ? Buffer2 : Buffer1;
+
         if (DataCount == 0 && c != '<') {
-            // Do nothing
+            // Ignore characters until the start of a command ('<') is received
         } else {
-            ReceivedData[DataCount] = c;
-            DataCount++;
+            currentBuffer[DataCount] = c; // Store the received character in the buffer
+            DataCount++; // Increment the buffer index
+
             if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
                 DataCount = 0;
             }
-            if (c == '>') { // Set the flag when a complete command is received
-                ReceivedData[DataCount] = '\0'; // Add null terminator
-                DataInBufferFlag = true;
-                CommandLength = DataCount; // Store the length of the command
-                DataCount = 0;
+
+            if (c == '>') { // Check if the end of a command is received
+                currentBuffer[DataCount] = '\0'; // Add null terminator to the buffer
+                if (bufferFlag) {
+                    Buffer2Ready = true;
+                } else {
+                    Buffer1Ready = true;
+                }
+                bufferFlag = !bufferFlag; // Switch buffer
+                DataCount = 0; // Reset the buffer index
             }
         }
     }
 }
-
 // void processReceivedData() {
 //     if (ReceivedData[CommandLength] == '\0') {
 //         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
@@ -498,50 +537,164 @@ void ProcessError(){
 //     }
 // }
 
-void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
-    
-    if (DataInBufferFlag == true) { // We have got something
-        // processReceivedData();
-        char *token;
-        memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
-         // Clear the buffer and reset the flag immediately after copying the data
-        memset((void*)ReceivedData, 0, sizeof(ReceivedData));
-        DataInBufferFlag = false;
-        
-        token = strchr(RecdDataConst, '<');  // Find the start of the command
-        while (token != NULL) {
-            char *end = strchr(token, '>');  // Find the end of the command
-            if (end != NULL) {
-                *end = '\0'; // Replace '>' with '\0' to end the string
-                char *colon = strchr(token, ':');  // Find the start of the instruction
-                if (colon != NULL) {
-                    *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
-                    Command = atoi(token + 1); // Convert the command to an integer
-                    Instruction = atoi(colon + 1); // Convert the instruction to an integer
-                    DecodeCommsData();  // Process the command and instruction
-                }
-                token = strchr(end + 1, '<');  // Find the start of the next command
-            } else {
-                break; // No more complete commands in the buffer
+// 20240924: This version of CheckBlueTooth() replaced with double buffering version.  But reverted, hopefully temporarily, when double buffering didn't work.
+// void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null. 
+//     if (DataInBufferFlag == true) { // We have got something
+//         // processReceivedData();
+//         char *token;
+//         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
+//          // Clear the buffer and reset the flag immediately after copying the data
+//         memset((void*)ReceivedData, 0, sizeof(ReceivedData));
+//         DataInBufferFlag = false;
+//         uartPrint("Received data: "); //20240923 Sort out problem with <10:0><21:1> from bespoke app.
+//         uartPrint(RecdDataConst);        
+//         token = strchr(RecdDataConst, '<');  // Find the start of the command
+//         while (token != NULL) {
+//             char *end = strchr(token, '>');  // Find the end of the command
+//             if (end != NULL) {
+//                 *end = '\0'; // Replace '>' with '\0' to end the string
+//                 char *colon = strchr(token, ':');  // Find the start of the instruction
+//                 if (colon != NULL) {
+//                     *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
+//                     Command = atoi(token + 1); // Convert the command to an integer
+//                     Instruction = atoi(colon + 1); // Convert the instruction to an integer
+//                     DecodeCommsData();  // Process the command and instruction
+//                 }
+//                 token = strchr(end + 1, '<');  // Find the start of the next command
+//             } else {
+//                 break; // No more complete commands in the buffer
+//             }
+//         }
+//     }
+// }
+void ProcessBuffer(char* buffer) {
+    // Debug print: Log buffer contents
+    uartPrint("ProcessingBuffer: ");
+    uartPrint(buffer);
+
+    // Trim leading and trailing whitespace
+    char *start = buffer;
+    while (isspace(*start)) start++;
+    char *end = start + strlen(start) - 1;
+    while (end > start && isspace(*end)) end--;
+    *(end + 1) = '\0';
+
+    char *token = strchr(start, '<');  // Find the start of the command
+    while (token != NULL) {
+        char *end = strchr(token, '>');  // Find the end of the command
+        if (end != NULL) {
+            *end = '\0'; // Replace '>' with '\0' to end the string
+            char *colon = strchr(token, ':');  // Find the start of the instruction
+            if (colon != NULL) {
+                *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
+                Command = atoi(token + 1); // Convert the command to an integer
+                Instruction = atoi(colon + 1); // Convert the instruction to an integer
+
+                // Debug print: Log parsed command and instruction
+                uartPrint("Cmd: ");
+                uartPrint(String(Command).c_str());
+                uartPrint("Instruction: ");
+                uartPrint(String(Instruction).c_str());
+
+                DecodeCommsData();  // Process the command and instruction
             }
+            token = strchr(end + 1, '<');  // Find the start of the next command
+        } else {
+            break; // No more complete commands in the buffer
+        }
+    }
+
+    // Clear the processing buffer after processing
+    memset(buffer, 0, BUFFER_SIZE);
+}
+
+void CheckBlueTooth() {
+    if (Buffer1Ready || Buffer2Ready) { // We have got something
+        if (Buffer1Ready) {
+            uartPrint("Buffer1Ready");
+            ProcessBuffer(Buffer1);
+            Buffer1Ready = false;
+        }
+        if (Buffer2Ready) {
+            uartPrint("Buffer2Ready");
+            ProcessBuffer(Buffer2);
+            Buffer2Ready = false;
         }
     }
 }
-void uartRead(char* buffer, int length) { //20240618.  This is not called.  ISR used instead.
-    int i = 0;
-    while (uartAvailable() && i < length - 1) {
-        char c = uartGetChar();
-        buffer[i++] = c;
-        // Echo the character back to the serial monitor
-        uartPutChar(c);
-        // If we've encountered a newline or carriage return, stop reading
-        if (c == '\n' || c == '\r') {
-            break;
-        }
-    }
-    // Null-terminate the string
-    buffer[i] = '\0';
-}
+// 20240924: This version used with ISR(USART..., updated) but didn't run.  Back out for Gav to use until it is resolved.
+// void CheckBlueTooth() {
+//     if (DataInBufferFlag == true) { // We have got something
+//         // Swap buffers
+//         char tempBuffer[BUFFER_SIZE];
+//         memcpy(tempBuffer, CurrentBuffer, BUFFER_SIZE);
+//         memcpy(CurrentBuffer, ProcessingBuffer, BUFFER_SIZE);
+//         memcpy(ProcessingBuffer, tempBuffer, BUFFER_SIZE);
+
+//         // Clear the buffer and reset the flag
+//         memset(CurrentBuffer, 0, sizeof(CurrentBuffer));
+//         DataInBufferFlag = false;
+
+//         // Debug print: Log buffer contents
+//         uartPrint("temp: ");
+//         uartPrint(tempBuffer);
+//         uartPrint("\nCurrent: ");
+//         uartPrint(CurrentBuffer);
+//         uartPrint("\nProc: ");
+//         uartPrint(ProcessingBuffer);
+
+//         // Trim leading and trailing whitespace
+//         char *start = ProcessingBuffer;
+//         while (isspace(*start)) start++;
+//         char *end = start + strlen(start) - 1;
+//         while (end > start && isspace(*end)) end--;
+//         *(end + 1) = '\0';
+
+//         char *token = strchr(start, '<');  // Find the start of the command
+//         while (token != NULL) {
+//             char *end = strchr(token, '>');  // Find the end of the command
+//             if (end != NULL) {
+//                 *end = '\0'; // Replace '>' with '\0' to end the string
+//                 char *colon = strchr(token, ':');  // Find the start of the instruction
+//                 if (colon != NULL) {
+//                     *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
+//                     Command = atoi(token + 1); // Convert the command to an integer
+//                     Instruction = strtol(colon + 1, NULL, 16); // Convert the instruction to an integer (hex format)
+
+//                     // Debug print: Log parsed command and instruction
+//                     uartPrint("Parsed Command: ");
+//                     uartPrint(String(Command).c_str());
+//                     uartPrint(", Instruction: ");
+//                     uartPrint(String(Instruction).c_str());
+
+//                     // Only process the command if it is 10
+//                     // if (Command == 10) {
+//                     //     DecodeCommsData();  // Process the command and instruction
+//                     // }
+//                 }
+//                 token = strchr(end + 1, '<');  // Find the start of the next command
+//             } else {
+//                 break; // No more complete commands in the buffer
+//             }
+//         }
+//     }
+// }
+
+// void uartRead(char* buffer, int length) { //20240618.  This is not called.  ISR used instead.  (ISR(USAR...))
+//     int i = 0;
+//     while (uartAvailable() && i < length - 1) {
+//         char c = uartGetChar();
+//         buffer[i++] = c;
+//         // Echo the character back to the serial monitor
+//         uartPutChar(c);
+//         // If we've encountered a newline or carriage return, stop reading
+//         if (c == '\n' || c == '\r') {
+//             break;
+//         }
+//     }
+//     // Null-terminate the string
+//     buffer[i] = '\0';
+// }
 
 // void testLoopUart(char* testString) {//Use this during development only.  
 //     if(false){ //Put this if (false) in, with associated closing bracket, when this is not to be run.

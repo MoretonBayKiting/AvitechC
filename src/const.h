@@ -81,6 +81,7 @@
 #define BAUD 9600 //57600  //Baud rate for HC-05
 #define MYUBRR F_CPU/16/BAUD-1 // The formula for calculating the UBRR value is given in the AVR datasheet:
 #define DEBUG_MSG_LENGTH 120
+#define BUFFER_SIZE 24 //20240924
 // 20240624 Constants to be used for i2c (MCP4725 DAC)
 #define TW_START_TRANSMITTED 0x08
 #define TW_REP_START_TRANSMITTED 0x10

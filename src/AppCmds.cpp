@@ -219,6 +219,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
         WarnLaserOnOnce = 1; //Enable laser warning when Run Mode button is pressed
         PrevSetupModeFlag = SetupModeFlag;
         SetupModeFlag = 0;
+        printToBT(9,0); //20240922
         // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
     }
 
@@ -226,6 +227,7 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
         WarnLaserOnOnce = 1; //Enable laser warning when Program Mode button is pressed
         PrevSetupModeFlag = SetupModeFlag;
         SetupModeFlag = 1;
+        printToBT(9,1);// 20240922
         // Audio2(2,2,2);//,"AC10:1");
         ProgrammingMode();   //Home machine ready for programming in points
     }

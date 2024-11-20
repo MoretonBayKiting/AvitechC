@@ -1866,8 +1866,9 @@ uint16_t distance(int pt1[2], int pt2[2]) {
     return dist;
 }
 
-bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRungs) {  
-    static int thisRes[2];
+bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRungs) {  
+    static uint8_t wigglyPt = 0;
+    static int thisRes[2], tilt = 0;
     static int nextRes[2];
     static bool startRung=true;
     static bool pat3=true; //
@@ -1875,18 +1876,18 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRung
     static uint8_t rung=0;
 
     static uint8_t nbrSegPts = 0;
-    static uint8_t seg = 0;
+    static uint8_t seg = 0, fstSeg = 0, sndSeg = 0; 
     static uint8_t segPt = 0;
     static int pt1[2];
     static int pt2[2];
-    #define SEG_LENGTH 100 //Length (in steps) between straightening points along boundary segments.    
+    
     // if (ind < MapCount[0][zn]) { //First, cycle around the boundary
     if(pat!=lastPat){//Test for a new pattern and, if so, reset seg.
         seg = 0;
     }
     lastPat = pat;
-    if(seg < MapCount[0][zn]){ //Use seg to count segments.  Use segPt to count intermediate points in a segment.
-        if (segPt == 0){
+    if(seg < MapCount[0][zn]){  //Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
+        if (segPt == 0){ //First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
             pt1[0] = Vertices[0][seg];
             pt1[1] = Vertices[1][seg];
             if(seg == MapCount[0][zn] - 1){//Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
@@ -1896,26 +1897,38 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRung
                 pt2[0] = Vertices[0][seg+1];
                 pt2[1] = Vertices[1][seg+1];
             }
-            #ifdef DEBUG
-            sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
-            uartPrint(debugMsg);            
+            #ifdef BASE_PRINT
+                sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
+                uartPrint(debugMsg);            
             #endif
-            nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);
+            nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);//This is the number of dense points to be placed along the segment, excluding wiggly points.
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
+            segPt++; //20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
         } else{ 
-            CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
-            X = res[0];
-            Y = res[1];
-        } 
-        segPt++;
-        if(segPt >= nbrSegPts){
+            // 20241119: WigglyBorder_
+            if(wigglyPt==0){ //Move to the next dense segment point.
+                CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
+                X = res[0];
+                Y = res[1];
+            } 
+            else{//For wiggly points get a few randomly positioned around the start of the (dense) segment.
+                X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
+                Y = res[1] + (rand() % (2 * Y_WIGGLY_BORDER_RANGE + 1)) - Y_WIGGLY_BORDER_RANGE;
+            }
+            wigglyPt++;
+        }
+        if(wigglyPt > NBR_WIGGLY_POINTS) { //Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
+            wigglyPt = 0;
+            segPt++;
+            }
+        if(segPt >= nbrSegPts){//Having traversed the interpolated segment points, move to the next
             seg++;
             segPt = 0;
         }
-        #ifdef DEBUG
-        sprintf(debugMsg,"seg %d, segPt %d,nbrSegPts %d, ind %d", seg, segPt, nbrSegPts, ind);
-        uartPrint(debugMsg);            
+        #ifdef BASE_PRINT
+            sprintf(debugMsg,"pat %d, seg %d, segPt %d, wigglyPt %d, nbrSegPts %d, ind %d, X %d, Y %d", pat, seg, segPt, wigglyPt, nbrSegPts, ind, X, Y);
+            uartPrint(debugMsg);            
         #endif
     //Now deal with the rungs - above is just boundary.
     } else {
@@ -1926,13 +1939,9 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRung
                 if(RndNbr==nbrRungs) rung = 0;
             }
             if (RndNbr == 0) RndNbr = 1;
-            int tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);//Argument is Cartesian offset from laser.  Get tilt angle for this.
-            uint8_t fstSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, 0); //Fist segment which includes specified/chosen tilt
-            uint8_t sndSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, fstSeg+1); //Opposite segment which includes specified/chosen tilt
-            #ifdef DEBUG
-            sprintf(debugMsg,"rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d",RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg);
-            uartPrint(debugMsg);            
-            #endif
+            tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);//Argument is Cartesian offset from laser.  Get tilt angle for this.
+            fstSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, 0); //First segment which includes specified/chosen tilt
+            sndSeg = getInterceptSegment(MapCount[0][zn]-1,tilt, fstSeg+1); //Opposite segment which includes specified/chosen tilt
             // For each segment get the interpolated point in the segment needed for the new rung.
             midPt(tilt, fstSeg, thisRes); //Intercept of pan for given tilt with fstSeg
             midPt(tilt, sndSeg, nextRes); //Intercept of pan for given tilt with sndSeg
@@ -1942,6 +1951,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRung
             X = nextRes[0]; 
             Y = nextRes[1];
         }
+
         startRung = !startRung;
         if (pat == 3) {
             startRung = true;//Don't do horizontal rungs.  Just get random points for pattern 3.
@@ -1951,6 +1961,12 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t ind, uint8_t rhoMin, uint8_t nbrRung
                 Y = nextRes[1];
             }
         }
+        #ifdef BASE_PRINT
+            sprintf(debugMsg,"pat %d,rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d, X %d, Y %d",pat, RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg, X, Y);
+            uartPrint(debugMsg);            
+        #endif
+
+        ind++;
     }
     #ifdef DEBUG
     sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
@@ -2319,9 +2335,9 @@ void HomeAxis() {
 //     ResetTiming();
 // }
 void RunSweep(uint8_t zn) {
-    uint8_t NbrPts, PatType, i;
-    int last[2],nxt[2];//,nbrMidPts;
-    int minTilt = 0;
+    uint8_t PatType, ind=0;
+    // int last[2],nxt[2];//,nbrMidPts;
+    int minTilt = 0, cnt = 0;
     int maxTilt = 0;
     int rhoMin = 0;
     bool startRung = true;
@@ -2334,28 +2350,35 @@ void RunSweep(uint8_t zn) {
     // uartPrint(debugMsg);
     for (PatType = 1; PatType <= 4; PatType++) {
         #ifdef BASE_PRINT
-        sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
-        uartPrint(debugMsg);
-        #endif
-        for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
-            // Store present point to use in interpolation
-            startRung = getXY(PatType, zn, Index, rhoMin, nbrRungs);
-            #ifdef BASE_PRINT
-            sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
+            sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
             uartPrint(debugMsg);
+        #endif
+        while (ind < Nbr_Rnd_Pts) {
+        // for (uint8_t Index = 0; Index <MapCount[0][zn] * NBR_WIGGLY_POINTS + Nbr_Rnd_Pts; Index++) {
+        // for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
+            startRung = getXY(PatType, zn, ind, rhoMin, nbrRungs);
+            #ifdef DEBUG
+                sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
+                uartPrint(debugMsg);
             #endif
-            if (Index == 0 && PatType == 1) { //20240727:Laser off as it moves towards 0th point of cycle.
-                CmdLaserOnFlag = false;
-                DSS_preload = Step_Rate_Max;
-            } else {
-                if ((PatType==2 && startRung)){ //Laser off and high speed if going to start of rung in pat 2
+            if (false){
+                if (cnt == 0 && PatType == 1) { //20240727:Laser off as it moves towards 0th point of cycle.
                     CmdLaserOnFlag = false;
-                    DSS_preload = CalcSpeed(true); //Passing true makes the speed fast, independent of tilt angle.
+                    DSS_preload = Step_Rate_Max;
                 } else {
-                    CmdLaserOnFlag = true;
-                    DSS_preload = CalcSpeed(false);//Passing false makes the speed depend on tilt angle.
+                    if ((PatType==2 && startRung)){ //Laser off and high speed if going to start of rung in pat 2
+                        CmdLaserOnFlag = false;
+                        DSS_preload = CalcSpeed(true); //Passing true makes the speed fast, independent of tilt angle.
+                    } else {
+                        CmdLaserOnFlag = true;
+                        DSS_preload = CalcSpeed(false);//Passing false makes the speed depend on tilt angle.
+                    } 
                 }
+            } else {
+                CmdLaserOnFlag = true; 
+                DSS_preload = Step_Rate_Max;
             }
+
             ProcessCoordinates();
             SteppingStatus = 1;
             setupTimer1();
@@ -2369,7 +2392,14 @@ void RunSweep(uint8_t zn) {
                     return;
                 }
             }
+        cnt++; //20241120: Count the number of times through the while loop and exit if it gets too long.
+        if (cnt>1000) {
+            cnt = 0;
+            break;
+            }
         }
+    cnt = 0;
+    ind = 0;
     }
     ResetTiming();
 }

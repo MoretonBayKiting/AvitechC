@@ -89,3 +89,9 @@
 #define TW_MT_DATA_ACK 0x28
 #define TW_MR_SLA_ACK 0x40
 #define TW_MR_DATA_ACK 0x50
+
+#define SEG_LENGTH 100 //Length (in steps) between straightening points along boundary segments.    
+// 20241119: WigglyBorder_
+#define X_WIGGLY_BORDER_RANGE 40
+#define Y_WIGGLY_BORDER_RANGE 40
+#define NBR_WIGGLY_POINTS 5

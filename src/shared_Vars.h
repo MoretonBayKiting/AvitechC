@@ -7,7 +7,7 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define BASE_PRINT
+// #define BASE_PRINT
 // #define DEBUG
 // #define PRINT_EEPROM
 #define PRINT_CMD9

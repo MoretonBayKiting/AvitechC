@@ -11,10 +11,10 @@
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
 #define HOMING_SPEED 50 //20240801 Should this be 100.  50 seems better.
-#define TILT_SLOW_STEP_RATE 1200
-#define TILT_FAST_STEP_RATE 500
+#define TILT_SLOW_STEP_RATE 1500
+#define TILT_FAST_STEP_RATE 1500
 #define PAN_SLOW_STEP_RATE 400
-#define PAN_FAST_STEP_RATE 105
+#define PAN_FAST_STEP_RATE 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -94,4 +94,4 @@
 // 20241119: WigglyBorder_
 #define X_WIGGLY_BORDER_RANGE 40
 #define Y_WIGGLY_BORDER_RANGE 40
-#define NBR_WIGGLY_POINTS 5
+#define NBR_WIGGLY_POINTS 0

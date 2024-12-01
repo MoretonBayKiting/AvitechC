@@ -273,7 +273,7 @@ uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
-uint8_t Nbr_Rnd_Pts = 30;
+uint8_t Nbr_Rnd_Pts = 130;
 uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 1;
 uint8_t EEMEM EramSpeedScale;
@@ -1871,7 +1871,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
     static int thisRes[2], tilt = 0;
     static int nextRes[2];
     static bool startRung=true;
-    static bool pat3=true; //
+    static bool pat3=true; // Boolean to toggle if pattern 3 is being used.
     static uint8_t lastPat = 0;
     static uint8_t rung=0;
 
@@ -1886,6 +1886,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
         seg = 0;
     }
     lastPat = pat;
+    //This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary. 
     if(seg < MapCount[0][zn]){  //Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
         if (segPt == 0){ //First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
             pt1[0] = Vertices[0][seg];
@@ -1905,7 +1906,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
             segPt++; //20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
-        } else{ 
+        } else { 
             // 20241119: WigglyBorder_
             if(wigglyPt==0){ //Move to the next dense segment point.
                 CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
@@ -1916,13 +1917,13 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
                 Y = res[1] + (rand() % (2 * Y_WIGGLY_BORDER_RANGE + 1)) - Y_WIGGLY_BORDER_RANGE;
             }
-            wigglyPt++;
+            wigglyPt++; //20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
         }
         if(wigglyPt > NBR_WIGGLY_POINTS) { //Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
             wigglyPt = 0;
             segPt++;
             }
-        if(segPt >= nbrSegPts){//Having traversed the interpolated segment points, move to the next
+        if(segPt >= nbrSegPts){//Having traversed the interpolated segment points, move to the next segment
             seg++;
             segPt = 0;
         }
@@ -1952,10 +1953,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             Y = nextRes[1];
         }
 
-        startRung = !startRung;
+        startRung = !startRung;//Toggle startRung so that the next time this function is called, the other end of the segment is used.
         if (pat == 3) {
             startRung = true;//Don't do horizontal rungs.  Just get random points for pattern 3.
-            pat3 = !pat3;
+            pat3 = !pat3; //20241130: Always want startRung true so that a new value of thisRes and NextRes will be set above, where thisRes is 
+            //from one side of zone and nextRes if from other.  Toggle pat3 here in order to sequentially choose from different sides.
             if (!pat3) {//thisRes is on one side of zone and nextRes is on other side. Need sequential points to be from opposite sides.
                 X = nextRes[0];
                 Y = nextRes[1];
@@ -2052,7 +2054,8 @@ void StopSystem() {
     Y = AbsY;
 }
 
-void avoidLimits(bool axis){
+void avoidLimits(bool axis){ //Don't allow jogging to take camera outside allowed range.
+    //axis = false for pan and true for tilt (TBC). Set JogFlag (to one of 1,2,3,4) if limits are exceeded.
     JogFlag=0;
     // if(SetupModeFlag == 1){
     // uint8_t TOLERANCE = 2;
@@ -2361,7 +2364,7 @@ void RunSweep(uint8_t zn) {
                 sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
                 uartPrint(debugMsg);
             #endif
-            if (false){
+            // if (false){ //20241123ish.  Used for testing new cnt rather than index.  Removed, 20241129.
                 if (cnt == 0 && PatType == 1) { //20240727:Laser off as it moves towards 0th point of cycle.
                     CmdLaserOnFlag = false;
                     DSS_preload = Step_Rate_Max;
@@ -2374,10 +2377,10 @@ void RunSweep(uint8_t zn) {
                         DSS_preload = CalcSpeed(false);//Passing false makes the speed depend on tilt angle.
                     } 
                 }
-            } else {
-                CmdLaserOnFlag = true; 
-                DSS_preload = Step_Rate_Max;
-            }
+            // } else {
+            //     CmdLaserOnFlag = true; 
+            //     DSS_preload = Step_Rate_Max;
+            // }
 
             ProcessCoordinates();
             SteppingStatus = 1;
@@ -2598,7 +2601,8 @@ void DoHouseKeeping() {
         }
     }
 
-    if (SystemFaultFlag == 1) {
+    // if (SystemFaultFlag == 1) {
+    if (SystemFaultFlag) { //20241129
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;

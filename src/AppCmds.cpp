@@ -64,7 +64,7 @@ void Cmd1() {
     // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
     eeprom_update_byte(&EramUserLaserPower, Instruction);
     UserLaserPower = Instruction;
-
+    // LaserPower = Instruction; //20241202: Temporary for testing.
     GetLaserTemperature();
     ThrottleLaser();
     Audio2(1,2,0);//,"AC1");

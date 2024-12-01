@@ -113,12 +113,12 @@ uint8_t TiltEnableFlag; // Y enable axis flag when jogging mode
 uint8_t TiltSpeed; // Y stepping speed flag... 1=fast 0=slow
 
 //---------Laser Variables------------------------
-uint8_t UserLaserPower;
+uint8_t UserLaserPower = 100; //20241202.  Default of 100 - could be zero?
 uint8_t EEMEM EramUserLaserPower;
 
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
-uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver
+uint8_t LaserPower = 100; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
 
 float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro constant.  
 // Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
@@ -1295,7 +1295,8 @@ void ThrottleLaser() {
     //     LaserOverTempFlag = 0;
     //     SystemFaultFlag = false;
     // }
-    LaserPower = 200; //20240625: Don't let it go to zero (for testing)
+    // LaserPower = UserLaserPower; //20240625: Don't let it go to zero (for testing).  20241202: Set with 
+    LaserPower = 100;
 }
 
 void initMPU() {
@@ -2711,12 +2712,15 @@ int main() {
             // }
             if (MapTotalPoints > 0){
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
-                    if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
-                        MapRunning = Zn; //But map index in app is 1 based.
-                        RunSweep(Zn-1); //
+                    //20241202.  Use ActiveMapZones to filter which zones are run.
+                    if ((ActiveMapZones & (1 << (Zn - 1))) != 0) { 
+                        if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
+                            MapRunning = Zn; //But map index in app is 1 based.
+                            RunSweep(Zn-1); //
+                        }
                     }
                 }
-            }else SetLaserVoltage(0); // 20240718: Standby mode
+            } else SetLaserVoltage(0); // 20240718: Standby mode
         }
         if (SetupModeFlag == 2) {
             CalibrateLightSensor();

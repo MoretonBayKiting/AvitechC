@@ -52,8 +52,8 @@ extern int EramAccelTripPoint;
 extern int AccelTripPoint;
 extern uint8_t EramOperationMode;
 extern uint8_t OperationMode;
-extern uint8_t EramSpeedZone[]; //Leave out size?
-extern uint8_t SpeedZone[]; //Leave out size?
+// extern uint8_t EramSpeedZone[]; //Leave out size?
+// extern uint8_t SpeedZone[]; //Leave out size?
 extern uint16_t DSS_preload;
 extern uint8_t EramActiveMapZones;
 extern uint8_t ActiveMapZones;

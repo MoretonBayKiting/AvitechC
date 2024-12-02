@@ -29,6 +29,7 @@ void DecodeCommsData() {
         case 12: Cmd12(); break;  // Store the accelerometer trip point
         case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
         case 14: Cmd14(); break;  //Delete last way point
+        case 16: Cmd16(); break;  //SpeedScale - see notes with function below.
         // case 15: Cmd15(); break;  //MinimumLaserPower - needs attention
         case 21: Cmd21(); break;  //Needed, as null, to listen to bespoke app.
         // case 24: Cmd24(); break;
@@ -470,6 +471,14 @@ void Cmd51() {
     // LoadActiveMapZones(); //Does this need to be run?
     Audio2(1,2,0);//,"AC21");
 }
+
+void Cmd16() { //20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
+    eeprom_update_byte(&EramSpeedScale, Instruction);
+    SpeedScale = Instruction;
+    // LoadActiveMapZones(); //Does this need to be run?
+    Audio2(1,2,0);//,"AC22");
+}
+
 void Cmd52() { //
     eeprom_update_byte(&EramSpeedScale, Instruction);
     SpeedScale = Instruction;

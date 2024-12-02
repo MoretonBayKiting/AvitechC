@@ -22,7 +22,6 @@ void Cmd12(void);
 void Cmd13(void);
 void Cmd14(void);
 // void Cmd15(void);
-void cmdSpeedZone(uint8_t i);
 void Cmd16(void);
 void Cmd17(void);
 void Cmd18(void);

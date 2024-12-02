@@ -151,8 +151,8 @@ uint8_t A;
 char S[10];//20240607: This should only need to be char[4] // Variables to decode data coming in from the RS232 data stream from the phone Commands
 
 //----------Speed Zone Variables--------------------
-uint8_t SpeedZone[5];
-uint8_t EEMEM EramSpeedZone[5];
+// uint8_t SpeedZone[5];
+// uint8_t EEMEM EramSpeedZone[5];
 
 //----------Battery Charge Variables--------------------
 uint16_t BattReadings[10];
@@ -1295,7 +1295,8 @@ void ThrottleLaser() {
     //     LaserOverTempFlag = 0;
     //     SystemFaultFlag = false;
     // }
-    LaserPower = 100; //20240625: Don't let it go to zero (for testing)
+    // LaserPower = 100; //20240625: Don't let it go to zero (for testing)
+    LaserPower = UserLaserPower; //20241202: Try UserLaserPower until this function is properly reviewed.
 }
 
 void initMPU() {
@@ -2465,9 +2466,9 @@ void PrintZoneData() {
             }
         printToBT(i + 4,res);  // Print count of map points.
 
-        res = SpeedZone[i];
-        printToBT(i + 10,res);  // Target points are 10:14 for 5 SpeedZones
-        _delay_ms(50);
+        // res = SpeedZone[i];
+        // printToBT(i + 10,res);  // Target points are 10:14 for 5 SpeedZones
+        // _delay_ms(50);
     }
 }
 void PrintAppData() {

@@ -10,7 +10,7 @@
 #define BASE_PRINT
 // #define DEBUG
 // #define PRINT_EEPROM
-// #define PRINT_CMD9
+#define PRINT_CMD9
 // Variables
 extern uint8_t EramUserLaserPower;
 extern uint8_t UserLaserPower;

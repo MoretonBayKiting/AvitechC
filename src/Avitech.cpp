@@ -118,7 +118,7 @@ uint8_t EEMEM EramUserLaserPower;
 
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
-uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
+uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100. 
 
 float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro constant.  
 // Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
@@ -1295,8 +1295,7 @@ void ThrottleLaser() {
     //     LaserOverTempFlag = 0;
     //     SystemFaultFlag = false;
     // }
-    // LaserPower = UserLaserPower; //20240625: Don't let it go to zero (for testing).  20241202: Set with 
-    LaserPower = 100;
+    LaserPower = 100; //20240625: Don't let it go to zero (for testing)
 }
 
 void initMPU() {
@@ -2644,13 +2643,9 @@ void setup() {
     sei();  // Enable global interrupts.
     uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro constant
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
-    uartPrintFlash(F("Pre timer setup in setup() (flash print)"));
-    uartPrint("Pre timer setup in setup()");
     setupTimer1();
     setupTimer3();
-    _delay_ms(4000); //More time to connect and not, therefore, miss serial statements.
-    uartPrintFlash(F("Post 4s delay (flash print)"));
-    uartPrint("Post 4s delay ");
+
     setupPeripherals();
     setupWatchdog();
     OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets
@@ -2715,15 +2710,15 @@ int main() {
                 // firstRun = false;
             // }
             if (MapTotalPoints > 0){
-                for (Zn = 1; Zn <= NBR_ZONES; Zn++) {
+                for (Zn = 1; Zn <= NBR_ZONES; Zn++) {   
                     //20241202.  Use ActiveMapZones to filter which zones are run.
-                    if ((ActiveMapZones & (1 << (Zn - 1))) != 0) { 
+                    if ((ActiveMapZones & (1 << (Zn - 1))) != 0) {                  
                         if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
                             MapRunning = Zn; //But map index in app is 1 based.
                             RunSweep(Zn-1); //
                         }
                     }
-                }
+                }                    
             } else SetLaserVoltage(0); // 20240718: Standby mode
         }
         if (SetupModeFlag == 2) {

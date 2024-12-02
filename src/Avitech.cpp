@@ -113,12 +113,12 @@ uint8_t TiltEnableFlag; // Y enable axis flag when jogging mode
 uint8_t TiltSpeed; // Y stepping speed flag... 1=fast 0=slow
 
 //---------Laser Variables------------------------
-uint8_t UserLaserPower = 100; //20241202.  Default of 100 - could be zero?
+uint8_t UserLaserPower; //20241202.  Default of 100 - could be zero?
 uint8_t EEMEM EramUserLaserPower;
 
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
-uint8_t LaserPower = 100; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
+uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
 
 float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro constant.  
 // Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
@@ -2644,9 +2644,13 @@ void setup() {
     sei();  // Enable global interrupts.
     uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro constant
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
+    uartPrintFlash(F("Pre timer setup in setup() (flash print)"));
+    uartPrint("Pre timer setup in setup()");
     setupTimer1();
     setupTimer3();
-
+    _delay_ms(4000); //More time to connect and not, therefore, miss serial statements.
+    uartPrintFlash(F("Post 4s delay (flash print)"));
+    uartPrint("Post 4s delay ");
     setupPeripherals();
     setupWatchdog();
     OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets

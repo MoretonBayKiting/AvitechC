@@ -2678,14 +2678,8 @@ int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
     static bool doPrint = true;
     setup();
-    #ifdef PRINT_EEPROM
-    while(1){
-        DoHouseKeeping();
-    }
-    #endif
 
-    #ifndef PRINT_EEPROM
-    while(1) {                
+    while(1) { 
         // if(PrevSetupModeFlag != SetupModeFlag) {
         //     sprintf(debugMsg,"Mode change %d, %d",PrevSetupModeFlag,SetupModeFlag);
         //     uartPrint(debugMsg);
@@ -2727,7 +2721,6 @@ int main() {
         }
         DoHouseKeeping();         
     }
-    #endif
     return 0;
 }
 

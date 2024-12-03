@@ -133,9 +133,9 @@ void Cmd7() {
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
 void Cmd8(){
-    #ifdef PRINT_EEPROM
+    // #ifdef PRINT_EEPROM //20241203 Take out conditional on PRINT_EEPROM.  Allow this to be called when device in run mode.
     PrintEramVars();
-    #endif
+    // #endif
     }
 
 void Cmd9() {

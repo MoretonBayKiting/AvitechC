@@ -7,9 +7,9 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define BASE_PRINT
+#define GHOST
+// #define BASE_PRINT
 // #define DEBUG
-#define PRINT_EEPROM
 // #define PRINT_CMD9
 // Variables
 extern uint8_t EramUserLaserPower;

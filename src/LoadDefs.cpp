@@ -86,7 +86,6 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
 }
 
-#ifdef PRINT_EEPROM
 void PrintEramVars(){
     sprintf(debugMsg,"UserLaserPower:  %p, %d",(void*)&EramUserLaserPower, eeprom_read_byte(&EramUserLaserPower));  
     uartPrint(debugMsg);  
@@ -101,7 +100,7 @@ void PrintEramVars(){
     uartPrint(debugMsg);  
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
     for (uint8_t i=0;i<MapTotalPoints;i++){
-        sprintf(debugMsg,"WPi: %u x: %u y: %u",i, eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY));  
+        sprintf(debugMsg,"WPi: %u x: %u y: %u",i, (int)eeprom_read_word(&EramPositions[i].EramX), (int)(eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF));  
         uartPrint(debugMsg);  
     }
     // for(int i = 0; i < 5; i++) {
@@ -123,4 +122,3 @@ void PrintEramVars(){
     // FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
     // LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
 }
-#endif

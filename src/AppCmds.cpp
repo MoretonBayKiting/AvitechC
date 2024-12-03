@@ -22,7 +22,7 @@ void DecodeCommsData() {
         case 5: Cmd5(); break; //Update LaserID (in EEPROM)
         case 6: Cmd6(); break; // X = Instruction;  Start timer1.
         case 7: Cmd7(); break; // Y = Instruction;  Start timer1.
-        case 8: Cmd8(); break;  //Print EEPROM values to serial output.  Need PRINT_EEPROM defined.
+        case 8: Cmd8(); break;  //Print EEPROM values to serial output.  
         case 9: Cmd9(); break;  //Store way point
         case 10: Cmd10(); break; //Setup/Run mode selection. Cold restart
         case 11: Cmd11(); break;  // Process the Send Diagnostic Data register or Process the full reset flag on next restart
@@ -133,9 +133,7 @@ void Cmd7() {
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
 void Cmd8(){
-    // #ifdef PRINT_EEPROM //20241203 Take out conditional on PRINT_EEPROM.  Allow this to be called when device in run mode.
     PrintEramVars();
-    // #endif
     }
 
 void Cmd9() {

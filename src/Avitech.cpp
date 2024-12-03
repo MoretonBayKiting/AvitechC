@@ -95,7 +95,7 @@ uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
 // uint16_t AppCompatibilityNo;
 uint8_t GyroAddress = MPU6000_ADDRESS; // 0x69 for Board 6.13 and later (MPU6050).  0x68 for earlier boards (MPU6000).  Set with <11:4> (0x69) and <11:8> (0x69) and store in EramGyroAddress
-bool GyroOnFlag = false; //20240722: Add to facilitate startup with different boards.
+bool GyroOnFlag = true; //20241203. Changed to true (was false). 20240722: Add to facilitate startup with different boards.
 //Note that these addresses are 7 bit addresses.  With r/w bits these would be 0xD2/0xD3 for 0x69 and 0xD0/0xD1 for 0x68.
 uint8_t EEMEM EramGyroAddress;
 
@@ -569,8 +569,8 @@ void ProcessError(){
 // }
 void ProcessBuffer(char* buffer) {
     // Debug print: Log buffer contents
-    uartPrint("ProcessingBuffer: ");
-    uartPrint(buffer);
+    // uartPrint("ProcessingBuffer: ");
+    // uartPrint(buffer);
 
     // Trim leading and trailing whitespace
     char *start = buffer;
@@ -611,12 +611,12 @@ void ProcessBuffer(char* buffer) {
 void CheckBlueTooth() {
     if (Buffer1Ready || Buffer2Ready) { // We have got something
         if (Buffer1Ready) {
-            uartPrint("Buffer1Ready");
+            // uartPrint("Buffer1Ready");
             ProcessBuffer(Buffer1);
             Buffer1Ready = false;
         }
         if (Buffer2Ready) {
-            uartPrint("Buffer2Ready");
+            // uartPrint("Buffer2Ready");
             ProcessBuffer(Buffer2);
             Buffer2Ready = false;
         }
@@ -1125,6 +1125,10 @@ void DecodeAccelerometer() {
                 Z_AccelFlag = 1;
                 SystemFaultFlag = true;
                 uartPrintFlash(F("AccelTripPoint error. \n"));
+                #ifdef BASE_PRINT
+                    sprintf(debugMsg,"Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
+                    uartPrint(debugMsg); 
+                #endif
             } else {
                 Z_AccelFlag = 0;
                 SystemFaultFlag = false;
@@ -1413,6 +1417,12 @@ void setupTimer3() {
     OCR3A = 780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
     TIMSK3 |= (1 << OCIE3A);  // Enable the compare match interrupt
 }
+
+void TurnOnGyro(){
+    Command = 11;
+    Instruction = 4;
+    DecodeCommsData();
+}
 #pragma endregion Utility functions
 #pragma region Zone functions
 uint8_t GetZone(uint8_t i) {
@@ -1501,8 +1511,8 @@ void LoadZoneMap(uint8_t zn) {
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        #ifdef BASE_PRINT
-        printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
+        #ifdef GHOST
+            printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
         #endif
      } //snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
@@ -1983,6 +1993,17 @@ void ProcessCoordinates() {
     Dx = X - AbsX; // Distance to move
     Dy = Y - AbsY; // Distance to move
 
+    #ifdef GHOST
+        static int LastX = 0;
+        static int LastY = 0;
+        if (X != LastX || Y != LastY) {
+            sprintf(debugMsg, "X: %d, Y: %d", X, Y);
+            uartPrint(debugMsg);
+            LastX = X;
+            LastY = Y;
+        }
+    #endif
+
     if ((Dx==0) && (Dy == 0)){ //20240623: Explicitly exclude this case.
         StepCount = 0;
         }//Do nothing
@@ -2023,6 +2044,10 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
     } else { // tilt
         Y = steps;
     }
+    #ifdef BASE_PRINT 
+        sprintf(debugMsg,"Beginning of MoveMotor():axis %d, steps %d, X %d, Y %d", axis, steps, X, Y);
+        uartPrint(debugMsg);   
+    #endif
     ProcessCoordinates();
     // CheckTimer1(11);
     DSS_preload = HOMING_SPEED;
@@ -2204,6 +2229,10 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
         Y = 0;
         AbsY = 0;
     }
+    #ifdef BASE_PRINT 
+        sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
+        uartPrint(debugMsg);   
+    #endif
 }
 void MoveLaserMotor() {
     ProcessCoordinates(); // Drive motors to the coordinates
@@ -2340,11 +2369,15 @@ void HomeAxis() {
 // }
 void RunSweep(uint8_t zn) {
     uint8_t PatType, ind=0;
+    #ifdef GHOST
+        static uint8_t LastPatType;
+    #endif
     // int last[2],nxt[2];//,nbrMidPts;
     int minTilt = 0, cnt = 0;
     int maxTilt = 0;
     int rhoMin = 0;
     bool startRung = true;
+
 
     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
@@ -2353,6 +2386,13 @@ void RunSweep(uint8_t zn) {
     // sprintf(debugMsg,"Rungs %d rhoMin %d",nbrRungs,rhoMin);
     // uartPrint(debugMsg);
     for (PatType = 1; PatType <= 4; PatType++) {
+        #ifdef GHOST
+            if (LastPatType!=PatType){
+                LastPatType = PatType;
+                sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
+                uartPrint(debugMsg);
+            }
+        #endif
         #ifdef BASE_PRINT
             sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
             uartPrint(debugMsg);
@@ -2646,7 +2686,7 @@ void setup() {
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
     setupTimer1();
     setupTimer3();
-
+    TurnOnGyro();
     setupPeripherals();
     setupWatchdog();
     OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets

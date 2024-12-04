@@ -1,4 +1,4 @@
-#pragma region Include files
+
     #include <Arduino.h>
     // #include <type_traits>
     #include <stdio.h>
@@ -31,8 +31,6 @@
     #undef TW_STATUS
     #define TW_STATUS		(TWSR0 & TW_STATUS_MASK)
 
-#pragma endregion Include files
-#pragma region Variable definitions
 MCP4725 DAC(0x60);// (MCP4725ADD>>1);
 uint8_t printCnter = 0;
 // uint16_t eeprom_address = 0;
@@ -212,7 +210,7 @@ uint16_t MapRunning;
 uint8_t Counter50ms;
 //Counters to use for periodic printing while debugging.
 uint32_t JM_n=0; 
-uint32_t MM_n=0;
+// uint32_t MM_n=0;
 
 //---------MPU6050 IMU  & Temperature, then HC-05 bluetooth module-----------------
 union { // Accel_Z to be used to access any of Z_accel, int or the subcomponents
@@ -261,8 +259,6 @@ volatile int DataCount = 0;
 volatile uint8_t CommandLength = 0;
 // uint8_t cnter = 0;
 
-#pragma endregion Variable Definitions
-#pragma region Tuning Variable Definitions
 // 20240726 Tuning parameters - possibly not required in production version
 uint16_t EEMEM Eram_Step_Rate_Min;
 uint16_t Step_Rate_Min = 2000;
@@ -273,7 +269,7 @@ uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
-uint8_t Nbr_Rnd_Pts = 130;
+uint8_t Nbr_Rnd_Pts = 20;
 uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 1;
 uint8_t EEMEM EramSpeedScale;
@@ -282,8 +278,6 @@ uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50;//Units are decimetres.  50 => 5metres
 
 // uint8_t Max_Nbr_Perimeter_Pts = 100;
-#pragma endregion Tuning Variable Definitions
-#pragma region Function Declarations
 void HomeAxis();
 void DoHouseKeeping();
 void StopTimer1();
@@ -292,8 +286,6 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// 
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper* message);
 void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
-#pragma endregion Function Declarations
-#pragma region Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
 void setupPeripherals(){
     // Set relevant pins as output
     DDRD |= (1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN) | (1 << X_DIR) | (1 << Y_DIR) | (1 << X_STEP) | (1 << Y_STEP);
@@ -622,101 +614,10 @@ void CheckBlueTooth() {
         }
     }
 }
-// 20240924: This version used with ISR(USART..., updated) but didn't run.  Back out for Gav to use until it is resolved.
-// void CheckBlueTooth() {
-//     if (DataInBufferFlag == true) { // We have got something
-//         // Swap buffers
-//         char tempBuffer[BUFFER_SIZE];
-//         memcpy(tempBuffer, CurrentBuffer, BUFFER_SIZE);
-//         memcpy(CurrentBuffer, ProcessingBuffer, BUFFER_SIZE);
-//         memcpy(ProcessingBuffer, tempBuffer, BUFFER_SIZE);
-
-//         // Clear the buffer and reset the flag
-//         memset(CurrentBuffer, 0, sizeof(CurrentBuffer));
-//         DataInBufferFlag = false;
-
-//         // Debug print: Log buffer contents
-//         uartPrint("temp: ");
-//         uartPrint(tempBuffer);
-//         uartPrint("\nCurrent: ");
-//         uartPrint(CurrentBuffer);
-//         uartPrint("\nProc: ");
-//         uartPrint(ProcessingBuffer);
-
-//         // Trim leading and trailing whitespace
-//         char *start = ProcessingBuffer;
-//         while (isspace(*start)) start++;
-//         char *end = start + strlen(start) - 1;
-//         while (end > start && isspace(*end)) end--;
-//         *(end + 1) = '\0';
-
-//         char *token = strchr(start, '<');  // Find the start of the command
-//         while (token != NULL) {
-//             char *end = strchr(token, '>');  // Find the end of the command
-//             if (end != NULL) {
-//                 *end = '\0'; // Replace '>' with '\0' to end the string
-//                 char *colon = strchr(token, ':');  // Find the start of the instruction
-//                 if (colon != NULL) {
-//                     *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
-//                     Command = atoi(token + 1); // Convert the command to an integer
-//                     Instruction = strtol(colon + 1, NULL, 16); // Convert the instruction to an integer (hex format)
-
-//                     // Debug print: Log parsed command and instruction
-//                     uartPrint("Parsed Command: ");
-//                     uartPrint(String(Command).c_str());
-//                     uartPrint(", Instruction: ");
-//                     uartPrint(String(Instruction).c_str());
-
-//                     // Only process the command if it is 10
-//                     // if (Command == 10) {
-//                     //     DecodeCommsData();  // Process the command and instruction
-//                     // }
-//                 }
-//                 token = strchr(end + 1, '<');  // Find the start of the next command
-//             } else {
-//                 break; // No more complete commands in the buffer
-//             }
-//         }
-//     }
-// }
-
-// void uartRead(char* buffer, int length) { //20240618.  This is not called.  ISR used instead.  (ISR(USAR...))
-//     int i = 0;
-//     while (uartAvailable() && i < length - 1) {
-//         char c = uartGetChar();
-//         buffer[i++] = c;
-//         // Echo the character back to the serial monitor
-//         uartPutChar(c);
-//         // If we've encountered a newline or carriage return, stop reading
-//         if (c == '\n' || c == '\r') {
-//             break;
-//         }
-//     }
-//     // Null-terminate the string
-//     buffer[i] = '\0';
-// }
-
-// void testLoopUart(char* testString) {//Use this during development only.  
-//     if(false){ //Put this if (false) in, with associated closing bracket, when this is not to be run.
-//         for (int i = 0; i < 1000; i++) {  // Replace 1000 with the number of iterations you want
-//             sprintf(debugMsg, "%s: DM:  %d", testString, i);
-//             uartPrint(debugMsg);
-//             CheckBlueTooth();
-//             if (received39){
-//                 // if (c == 'C'){
-//                     uartPrint("Have read C ");
-//                     received39 = false;
-//                     return; // Break the loop
-//                 }
-//             _delay_ms(1000);  // Delay for 1 second. Adjust as needed.
-//             }
-//     }
-// }
 
 void printToBT(uint8_t cmd, uint16_t inst){
     char printToBTMsg[20];
     sprintf(printToBTMsg, "<%02d:%04x>", cmd,  inst);
-    // sprintf(printToBTMsg, "<%02x:%04x>", cmd,  inst); //Phone app comments indicated that hex is expected.  But it doesn't in fact test for hex.
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
@@ -799,8 +700,6 @@ uint8_t i2c_rbyte(uint8_t ack) {
     while (!(TWCR0 & (1 << TWINT)));  // Wait for the read operation to complete
     return TWDR0;  // Return the received byte
 }
-#pragma endregion Function definitions - peripherals, watchdog, uart, buzzer, timers, DAC, i2c
-#pragma region ISRs
 void StepperDriverISR() {
     // uint8_t x_dir_state = (PIND & (1 << X_DIR)) != 0; //Could use PORTD rather rathan PIND.  But as all (that are used) are configured for output, either can be used.
     // bool x_dir_state = (PIND & (1 << X_DIR)) == 0; 20240629 Replace with something easier to follow but also opposite sign.
@@ -809,8 +708,11 @@ void StepperDriverISR() {
     bool y_dir_state = (PIND & (1 << Y_DIR)) ? 1 : 0;
 
     if (StepCount > 0) {  //StepCount is uint16_t so can't be negative. So this is equivalent to if(StepCount !=0).
+        #ifdef ISOLATED_BOARD
+            sprintf(debugMsg,"StepCount: %d, X: %d: Y %d, AbsX %d, AbsY %d", StepCount, X, Y, AbsX, AbsY);
+            uartPrint(debugMsg);
+        #endif
         StepCount--;
-
         if (Dx > Dy) {
             StepOverRatio += Dy;
             if (StepOverRatio >= Dx) {
@@ -885,8 +787,6 @@ ISR(TIMER3_COMPA_vect){
 ISR(WDT_vect){
     // This ISR will be called when the watchdog timer times out. Without any code, the system will reset.
 }
-#pragma endregion ISRs
-#pragma region Utility functions
 void GetBatteryVoltage() {
     unsigned int SensorReading = 0;
     BattTotal = BattTotal - BattReadings[BattReadIndex];
@@ -955,32 +855,12 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo) {
     OffTicks = OffPd;
     AudioLength = cnt * (OnTicks + OffTicks); // Could be cnt * OnTicks + (cnt-1)*OffTicks;
     if (FstTick == 0) FstTick = TJTick; // Set FstTick if starting pattern. Don't do anything if a pattern is already running.
-    // #ifdef DEBUG 
-    // if (debugInfo != nullptr) {
-    //     uartPrint(debugInfo);
-    // } 
-    // else {
-    //     uartPrint("Debug null");
-    // }
-    // #endif
-    // #ifdef DEBUG 
-    // uartPrintFlash(F("TJTick, Fst, Cnt, OnPd, OffPd: "));
-    // if (debugInfo != nullptr) {
-    //     sprintf(debugMsg, "%d, %d, %d, %d, %d, %s \n", TJTick, FstTick, cnt, OnPd, OffPd, debugInfo);
-    // } else {
-    //     sprintf(debugMsg, "%d, %d, %d, %d, %d \n", TJTick, FstTick, cnt, OnPd, OffPd);
-    // }
-    // uartPrint(debugMsg);
-    // #endif
 }
 void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by Audio2().
     static bool BuzzerOn = false;
     if(PrevAudioLength != AudioLength){
         PrevAudioLength = AudioLength; 
-        // #ifdef DEBUG 
-        // sprintf(debugMsg, "A3 %d, %d, %d, %d, %d \n", TJTick, FstTick,AudioLength, OnTicks, OffTicks);
-        // uartPrint(debugMsg);
-        // #endif
+
     }
     //If FstTick is not set, there's nothing to do.
     if ((FstTick == 0) || (TJTick - FstTick >= AudioLength) || (TJTick < FstTick)) { //If the pattern has completed or TJTick has rolled over to zero, reset FstTick to zero and return.
@@ -991,19 +871,11 @@ void Audio3(){ //Call this in ISR to implement buzzer when it has been setup by 
     // if((TJTick - FstTick) % AudioLength <= OnTicks) {    
     if((TJTick - FstTick) % (OnTicks + OffTicks) <= OnTicks) {    
         if (!BuzzerOn) {
-            // #ifdef DEBUG 
-            // sprintf(debugMsg,"On %d",TJTick);
-            // uartPrint(debugMsg); //Print when buzzer is turned on
-            // #endif
             BuzzerOn = true;
         }
     }
     else {
         if(BuzzerOn){
-            // #ifdef DEBUG
-            // sprintf(debugMsg,"Off %d",TJTick);
-            // uartPrint(debugMsg); //Print when buzzer is turned on
-            // #endif
             BuzzerOn = false;
         }
     }
@@ -1124,10 +996,14 @@ void DecodeAccelerometer() {
             if (Accel_Z.Z_accel < AccelTripPoint) {
                 Z_AccelFlag = 1;
                 SystemFaultFlag = true;
-                uartPrintFlash(F("AccelTripPoint error. \n"));
+                #ifndef ISOLATED_BOARD
+                    uartPrintFlash(F("AccelTripPoint error. \n"));  
+                #endif
                 #ifdef BASE_PRINT
-                    sprintf(debugMsg,"Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
-                    uartPrint(debugMsg); 
+                    #ifndef ISOLATED_BOARD                        
+                        sprintf(debugMsg,"Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
+                        uartPrint(debugMsg); 
+                    #endif
                 #endif
             } else {
                 Z_AccelFlag = 0;
@@ -1423,8 +1299,6 @@ void TurnOnGyro(){
     Instruction = 4;
     DecodeCommsData();
 }
-#pragma endregion Utility functions
-#pragma region Zone functions
 uint8_t GetZone(uint8_t i) {
     uint16_t Opzone;
     if (i<=MapTotalPoints){
@@ -1577,16 +1451,12 @@ void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as
     int temp = static_cast<int>(angle * PAN_STEPS_PER_RAD);//pan
     thisRes[0] = temp;
     thisRes[1] = getTiltFromCart(static_cast<int>(r)); //tilt.
-    // #ifdef DEBUG
-    // sprintf(debugMsg,"r  %d, res0 %d, res1 %d",r, thisRes[0], thisRes[1]);
-    // uartPrint(debugMsg);
-    // #endif
 }
 int GetPanPolar(int TiltPolar, int PanCart){ //Get the number of pan steps for a specified tilt angle (steps) and cartesian pan distance.
     int rho = getCartFromTilt(TiltPolar);
     return PAN_STEPS_PER_RAD*PanCart/rho;
 }
-void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c = 0, uint8_t d = 0){
+void printPerimeterStuff(const char* prefix, int a, int b, uint8_t c, uint8_t d){
     // Using snprintf for safer string formatting and concatenation
     snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
@@ -1613,13 +1483,13 @@ uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin){//, int &rhoMax, int 
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint8_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
     #ifdef DEBUG
-    sprintf(debugMsg,"rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ",rhoMax,rhoMin, minTilt, maxTilt,Tilt_Sep, temp);
-    uartPrint(debugMsg);
+        sprintf(debugMsg,"rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ",rhoMax,rhoMin, minTilt, maxTilt,Tilt_Sep, temp);
+        uartPrint(debugMsg);
     #endif
     return (uint8_t)temp;
 }
 
-uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) { //Get 
+uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) {
     for (uint8_t i = fstInd; i < nbrZnPts; i++) {
         if ((Vertices[1][i] <= tilt && Vertices[1][i + 1] > tilt) ||
             (Vertices[1][i] > tilt && Vertices[1][i + 1] <= tilt)) {
@@ -1627,80 +1497,6 @@ uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) { //Get
         }
     }
 }
-
-
-// void GetPerimeter(uint8_t zn) {  //LoadZoneMap(zn) loads the vertices of a zone, specified by the user, and slope of each segment to Vertices[][].  
-//     // This GetPerimeter() fills out the perimeter with more points, intended to be on the existing segments, so that traversing a segment will be 
-//     // straighter (in Cartesian space) and, more importantly, laser traces can be denser across the zone.  Separation from one dense point to the next
-//     // is intended to reflect an approximately constant Cartesian tilt axis offset.
-//     uint8_t j = 0;
-//     int nextTilt = 0, lastTilt = 0; 
-//     bool testBit = false;
-//     int nbrPts =0;
-//     uint8_t dirn = 0;
-//     uint8_t zn_1 = zn; // 20240701: Had used zn-1.  But zn-1 now passed as argument to this function.
-
-
-//     for (uint8_t i = 0; i < MapCount[0][zn_1]-1; i++) { //MapCount[0][zn] is the number of specified vertices, including repeated first as last, in zone zn.
-//         // 20240727: Changed upper limit from i < MapCount[0][zn_1]-1 to i < MapCount[0][zn_1].  Bad result (ref Debug20240727B.txt)
-//         Perimeter[0][j] = Vertices[0][i]; //Set the first dense perimeter point to the first specified vertex
-//         Perimeter[1][j] = Vertices[1][i]; //Vertices[][] holds specified vertices for the specified zone (loaded by LoadZoneMap(zn)).
-//         // sprintf(debugMsg,"(x,y):(%d, %d), (i, j):(%d,%d), MC %d, zn_1 %d",Perimeter[0][j], Perimeter[1][j], i, j,MapCount[0][zn_1],zn_1);
-//         // uartPrint(debugMsg);
-//         dirn = 0;
-//         if (Vertices[1][i+1] > Vertices[1][i]) dirn = 1; //If next y value is greater than this one, dirn = 1
-//         if (Vertices[1][i+1] < Vertices[1][i]) dirn = 2;
-//         // printPerimeterStuff("V0i, V1i", Vertices[0][i], Vertices[1][i]);
-//         // #ifdef DEBUG
-//         printPerimeterStuff("(P0j, P1j):  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-//         // #endif
-//         if ((dirn != 0) && (!(Vertices[2][i] == DEF_SLOPE))) { // dirn == 0 is the case where the tilt value doesn't change for the segment.  
-//             // The DEF_SLOPE case is that for minimal change in tilt.  dirn == 0 is in fact a subset of the DEF_SLOPE case.
-//             nextTilt = getNextTiltVal(Perimeter[1][j], dirn);  
-//             testBit = false;
-//             if ((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2)) testBit = true; //Test for room for an intermediate point
-//             while (testBit) { 
-//                 j++;
-//                 if(j>=MAX_NBR_PERIMETER_PTS) break;
-//                 Perimeter[1][j] = nextTilt;
-//                 Perimeter[0][j] = (Perimeter[1][j] - Vertices[1][i]) * Vertices[2][i]; // 10; //Interim (delta) x value = Delta Y * slope / 10.  (Slope is stored as actual slope * 10)
-//                 Perimeter[0][j] = Vertices[0][i] + Perimeter[0][j]/10; // Add delta x to x(i)
-//                 lastTilt = nextTilt;
-//                 nextTilt = getNextTiltVal(Perimeter[1][j], dirn);
-//                 if (nextTilt == lastTilt){ //Deal with the case where integer arithmetic rounds to no change.
-//                     nextTilt += (dirn==1) ? MIN_TILT_DIFF : -MIN_TILT_DIFF; //20240702 Had 1:-1.  But very slow convergence.  Need something more adaptive.  If>1 could overshoot.  Is that a problem?
-//                 }
-//                 // #ifdef DEBUG
-//                 printPerimeterStuff("P0j, P1j :  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-//                 // #endif
-//                 if (!((nextTilt < Vertices[1][i+1] && dirn == 1) ||(nextTilt > Vertices[1][i+1] && dirn == 2))) testBit = false;//Exit if there's not room for another intermediate point
-//             }
-//         } else { //The fixed tilt, pan only case.
-//             int fixedPanDiff = GetPanPolar(Vertices[1][i],MAX_PAN_DIST);//
-//             if (abs(Vertices[0][i+1]-Vertices[0][i]) > fixedPanDiff){
-//                 nbrPts = abs(Vertices[0][i+1]-Vertices[0][i])/fixedPanDiff; 
-//             } else nbrPts = 0; //20240727.  Ref Debug20240727N.txt.
-
-//             for (uint8_t a = 1; a<=nbrPts; a++){
-//                 j++;
-//                 if(j>=MAX_NBR_PERIMETER_PTS) break;
-//                 Perimeter[0][j] = Vertices[0][i] + fixedPanDiff * ((Vertices[0][i+1]>Vertices[0][i]) ? 1 : -1) * a;
-//                 Perimeter[1][j] = Vertices[1][i];
-//                 // #ifdef DEBUG
-//                 printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], i , j);
-//                 // #endif
-//             }   
-//         }
-//         j++;//Increment j between segments so that intermediate points in one segment don't write over those in the next.
-//         if(j>=MAX_NBR_PERIMETER_PTS) break;
-//     }
-//     // 20240727: Add the repeated vertex and increase NbrPerimeterPts to accomodate that.
-//     Perimeter[0][j] = Vertices[0][MapCount[0][zn_1]-1];
-//     Perimeter[1][j] = Vertices[1][MapCount[0][zn_1]-1];
-//     printPerimeterStuff("P0j, P1j;  (i, j)", Perimeter[0][j], Perimeter[1][j], j);
-//     NbrPerimeterPts = j+1; //Include last increment to allow for repeated vertex. 0 based array so (j+1) elements when last is indexed by j.
-//     // j++; //This is necessary so that next segment starts at right value/index.
-// }
 
 int sign(int x) {
     return (x > 0) - (x < 0);
@@ -1712,8 +1508,8 @@ void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]){
     temp = num * abs(nxt[1] - last[1]);
     res[1] = last[1] + temp/den *sign(nxt[1] - last[1]); 
     #ifdef DEBUG
-    sprintf(debugMsg,"num %d, den %d, x0 %d, y0 %d, x1 %d, y1 %d, res0 %d, res1 %d",num , den, last[0],last[1],nxt[0],nxt[1],res[0],res[1]);
-    uartPrint(debugMsg);
+        sprintf(debugMsg,"num %d, den %d, x0 %d, y0 %d, x1 %d, y1 %d, res0 %d, res1 %d",num , den, last[0],last[1],nxt[0],nxt[1],res[0],res[1]);
+        uartPrint(debugMsg);
     #endif
 }
 // Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate ((i + 1)/n), and return polars of interpolated point (thisRes).
@@ -1723,107 +1519,17 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     getCart(last[0], last[1], c1); //Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
     #ifdef DEBUG
-    sprintf(debugMsg,"l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d",last[0],last[1],nxt[0],nxt[1],c1[0],c2[0],c1[1],c2[1]);
-    uartPrint(debugMsg);
+        sprintf(debugMsg,"l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d",last[0],last[1],nxt[0],nxt[1],c1[0],c2[0],c1[1],c2[1]);
+        uartPrint(debugMsg);
     #endif
     // Do the Cartesian interpolation, storing results in thisRes
     uint16_t temp = num * abs(c2[0] - c1[0]);
     res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
-    // #ifdef DEBUG
-    // sprintf(debugMsg,"X temp: %d res: %d",temp,res[0]);
-    // uartPrint(debugMsg);
-    // #endif
     temp = num * abs(c2[1] - c1[1]);
     res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
-    // #ifdef DEBUG
-    // sprintf(debugMsg,"Y num: %d den: %d temp: %d res0: %d res1: %d",num, den, temp,res[0],res[1]);
-    // uartPrint(debugMsg);
-    // #endif
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
     getPolars(res[0],res[1], res);
-    // #ifdef DEBUG
-    // sprintf(debugMsg,"After getPolars. res0: %d res1: %d",res[0],res[1]);
-    // uartPrint(debugMsg);
-    // #endif
 }
-#pragma endregion Zone functions
-#pragma region Movement functions
-// uint8_t getRndLadInd(uint8_t rnd) {  //Get the perimeter point reasonably close to horizontally opposite (ie panwise opposite - ie a "rung") the input point.
-//     uint8_t tempInd;
-//     if (minYind > maxYind) { // Change MinY and MaxY to ensure minY <= maxY
-//         tempInd = minYind;
-//         minYind = maxYind;
-//         maxYind = tempInd;
-//     }
-
-//     if (rnd >= minYind && rnd <= maxYind) { //
-//         tempInd = 2 * maxYind;
-//         tempInd = tempInd - rnd;
-//         if (tempInd > NbrPerimeterPts) {
-//             tempInd = tempInd - NbrPerimeterPts;
-//         }
-//     } else if (rnd < minYind) {
-//         tempInd = 2 * minYind;
-//         tempInd = tempInd - rnd;
-//     } else { // rnd > maxY
-//         tempInd = 2 * maxYind;
-//         tempInd = tempInd - rnd;
-//     }
-
-//     if (rnd == minYind || rnd == maxYind) tempInd = rnd - 1;
-//     if (tempInd == 0) tempInd = 2;
-//     if (tempInd < 1) tempInd = 1;
-//     if (tempInd >= NbrPerimeterPts) tempInd = NbrPerimeterPts - 1;
-
-//     return tempInd;
-// }
-// uint8_t getExtremeY(bool upDown) {//Get the index of the maximum (upDown true) or minimum (upDown false) value of the Y values of the perimeter.
-//     //There is a much better way to do this using modern C++ iterators etc....Ask CoPilot.
-//     int val = 0;
-//     uint8_t i, ind;
-//     int maxval = -30000;
-//     ind = 1;
-
-//     for (i = 1; i < NbrPerimeterPts; i++) {
-//         val = Perimeter[1][i];
-//         if (upDown) {
-//             val = -val;
-//         }
-//         if (val > maxval) {
-//             maxval = val;
-//             ind = i;
-//         }
-//     }
-//     return ind;
-// }
-// Positioning and motor control 
-// 20240802: First version of getXY() was based on Perimeter() being populated with dense perimeter points.  Keep that, commented out, and replace with a new version.
-// void getXY(uint8_t ind, uint8_t pat) {//, uint8_t z) {  Zn is not passed as Perimeter() is loaded with the relevant zone data.
-//     if (ind < NbrPerimeterPts) { //First cycle around the boundary - ie all (dense) perimeter points.  Perimeter[i][j] has j 0 based to NbrPerimeterPts - 1
-//         X = Perimeter[0][ind];
-//         Y = Perimeter[1][ind];
-//     } else {
-//         PrevRndNbr = RndNbr;
-//         RndNbr = rand() % NbrPerimeterPts; // equivalent to Rnd(NbrPerimeterPts)
-//         if (RndNbr == 0) {
-//             RndNbr = 1;
-//         }
-//         AltRndNbr = RndNbr;
-
-//         if (pat == 2) { // This is the random ladder case when the opposite side of the rung is needed.
-//             if (rndLadBit == 1) {
-//                 minYind = getExtremeY(true);//
-//                 maxYind = getExtremeY(false);
-//                 AltRndNbr = getRndLadInd(PrevRndNbr);
-//                 rndLadBit = 0;
-//             } else {
-//                 rndLadBit = 1;
-//             }
-//         }
-//         X = Perimeter[0][AltRndNbr];
-//         Y = Perimeter[1][AltRndNbr];
-//     }
-// }
 
 void midPt(int tilt, uint8_t seg,int (&res)[2]){
     // uint8_t ratio = 0;
@@ -1843,8 +1549,8 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
         }
     // sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
     #ifdef DEBUG
-    sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,num, den, seg,res[0],res[1]);
-    uartPrint(debugMsg);
+        sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,num, den, seg,res[0],res[1]);
+        uartPrint(debugMsg);
     #endif
 }
 
@@ -1852,8 +1558,8 @@ uint16_t cartDistance(int pt1[2], int pt2[2]) {
     uint32_t dx = static_cast<uint32_t>(abs(pt2[0] - pt1[0]));
     uint32_t dy = static_cast<uint32_t>(abs(pt2[1] - pt1[1]));
     #ifdef DEBUG
-    sprintf(debugMsg,"dx %lu, dy %lu", dx, dy);
-    uartPrint(debugMsg);            
+        sprintf(debugMsg,"dx %lu, dy %lu", dx, dy);
+        uartPrint(debugMsg);            
     #endif
     uint32_t sqr = dx * dx + dy * dy;
     double dist = sqrt(sqr);
@@ -1871,8 +1577,8 @@ uint16_t distance(int pt1[2], int pt2[2]) {
     // uint16_t dist = std::max(dx,dy);
     uint16_t dist = (dx > dy) ? dx : dy;
     #ifdef DEBUG
-    sprintf(debugMsg,"pt20 %d, pt10 %d, pt21 %d, pt11 %d, dist %u, dx %u, dy %u", pt2[0], pt1[0], pt2[1], pt1[1],dist, dx, dy);
-    uartPrint(debugMsg);            
+        sprintf(debugMsg,"pt20 %d, pt10 %d, pt21 %d, pt11 %d, dist %u, dx %u, dy %u", pt2[0], pt1[0], pt2[1], pt1[1],dist, dx, dy);
+        uartPrint(debugMsg);            
     #endif
     return dist;
 }
@@ -1910,8 +1616,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 pt2[1] = Vertices[1][seg+1];
             }
             #ifdef BASE_PRINT
-                sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
-                uartPrint(debugMsg);            
+                #ifndef ISOLATED_BOARD
+                    sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
+                    uartPrint(debugMsg);            
+                #endif
             #endif
             nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);//This is the number of dense points to be placed along the segment, excluding wiggly points.
             X = Vertices[0][seg];
@@ -1938,10 +1646,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             seg++;
             segPt = 0;
         }
-        #ifdef BASE_PRINT
-            sprintf(debugMsg,"pat %d, seg %d, segPt %d, wigglyPt %d, nbrSegPts %d, ind %d, X %d, Y %d", pat, seg, segPt, wigglyPt, nbrSegPts, ind, X, Y);
-            uartPrint(debugMsg);            
-        #endif
+        // #ifdef BASE_PRINT
+        //     sprintf(debugMsg,"pat %d, seg %d, segPt %d, wigglyPt %d, nbrSegPts %d, ind %d, X %d, Y %d", pat, seg, segPt, wigglyPt, nbrSegPts, ind, X, Y);
+        //     uartPrint(debugMsg);            
+        // #endif
     //Now deal with the rungs - above is just boundary.
     } else {
         if(startRung){ //If a rung is not set, calculate both end points for a new rung.  Set x,y to the start of the segment.
@@ -1974,20 +1682,26 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 Y = nextRes[1];
             }
         }
-        #ifdef BASE_PRINT
-            sprintf(debugMsg,"pat %d,rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d, X %d, Y %d",pat, RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg, X, Y);
-            uartPrint(debugMsg);            
-        #endif
+        // #ifdef BASE_PRINT
+        //     sprintf(debugMsg,"pat %d,rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d, X %d, Y %d",pat, RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg, X, Y);
+        //     uartPrint(debugMsg);            
+        // #endif
 
         ind++;
     }
     #ifdef DEBUG
-    sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
-    uartPrint(debugMsg);
+        sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
+        uartPrint(debugMsg);
     #endif
     return startRung; //Use this to set speed and (possibly) laser on.
 }
 void ProcessCoordinates() {
+#ifdef ISOLATED_BOARD
+    AbsX = X;
+    AbsY = Y;
+    StepCount = 0;
+    SteppingStatus = 0;
+#endif
     StepOverRatio = 0;
 
     Dx = X - AbsX; // Distance to move
@@ -1997,8 +1711,10 @@ void ProcessCoordinates() {
         static int LastX = 0;
         static int LastY = 0;
         if (X != LastX || Y != LastY) {
-            sprintf(debugMsg, "X: %d, Y: %d", X, Y);
-            uartPrint(debugMsg);
+            // #ifndef ISOLATED_BOARD
+                sprintf(debugMsg, "X: %d, Y: %d", X, Y);
+                uartPrint(debugMsg);
+            // #endif
             LastX = X;
             LastY = Y;
         }
@@ -2038,16 +1754,16 @@ void ProcessCoordinates() {
 }
 
 void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
-    static uint16_t MM_n2 = 0;
+    // static uint16_t MM_n2 = 0;
     if (axis == 0) { // pan
         X = steps;
     } else { // tilt
         Y = steps;
     }
-    #ifdef BASE_PRINT 
-        sprintf(debugMsg,"Beginning of MoveMotor():axis %d, steps %d, X %d, Y %d", axis, steps, X, Y);
-        uartPrint(debugMsg);   
-    #endif
+    // #ifdef BASE_PRINT 
+    //     sprintf(debugMsg,"Beginning of MoveMotor():axis %d, steps %d, X %d, Y %d", axis, steps, X, Y);
+    //     uartPrint(debugMsg);   
+    // #endif
     ProcessCoordinates();
     // CheckTimer1(11);
     DSS_preload = HOMING_SPEED;
@@ -2055,6 +1771,9 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
     setupTimer1();
     if (waitUntilStop == 1) {  //So, if waitUntilStop is not 1, execution returns ?  Yes returns to HomeMotor() where there is a (blocking) {while limit switch is low} condition.
         // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
+        #ifdef ISOLATED_BOARD
+            DoHouseKeeping();
+        #endif
         while (SteppingStatus == 1) {
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
             // CheckBlueTooth();  //This should not be necessary.
@@ -2175,6 +1894,9 @@ void JogMotors(bool prnt) {//
     }
     else {
         setupTimer1();  //20240620.  Could be only if necessary?
+        #ifdef ISOLATED_BOARD
+            pos = 0;
+        #endif
         MoveMotor(axis, pos, 1);
     }
     JogFlag = 0;
@@ -2205,19 +1927,19 @@ uint16_t CalcSpeed(bool fst) {
 }
 
 void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reaches the relevant limit switch.
-    // static volatile uint16_t m;
-    // uartPrintFlash(F("HomeMotor \n"));
     MoveMotor(axis, steps, 0);
     setupTimer1();  //20240614 This added.  Shouldn't be necessary.
-    if (axis == 0) {
-        while (!(PINB & (1 << PAN_STOP))){  //While pan_stop pin is low.
-            // do nothing while motor moves
+    #ifndef ISOLATED_BOARD
+        if (axis == 0) {
+            while (!(PINB & (1 << PAN_STOP))){  //While pan_stop pin is low.
+                // do nothing while motor moves
+            }
+        } else {
+            while (!(PINB & (1 << TILT_STOP))) {  //While tilt_stop pin is low.
+                // do nothing while motor moves
+            }
         }
-    } else {
-        while (!(PINB & (1 << TILT_STOP))) {  //While tilt_stop pin is low.
-            // do nothing while motor moves
-        }
-    }
+    #endif
     StopTimer1();
     StepCount = 0;
     SteppingStatus = 0;
@@ -2229,15 +1951,19 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
         Y = 0;
         AbsY = 0;
     }
-    #ifdef BASE_PRINT 
-        sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
-        uartPrint(debugMsg);   
-    #endif
+    // #ifdef BASE_PRINT 
+    //     sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
+    //     uartPrint(debugMsg);   
+    // #endif
 }
 void MoveLaserMotor() {
     ProcessCoordinates(); // Drive motors to the coordinates
     DSS_preload = HOMING_SPEED; // Set speed rate
     SteppingStatus = 1;
+    #ifdef ISOLATED_BOARD
+        SteppingStatus = 0;
+        // break;
+    #endif
     setupTimer1();
     while (SteppingStatus == 1) { // do nothing while motor moves 
         // uartPrintFlash(F("In MLM"));
@@ -2269,18 +1995,26 @@ void HomeAxis() {
     setupTimer1(); //Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
     // *********PAN AXIS HOME****************
-    if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
-        // uartPrintFlash(F("Move from pan stop \n"));
-        MoveMotor(0, -300, 1);
-    }
-    HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
-    // *********TILT AXIS HOME****************
-    if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-        // uartPrintFlash(F("Move from tilt stop \n"));
-        MoveMotor(1, 300, 1);
-    }
-    CmdLaserOnFlag = false; //20240731
-    HomeMotor(1, -5000);  //Tilt motor homing position
+    #ifndef ISOLATED_BOARD
+        if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
+            // uartPrintFlash(F("Move from pan stop \n"));
+        }
+        
+        HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
+        // *********TILT AXIS HOME****************
+        if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
+            // uartPrintFlash(F("Move from tilt stop \n"));
+            MoveMotor(1, 300, 1);
+        }
+        
+        CmdLaserOnFlag = false; //20240731
+        HomeMotor(1, -5000);  //Tilt motor homing position
+    #endif
+    #ifdef ISOLATED_BOARD
+        X = 0;
+        Y = 0;
+        uartPrintFlash(F("HomeAxis \n"));
+    #endif
     // --**Move Tilt into final position**--
     switch (OperationMode) {
         case 0: Correctionstepping = 100; break;
@@ -2289,6 +2023,7 @@ void HomeAxis() {
         case 3: Correctionstepping = -220; break;
         default: Correctionstepping = 100; break;
     }
+
     MoveMotor(1, Correctionstepping, 1);
     CmdLaserOnFlag = false; //20240731
     NeutralAxis();  //Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
@@ -2297,76 +2032,7 @@ void HomeAxis() {
     CmdLaserOnFlag = false;
     IsHome = 1;
 }
-// 20240802.  Keep old version of RunSweep (used with dense perimeter)
-// void  RunSweep(uint8_t zn) {
-//     uint8_t NbrPts, PatType, i;
-//     int last[2],nxt[2];//,nbrMidPts;
-//     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
-//     LoadZoneMap(zn);
-//     GetPerimeter(zn);
 
-//     for (PatType = 1; PatType <= 2; PatType++) {//20240701 PatType.  Initially 2. 1:
-//         // HomeAxis(); //20240729
-//         for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
-//             // Store present point to use in interpolation
-//             last[0] = X;
-//             last[1] = Y;
-//             getXY(Index, PatType);
-//             nxt[0] = X;
-//             nxt[1] = Y;
-//             // sprintf(debugMsg,"Index %d, AltRndNbr %d, x0 %d,y0 %d,x1 %d,y1 %d",Index, AltRndNbr, last[0],last[1],nxt[0],nxt[1]);
-//             // CalcSpeedZone(); // 20240724 No longer used
-//             DSS_preload = CalcSpeed();
-//             // sprintf(debugMsg,"RN %d, x0 %d,y0 %d, speed: %d",AltRndNbr, last[0],last[1],DSS_preload);
-//             sprintf(debugMsg,"RN, x0, y0, speed, %d,%d,%d,%d",AltRndNbr, last[0],last[1],DSS_preload);
-//             uartPrint(debugMsg);
-//             _delay_ms(50); //20240831  Add this to separate it from next prints.
-
-//             if (Index == 0) { //20240727: Change to zero (from 1). So laser is off as it moves towards 0th point of cycle.
-//                 CmdLaserOnFlag = false;
-//                 DSS_preload = Step_Rate_Max;
-//             } else{
-//                 CmdLaserOnFlag = true;
-//             }
-
-//             // nbrMidPts = abs(nxt[0] - last[0])/ MID_PT_SEPARATION;
-//             // for (i = 0; i <= nbrMidPts; i++) {
-//                 // if (nbrMidPts > 0) {
-//                 //     if (i == nbrMidPts) {
-//                 //         X = nxt[0];
-//                 //         Y = nxt[1];
-//                 //     } else {
-//                 //         CartesianInterpolate(last,nxt,i, nbrMidPts, res);
-//                 //         getPolars(res[1], res[2], res);  //Pass res as input 
-//                 //         X = res[1];
-//                 //         Y = res[2];
-//                 //     }
-//                 // }
-//                 ProcessCoordinates();
-//                 // sprintf(debugMsg,"X: %d, Y: %d, Index: %d", X, Y, Index);
-//                 // uartPrint(debugMsg);
-
-//                 SteppingStatus = 1;
-//                 // uartPrintFlash(F("<T1 RS"));
-//                 setupTimer1();
-
-//                 while (SteppingStatus == 1) {
-//                     // uartPrintFlash(F("<DHK RS \n"));
-//                     DoHouseKeeping();
-//                     // uartPrintFlash(F(">DHK RS \n"));
-//                     if (SetupModeFlag == 1) { //Will only arise if SetupModeFlag is changed after RunSweep is called (which will occur if SetupModeFlag == 0 - run mode.)
-//                         // uartPrintFlash(F("SUM1 RS \n"));
-//                         StopTimer1();
-//                         StepCount = 0;
-//                         SteppingStatus = 0;
-//                         return;
-//                     }
-//                 // }
-//             }
-//         }
-//     }
-//     ResetTiming();
-// }
 void RunSweep(uint8_t zn) {
     uint8_t PatType, ind=0;
     #ifdef GHOST
@@ -2377,7 +2043,6 @@ void RunSweep(uint8_t zn) {
     int maxTilt = 0;
     int rhoMin = 0;
     bool startRung = true;
-
 
     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
@@ -2394,12 +2059,12 @@ void RunSweep(uint8_t zn) {
             }
         #endif
         #ifdef BASE_PRINT
-            sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
-            uartPrint(debugMsg);
+            #ifndef ISOLATED_BOARD 
+                sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
+                uartPrint(debugMsg);
+            #endif
         #endif
         while (ind < Nbr_Rnd_Pts) {
-        // for (uint8_t Index = 0; Index <MapCount[0][zn] * NBR_WIGGLY_POINTS + Nbr_Rnd_Pts; Index++) {
-        // for (uint8_t Index = 0; Index <Nbr_Rnd_Pts; Index++) {
             startRung = getXY(PatType, zn, ind, rhoMin, nbrRungs);
             #ifdef DEBUG
                 sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
@@ -2448,8 +2113,6 @@ void RunSweep(uint8_t zn) {
     ResetTiming();
 }
 
-#pragma endregion Movement functions
-#pragma region Print functions
 void TransmitData() {
     int Hexresult;
     char Result[5];
@@ -2568,8 +2231,6 @@ void PrintConfigData() {
         printToBT(ConfigCode[i],ConfigData[i]);
     }
 }
-#pragma endregion Print functions
-#pragma region Mode functions
 void ProgrammingMode() {
     // uartPrintFlash(F("10:1 Laser0 \n"));
     SetLaserVoltage(0); // Turn off laser
@@ -2616,13 +2277,23 @@ void OperationModeSetup(int OperationMode) {
     uartPrint(atCommand);
     // testLoopUart("OMS: end function ");
 }
-#pragma endregion Mode functions
+
 void DoHouseKeeping() {
     static uint16_t dhkn=0;
     dhkn++;
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
+    #ifdef ISOLATED_BOARD
+        static uint16_t lastTick;
+        if (TJTick != lastTick+ISOLATED_BOARD_INTERVAL) {
+            lastTick = TJTick;
+            X = AbsX;
+            Y = AbsY;
+            StepCount = 0;
+            SteppingStatus = 0;
+        }
+    #endif
     // avoidLimits(true); //20240731 
     // avoidLimits(false);
     if (Tick > 4) {
@@ -2680,15 +2351,35 @@ void DoHouseKeeping() {
     }
 }
 
+
+
 void setup() {
     sei();  // Enable global interrupts.
     uart_init(MYUBRR);  // Initialize UART with baud rate specified by macro constant
     _delay_ms(2000); //More time to connect and not, therefore, miss serial statements.
+
+    #ifndef ISOLATED_BOARD
+        uartPutChar('\n');
+        sprintf(debugMsg, "In setup, ISOLATED_BOARD false");
+        uartPrint(debugMsg);
+    #endif
+    #ifdef ISOLATED_BOARD
+        // _delay_ms(2000);
+        uartPutChar('\n');
+        sprintf(debugMsg, "In setup, ISOLATED_BOARD true");
+        uartPrint(debugMsg);
+    #endif
+
     setupTimer1();
     setupTimer3();
-    TurnOnGyro();
+    #ifndef ISOLATED_BOARD
+        TurnOnGyro();
+    #endif
     setupPeripherals();
-    setupWatchdog();
+    #ifndef ISOLATED_BOARD
+        setupWatchdog();    
+    #endif
+    
     OperationModeSetup(OperationMode);     // Select the operation mode the device will work under before loading data presets
     Wd_byte = MCUSR; // Read the Watchdog flag
     if (Wd_byte & (1 << WDRF)) { // there was a WD overflow. This flag is cleared of a Watchdog Config
@@ -2713,18 +2404,17 @@ void setup() {
     // Audio2(5,1,1);//,"Setup"); 
     _delay_ms(AUDIO_DELAY);
     HomeAxis();
+    #ifdef ISOLATED_BOARD
+        uartPrintFlash(F("End setup \n"));
+    #endif
 }
+
 int main() {
     // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
     static bool doPrint = true;
     setup();
 
     while(1) { 
-        // if(PrevSetupModeFlag != SetupModeFlag) {
-        //     sprintf(debugMsg,"Mode change %d, %d",PrevSetupModeFlag,SetupModeFlag);
-        //     uartPrint(debugMsg);
-        //     // PrevSetupModeFlag = SetupModeFlag;
-        // }
         doPrint = true;
         if (SetupModeFlag == 1) {
             if (PrevSetupModeFlag != SetupModeFlag) {
@@ -2747,6 +2437,10 @@ int main() {
             if (MapTotalPoints > 0){
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {   
                     //20241202.  Use ActiveMapZones to filter which zones are run.
+                    #ifdef ISOLATED_BOARD
+                        sprintf(debugMsg,"ActiveMapZones: %d, Zn: %d: X %d, AbsX %d,Y: %d, AbsY %d", ActiveMapZones, Zn, X,  AbsX,Y, AbsY);
+                        uartPrint(debugMsg);
+                    #endif
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0) {                  
                         if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
                             MapRunning = Zn; //But map index in app is 1 based.
@@ -2763,230 +2457,3 @@ int main() {
     }
     return 0;
 }
-
-// void testI2C() {
-//     byte error, address;
-//     int nDevices;
-
-//     uartPrint("Scanning...");
-
-//     nDevices = 0;
-//     for(address = 1; address < 127; address++ ) {
-//         Wire.beginTransmission(address);
-//         error = Wire.endTransmission();
-
-//         if (error == 0) {
-//             sprintf(debugMsg,"I2C device found at address: ,%02x,   !",address);
-//             uartPrint(debugMsg);
-//             nDevices++;
-//         }
-//         else if (error==4) {
-//             sprintf(debugMsg,"Unknown error at address: ,%02x,   !",address);
-//             uartPrint(debugMsg);
-//             nDevices++;    }    
-//   }
-//   if (nDevices == 0) uartPrint("No I2C devices found\n");
-//   else uartPrint("done\n");
-
-//   delay(5000); // wait 5 seconds for the next scan
-// }
-// void testLaserPower(){
-//     // Use LaserTick as timer for testing.
-//     static uint8_t lastLaserTick = 0;
-//     static uint8_t cnter = 0;
-//     static uint16_t l_power = 0;
-//     uint8_t nbrSteps = 12;
-//     if (lastLaserTick !=LaserTick){ //Only do something if LaserTick has changed (incrementes every 50ms )
-//         lastLaserTick = LaserTick;
-//         if (LaserTick == 0){ //Do something each second (which is the frequency that LaserTick resets to zero.)
-//             if(cnter ==0) {
-//                 l_power = 0;
-//             }else{
-//                 // l_power |= (1<<(cnter-1)); //Set one higher bit each time through. So max value will be 255 (for cnter == 8) (or 4095 for cnter == 12).
-//                 l_power += MAX_LASER_VALUE/nbrSteps;
-//             }
-//             SetLaserVoltage(l_power);
-//             // SetLaserVoltage(255); //Test with full power.
-//             sprintf(debugMsg,"cnter, l_powerX, l_powerD: %d, %04x, %d", cnter, l_power,l_power);
-//             uartPrint(debugMsg);
-//             _delay_ms(20);
-//             cnter++;
-//             if (cnter == nbrSteps+1){
-//                 cnter = 0;
-//                 l_power = 0;
-//             }
-//         }
-//     }
-// }
-
-// void SetLaserVoltage(uint8_t voltage) {
-//     uint16_t D;
-//     uint8_t Hi;
-//     uint8_t Lo;
-//     float Lvolt;
-
-//     // if (voltage == 0 || Laser2OperateFlag == 0 || Laser2StateFlag == 0) {
-//     //     PORTE &= ~(1 << LASER2); // Turn off Laser2
-//     // } else {
-//         PORTE |= (1 << LASER2); // Turn on Laser2
-//     // }
-
-//     //Lvolt = voltage / 51.0f; // Converts a byte value to a voltage (decimal) for the laser DAC to set.  EG 255/51=5volts or 127/51=2.5volts
-//     Lvolt = 250 / 51.0f; //20240624. Overwrite Lvolt for testing. Just want to be sure it turns on.
-//     D = Lvolt / VoltPerStep; // Calculate how many steps to set the requested voltage
-//     D <<= 4; // Shift left by 4 bits
-//     Hi = D >> 8; // Get the first 8 bits MSB
-//     Lo = D & 0xFF; // Get the last 8 bits LSB
-//     sprintf(debugMsg,"voltage, D, Hi, Lo: %d, %04x, %02x, %02x", voltage, D, Hi, Lo);
-//     uartPrint(debugMsg);
-//     _delay_ms(50);
-
-
-//     // Start the I2C bus for the laser power DAC.
-//     if (i2c_start(MCP4725) != 0) {
-//         // Handle error (e.g., log error, set an error flag, etc.)
-//         uartPrint("i2c_start error");
-//         return; // Exit if we can't start communication
-//     }
-
-//     // Send the 1st byte
-//     if (i2c_wbyte(0xC0) != 0) {  //20240624 0xC0: 0b1100 0000.  1100 is MCP4725 device code.  LSB is R/W (R=0). A2, A1, A0 (bits 1,2,3, starting from 0) are address bytes.
-//     // Defaults for A2 and A1, set at manufacture, are 0. Assume that is the case.  A0 is set by logic state of A0 pin.  Assume (based on BASCOM) that this is tied low.
-//         uartPrint("i2c_wbyte(0xC0) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 2nd byte
-//     if (i2c_wbyte(0x40) != 0) { //0x40: 0b0100 0000. From table 6-2 of data sheet: C2:C1:C0 = 010 =>Load configuration bits and data code to the DAC Register
-//     // Ref para 6.1.2
-//         uartPrint("i2c_wbyte(0x40) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 3rd byte (MSB) 
-//     if (i2c_wbyte(Hi) != 0) { //20240624 Figure 6-2 NOT 6-1 shows that 3rd byte has 8 MSBits and 4th byte has 4LSBs + 4 con't care bits.
-//         uartPrint("i2c_wbyte(Hi) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Send the 4th byte (LSB)
-//     if (i2c_wbyte(Lo) != 0) {
-//         uartPrint("i2c_wbyte(Lo) error");
-//         i2c_stop(); // Attempt to properly close the I2C communication
-//         return; // Exit after error
-//     }
-
-//     // Stop the I2C bus
-//     if (i2c_stop() != 0) {
-//         // Handle error if needed
-//         return; // Optional, as we're exiting the function anyway
-//     }
-
-//     if (voltage > 0 && BatteryTick > 4) {
-//         GetBatteryVoltage();
-//         BatteryTick = 0;
-//     }
-// }
-
-// void initDACMCP4725() {
-//     i2c_init(); // Initialize I2C with 400kHz bit rate
-//     if (i2c_start(MCP4725)) { // Start I2C communication and send MCP4725 address
-//         // The operation failed
-//         sprintf(debugMsg, "Operation failed ");
-//         uartPrint(debugMsg);
-//     }
-//     i2c_wbyte(0x0001); // Send data to set the default power to 0 volts in the EEPROM volt on startup
-//     i2c_stop(); // Stop I2C communication
-// }
-
-// void Audio(uint8_t pattern) { //20240624 Refactored to be non-blocking
-//     // Define the array with values for 50ms increments
-//     // Format: [on time in 50ms increments, off time in 50ms increments, repeat count]
-//     static const uint8_t audioTiming[6][3] = {
-//         {2, 2, 1},  // Pattern 1: 100ms on, 100ms off, repeat 1 time
-//         {1, 9, 2},  // Pattern 2: 50ms on, 450ms off, repeat 2 times
-//         {10, 2, 2}, // Pattern 3: 500ms on, 100ms off, repeat 2 times
-//         {1, 3, 2},  // Pattern 4: 50ms on, 150ms off, repeat 2 times
-//         {1, 1, 2},  // Pattern 5: 50ms on, 50ms off, repeat 2 times
-//         {10, 15, 4} // Pattern 6: 500ms on, 750ms off, repeat 4 times
-//     };
-
-//     static uint8_t lastCounter = 0;
-//     static uint8_t currentPattern = 0;
-//     static bool phase = false; // false: buzzer off, true: buzzer on
-//     static uint8_t repeatCounter = 0;
-//     static uint8_t phaseCounter = 0; // Tracks the duration of the current phase
-
-//     // Check if pattern has changed or it's the first run
-//     if (pattern != currentPattern) {
-//         currentPattern = pattern;
-//         phase = false; // Ensure buzzer starts off
-//         lastCounter = Counter50ms; // Reset timing
-//         repeatCounter = 0; // Reset repeat counter
-//         phaseCounter = 0; // Reset phase duration counter
-//     }
-
-//     // Calculate elapsed time since last state change
-//     uint8_t elapsed = (Counter50ms - lastCounter + 20) % 20; // Assuming Counter50ms increments every 50ms and resets every second
-
-//     // Index for accessing the timing array
-//     uint8_t index = pattern - 1; // Adjust for 0-based index
-
-//     // Check if it's time to toggle the buzzer state
-//     if ((phase && phaseCounter >= audioTiming[index][0]) || (!phase && phaseCounter >= audioTiming[index][1])) {
-//         phase = !phase; // Toggle phase
-//         lastCounter = Counter50ms; // Reset timing for next phase
-//         phaseCounter = 0; // Reset phase duration counter
-
-//         if (phase) { // If we're turning the buzzer on
-//             PORTE |= (1 << BUZZER);
-//         } else { // We're turning the buzzer off
-//             PORTE &= ~(1 << BUZZER);
-//             repeatCounter++; // Increment repeat counter after an on + off cycle
-//         }
-//     } else {
-//         phaseCounter += elapsed; // Update phase duration counter
-//     }
-
-//     // Check if all repeats are done for the current pattern
-//     if (repeatCounter >= audioTiming[index][2]) {
-//         currentPattern = 0; // Reset pattern to allow re-entry or change
-//     }
-// }
-
-// void checkTimer3(){
-//     if(true){
-//         if ((TCCR3B & ((1 << CS32) | (1 << CS31) | (1 << CS30))) == 0) {
-//             uartPrint("Timer3 is stopped");
-//         } 
-//         else {
-//             uartPrint("Timer3 is running");
-//         }
-//     }
-// }
-// void CheckTimer1(uint8_t timer1Cnt){
-//     if (false){
-//         if ((TCCR1B & ((1 << CS12) | (1 << CS11) | (1 << CS10))) == 0) {
-//             sprintf(debugMsg,"T1 stopped: %d, %d", timer1Cnt, OCR1A);
-//         } 
-//         else {
-//             sprintf(debugMsg,"T1 running: %d, %d", timer1Cnt, OCR1A);
-//         }
-//         uartPrint(debugMsg);
-//     }
-// }
-
-// uintptr_t GetPosEepromAddress(uint8_t posIndex, uint8_t axis){
-//     // Calculate the address offset for a position coordinate
-//     if (posIndex < MAX_NBR_MAP_PTS){
-//         if (axis == 0){
-//             return (uintptr_t)&EramPositions[posIndex].EramX - (uintptr_t)&EramPositions[0];
-//         } else
-//         {
-//             return (uintptr_t)&EramPositions[posIndex].EramY - (uintptr_t)&EramPositions[0];
-//         }
-//     }
-// }

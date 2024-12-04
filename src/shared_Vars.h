@@ -8,7 +8,9 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 #define GHOST
-// #define BASE_PRINT
+#define ISOLATED_BOARD
+#define ISOLATED_BOARD_INTERVAL 10
+#define BASE_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

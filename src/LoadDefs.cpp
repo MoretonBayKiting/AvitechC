@@ -63,13 +63,13 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     // uartPrint(MapTotalPoints);
     // uartPrint("\n");
     #ifdef DEBUG
-    sprintf(debugMsg,"MapTotalPoints address:  %p value: %d",(void*)&EramMapTotalPoints, MapTotalPoints);  
-    uartPrint(debugMsg);  
+        sprintf(debugMsg,"MapTotalPoints address:  %p value: %d",(void*)&EramMapTotalPoints, MapTotalPoints);  
+        uartPrint(debugMsg);  
     #endif
     GyroAddress = eeprom_read_byte(&EramGyroAddress); 
     #ifdef DEBUG
-    sprintf(debugMsg,"Gyro address:  %p value: %02x",(void*)&EramGyroAddress, GyroAddress);  
-    uartPrint(debugMsg);  
+        sprintf(debugMsg,"Gyro address:  %p value: %02x",(void*)&EramGyroAddress, GyroAddress);  
+        uartPrint(debugMsg);  
     #endif
     // for(int i = 0; i < 5; i++) {
     //     SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);

@@ -8,10 +8,12 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-#define ISOLATED_BOARD
-#define ISOLATED_BOARD_INTERVAL 10
-#define THROTTLE //20241205: Use to debug laser temperature and power.
-// #define BASE_PRINT
+// #define ISOLATED_BOARD
+#ifdef ISOLATED_BOARD
+    #define ISOLATED_BOARD_INTERVAL 10
+#endif
+// #define THROTTLE //20241205: Use to debug laser temperature and power.
+#define BASE_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

@@ -269,7 +269,7 @@ uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
 uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
-uint8_t Nbr_Rnd_Pts = 20;
+uint8_t Nbr_Rnd_Pts = 120;
 uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 1;
 uint8_t EEMEM EramSpeedScale;
@@ -1403,7 +1403,7 @@ void LoadZoneMap(uint8_t zn) {
         }
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        #ifdef GHOST
+        #ifdef BASE_PRINT   
             printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
         #endif
      } //snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
@@ -1440,9 +1440,11 @@ int getCartFromTilt(int t) {//Estimate a cartesian distance to the laser point b
 int getTiltFromCart(int rho) {
     // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
     // float b = atan2(LaserHt,rho*10);
-    float b = atan2(rho*10,LaserHt); //20241205 Arguments were reverse ordered.
-    // sprintf(debugMsg,"Ht %d, rho %d, ret %d",LaserHt, rho, (int)(b*STEPS_PER_RAD + 0.5));
-    // uartPrint(debugMsg);
+    float b = atan2(static_cast<float>(LaserHt), static_cast<float>(rho) * 10.0f); //20241205 Arguments were reverse ordered.  Arguments also now cast to float.
+    #ifdef GHOST
+        sprintf(debugMsg,"rho %d, 100*b %d, LaserHt %d",rho, static_cast<int>(100*b), LaserHt );
+        uartPrint(debugMsg);
+    #endif
     return (int)(b*TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
 int getNextTiltVal(int thisTilt, uint8_t dirn) {//20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.  
@@ -1463,8 +1465,12 @@ void getCart(int p, int t, int (&thisres)[2]) {//Take pan(t) and tilt(t) for a p
    thisres[1] = r*sin(p/PAN_STEPS_PER_RAD);
 }
 void getPolars(int c1, int c2,int thisRes[2]) {  //Take cartesian coordinates as input, return, via thisRes[2], polars.
-    long r = c1 * c1 + c2 * c2;  //Get the distance from the laser to the point by pythagoras.
-    r = sqrt(r);  
+    // 20241205 Change r from long to double.
+    double r = sqrt(static_cast<double>(c1) * c1 + static_cast<double>(c2) * c2);  // Get the distance from the laser to the point by Pythagoras.
+    #ifdef GHOST
+        sprintf(debugMsg,"c1 %d, c2 %d, r %d",c1, c2, static_cast<int>(r));
+        uartPrint(debugMsg);
+    #endif
     //First argument of atan2 is opp, second is adj.  Ref https://cplusplus.com/reference/cmath/atan2/.  
     double angle = atan2(static_cast<double>(c2), static_cast<double>(c1));  //Pan is atan(c2/c1).  atan2 assumes arguments are doubles. 
     int temp = static_cast<int>(angle * PAN_STEPS_PER_RAD);//pan
@@ -1549,10 +1555,14 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     #endif
     // Do the Cartesian interpolation, storing results in thisRes
     // uint16_t temp = num * abs(c2[0] - c1[0]);
-    int temp = num * abs(c2[0] - c1[0]); //20241204: Changed to int from uint16_t.  Though note sign() used below.
-    res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
-    temp = num * abs(c2[1] - c1[1]);
-    res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
+    // uint32_t temp = num * abs(c2[0] - c1[0]); //20241204: Changed to int from uint16_t.  Though note sign() used below.
+    // res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
+    // temp = num * abs(c2[1] - c1[1]);
+    // res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
+    uint32_t temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[0] - c1[0])); //20241204: Changed to uint32_t from int. Though note sign() used below.
+    res[0] = c1[0] + static_cast<int32_t>(temp / den) * sign(c2[0] - c1[0]);
+    temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[1] - c1[1]));
+    res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
     #ifdef GHOST
         sprintf(debugMsg,"Cartesian: res0 %d, res1 %d",res[0],res[1]);
@@ -1582,8 +1592,8 @@ void midPt(int tilt, uint8_t seg,int (&res)[2]){
             res[1]=Vertices[1][seg];
         }
     // sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
-    #ifdef DEBUG
-        sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,num, den, seg,res[0],res[1]);
+    #ifdef GHOST
+        sprintf(debugMsg,"midPt: S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,num, den, seg,res[0],res[1]);
         uartPrint(debugMsg);
     #endif
 }
@@ -1650,10 +1660,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 pt2[1] = Vertices[1][seg+1];
             }
             #ifdef BASE_PRINT
-                #ifndef ISOLATED_BOARD
+                // #ifndef ISOLATED_BOARD
                     sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
                     uartPrint(debugMsg);            
-                #endif
+                // #endif
             #endif
             nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);//This is the number of dense points to be placed along the segment, excluding wiggly points.
             X = Vertices[0][seg];
@@ -1738,12 +1748,12 @@ void ProcessCoordinates() {
     Dx = X - AbsX; // Distance to move
     Dy = Y - AbsY; // Distance to move
 
-    #ifdef GHOST
+    #ifdef BASE_PRINT
         static int LastX = 0;
         static int LastY = 0;
         if (X != LastX || Y != LastY) {
             // #ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "X: %d, Y: %d", X, Y);
+                sprintf(debugMsg, "T_S: %d, P_S: %d, AbsX: %d, AbsY: %d, X: %d, Y: %d", (PINB & (1 << TILT_STOP)) != 0, (PINB & (1 << PAN_STOP)) != 0,AbsX, AbsY, X, Y);
                 uartPrint(debugMsg);
             // #endif
             LastX = X;
@@ -1983,10 +1993,10 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
         Y = 0;
         AbsY = 0;
     }
-    // #ifdef BASE_PRINT 
-    //     sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
-    //     uartPrint(debugMsg);   
-    // #endif
+    #ifdef BASE_PRINT 
+        sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
+        uartPrint(debugMsg);   
+    #endif
 }
 void MoveLaserMotor() {
     ProcessCoordinates(); // Drive motors to the coordinates
@@ -2029,13 +2039,14 @@ void HomeAxis() {
     // *********PAN AXIS HOME****************
     #ifndef ISOLATED_BOARD
         if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
-            // uartPrintFlash(F("Move from pan stop \n"));
+            uartPrintFlash(F("Move from pan stop \n"));
+            MoveMotor(0, -300, 1); //20241206 This seems to have been lost at some stage.
         }
         
         HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
         // *********TILT AXIS HOME****************
         if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-            // uartPrintFlash(F("Move from tilt stop \n"));
+            uartPrintFlash(F("Move from tilt stop \n"));
             MoveMotor(1, 300, 1);
         }
         
@@ -2067,7 +2078,7 @@ void HomeAxis() {
 
 void RunSweep(uint8_t zn) {
     uint8_t PatType, ind=0;
-    #ifdef GHOST
+    #ifdef BASE_PRINT //GHOST
         static uint8_t LastPatType;
     #endif
     // int last[2],nxt[2];//,nbrMidPts;
@@ -2083,7 +2094,7 @@ void RunSweep(uint8_t zn) {
     // sprintf(debugMsg,"Rungs %d rhoMin %d",nbrRungs,rhoMin);
     // uartPrint(debugMsg);
     for (PatType = 1; PatType <= 4; PatType++) {
-        #ifdef GHOST
+        #ifdef BASE_PRINT //GHOST
             if (LastPatType!=PatType){
                 LastPatType = PatType;
                 sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);

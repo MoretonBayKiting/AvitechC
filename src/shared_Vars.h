@@ -7,10 +7,11 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define GHOST
+// #define GHOST
 #define ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
-#define BASE_PRINT
+#define THROTTLE //20241205: Use to debug laser temperature and power.
+// #define BASE_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

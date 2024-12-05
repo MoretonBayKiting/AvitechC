@@ -6,7 +6,7 @@
 #define RAMPING_STEPS 1
 // #define STARTUP_SPEED 100
 #define START_RAMPING_COUNT 100
-// #define STEP_RATE_MAX 75
+#define STEP_RATE_MAX 75
 // #define STEP_RATE_MIN 200 //20240724 Arbitrary value 
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
@@ -18,7 +18,8 @@
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
-#define TILT_SENSOR_IGNORE 325
+#define TILT_SENSOR_IGNORE 325 //Should this and MAX_TILT be the same (ie only one required)
+#define MAX_TILT 317 //20241204: Ref GM email: "Y shouldnt go above (physically below) Y: 317"
 #define NUM_BATT_READINGS 10
 #define NUM_TEMP_READINGS 10
 #define NIGHT_TRIP_TIME_FROM_STARTUP 240
@@ -95,3 +96,4 @@
 #define X_WIGGLY_BORDER_RANGE 40
 #define Y_WIGGLY_BORDER_RANGE 40
 #define NBR_WIGGLY_POINTS 0
+

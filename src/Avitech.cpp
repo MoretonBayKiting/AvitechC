@@ -49,8 +49,8 @@ uint8_t minYind;
 uint8_t maxYind;
 uint8_t RndNbr;//, PrevRndNbr, AltRndNbr;
 
-volatile uint16_t StepCount;                                       // How many steps to be executed
-uint16_t DSS_preload = Step_Rate_Max;                                     // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
+volatile uint16_t StepCount;                      // How many steps to be executed
+uint16_t DSS_preload = Step_Rate_Max;             // TCC1 compare value to get Desired Stepping Speed (DSS), Lower the number the faster the pulse train
 volatile bool SteppingStatus = 0;
 // bool SteppingStatus = 0;  //Shared   // 0 = No stepping in progress. 1= Stepping in progress
 char buffer[20];  //Use for printint to serial (Bluetooth)
@@ -263,7 +263,7 @@ volatile uint8_t CommandLength = 0;
 uint16_t EEMEM Eram_Step_Rate_Min;
 uint16_t Step_Rate_Min = 2000;
 uint16_t EEMEM Eram_Step_Rate_Max;
-uint16_t Step_Rate_Max = 75;
+uint16_t Step_Rate_Max = STEP_RATE_MAX;
 uint8_t EEMEM Eram_Rho_Min;
 uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
@@ -782,6 +782,10 @@ ISR(TIMER1_COMPA_vect){
 ISR(TIMER3_COMPA_vect){
     wdt_reset();  // Reset the watchdog timer
     TickCounter_50ms_isr();
+    // #ifdef THROTTLE
+    //     sprintf(debugMsg,"TJTick: %d, Tick: %d", TJTick, Tick);
+    //     uartPrint(debugMsg);
+    // #endif
 }
 
 ISR(WDT_vect){
@@ -828,9 +832,13 @@ void SetLaserVoltage(uint16_t voltage) {
     if ((voltage<256) && (voltage>2)){ //If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
         thisVoltage = (voltage<<4);
     }
+    // 20241205 Imported from BASCOM version, previously not here.
+    if(voltage>0 and BatteryTick>4){    //Laser on and sample every 2 sec's
+      GetBatteryVoltage();
+      BatteryTick=0;
+    }
     DAC.setValue(thisVoltage);
 }
-
 
 void firstOn(){
     uint8_t firstTimeOn = eeprom_read_byte(&EramFirstTimeOn);
@@ -1127,56 +1135,66 @@ void CalibrateLightSensor() {
     printToBT(25,LightLevel); // Send current light level reading
 }
 void ThrottleLaser() {
-    // float Result = 0.0;
-    // float L_power = 0.0;
-    // unsigned int SensorReading = readADC(0);
-    // uint8_t B_volt = 0;
-    // uint8_t Y;  //
-    // uint8_t X;  //
+    float Result = 0.0;
+    float L_power = 0.0;
+    unsigned int SensorReading = readADC(0); //20241205 Laser temperture
+    uint8_t B_volt = 0;
+    uint8_t Y;  
+    uint8_t X;  
 
-    // if (BatteryVoltage < 98) B_volt = 25;
-    // else if (BatteryVoltage < 100) B_volt = 50;
-    // else if (BatteryVoltage < 105) B_volt = 70;
-    // else if (BatteryVoltage < 110) B_volt = 90;
-    // else B_volt = 100;
+    if (BatteryVoltage < 98) B_volt = 25;
+    else if (BatteryVoltage < 100) B_volt = 50;
+    else if (BatteryVoltage < 105) B_volt = 70;
+    else if (BatteryVoltage < 110) B_volt = 90;
+    else B_volt = 100;
 
-    // if (Laser2OperateFlag == 1) {
-    //     Y = Laser2BattTrip + 5;  //Add hysteresis value if battery is low    eg 10.5 +0.5  = 11.0 for the reset level
-    //     if (BatteryVoltage < Laser2BattTrip) Laser2BattTripFlag = 1;
-    //     if (BatteryVoltage > Y) Laser2BattTripFlag = 0;
+    if (Laser2OperateFlag == 1) { //20241205 Ignore this case.
+        Y = Laser2BattTrip + 5;  //Add hysteresis value if battery is low    eg 10.5 +0.5  = 11.0 for the reset level
+        if (BatteryVoltage < Laser2BattTrip) Laser2BattTripFlag = 1;
+        if (BatteryVoltage > Y) Laser2BattTripFlag = 0;
 
-    //     X = Laser2TempTrip - 2;  //Add hysteresis value if the main laser is to hot. Reset value is 50-2=48deg's for reset back on
-    //     if (LaserTemperature > Laser2TempTrip) Laser2TempTripFlag = 1;
-    //     if (LaserTemperature < X) Laser2TempTripFlag = 0;
+        X = Laser2TempTrip - 2;  //Add hysteresis value if the main laser is too hot. Reset value is 50-2=48deg's for reset back on
+        if (LaserTemperature > Laser2TempTrip) Laser2TempTripFlag = 1;
+        if (LaserTemperature < X) Laser2TempTripFlag = 0;
 
-    //     if (Laser2TempTripFlag == 0 && Laser2BattTripFlag == 0) Laser2StateFlag = 1;
-    //     else Laser2StateFlag = 0;
-    // }
+        if (Laser2TempTripFlag == 0 && Laser2BattTripFlag == 0) Laser2StateFlag = 1;
+        else Laser2StateFlag = 0;
+    }
 
-    // // Calculate the laser power directly from the sensor reading using the quadratic function
-    // // Ref sheet LaserTemp of Alg.xlsm - this correlation directly from sensor reading to percentage of laser power.
-    // // y = -0.0087x2 + 12.361x - 4268.5
-    // // R² = 0.9996
-    // L_power = -0.0087 * SensorReading * SensorReading + 12.361 * SensorReading - 4268.5;
-    // // Ensure l_power (a percentage*100 of max voltage) is within a valid range 
-    // if (L_power < 0) L_power = 0;
-    // else if (L_power > 100) L_power = 100;
-    // if (B_volt < L_power) L_power = B_volt; //Ensure L_power is less than battery voltage.
-    // Result = L_power / 100.0f; //Convert to %age
-    // L_power = Result * MaxLaserPower; //Convert to voltage
-    // Result = UserLaserPower / 100.0f; //This looks like nonsense
-    // LaserPower = L_power * Result; //Scale voltage to 
+    // Calculate the laser power directly from the sensor reading using the quadratic function
+    // Ref sheet LaserTemp of Alg.xlsm - this correlation directly from sensor reading to percentage of laser power.
+    // y = -0.0087x2 + 12.361x - 4268.5
+    // R² = 0.9996
+    L_power = -0.0087 * SensorReading * SensorReading + 12.361 * SensorReading - 4268.5; //20241205: Why is SensorReading used rather than LaserTemperature?
+    if(SensorReading<710) L_power = 100; //20241205: Add constraints.  Magic numbers from Google Sheets.    
+    if(SensorReading>792) L_power = 37; 
+    //From Google Sheets: -4269 + 12.4x + -8.74E-03x^2
+    // Ensure l_power (a percentage*100 of max voltage) is within a valid range 
+    if (L_power < 0) L_power = 0;
+    else if (L_power > 100) L_power = 100;
+    if (B_volt < L_power) L_power = B_volt; //Ensure L_power is less than battery voltage.
+    Result = L_power / 100.0f; //Convert to %age
+    L_power = Result * MaxLaserPower; //Convert to voltage
+    Result = UserLaserPower / 100.0f; //This looks like nonsense
+    LaserPower = L_power * Result; //Scale voltage to 
 
-    // if (LaserTemperature > 55) {
-    //     LaserPower = 0;
-    //     LaserOverTempFlag = 1;
-    //     SystemFaultFlag = true;
-    // } else {
-    //     LaserOverTempFlag = 0;
-    //     SystemFaultFlag = false;
-    // }
+    if (LaserTemperature > 55) {
+        LaserPower = 0;
+        LaserOverTempFlag = 1;
+        SystemFaultFlag = true;
+    } else {
+        LaserOverTempFlag = 0;
+        SystemFaultFlag = false;
+    }
     // LaserPower = 100; //20240625: Don't let it go to zero (for testing)
-    LaserPower = UserLaserPower; //20241202: Try UserLaserPower until this function is properly reviewed.
+    // LaserPower = UserLaserPower; //20241202: Try UserLaserPower until this function is properly reviewed.
+    if(LaserPower>UserLaserPower) LaserPower = UserLaserPower; //20241205: Ensure LaserPower is less than UserLaserPower.
+
+    #ifdef THROTTLE
+        // sprintf(debugMsg,"BatteryVoltage: %d, B_volt: %d, Result: %d, SensorReading: %d, LaserPower: %d, ", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
+        sprintf(debugMsg, "BatteryVoltage: %d, B_volt: %d, Result: %.2f, SensorReading: %d, LaserPower: %d", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
+        uartPrint(debugMsg);
+    #endif
 }
 
 void initMPU() {
@@ -1421,7 +1439,8 @@ int getCartFromTilt(int t) {//Estimate a cartesian distance to the laser point b
 }
 int getTiltFromCart(int rho) {
     // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
-    float b = atan2(LaserHt,rho*10);
+    // float b = atan2(LaserHt,rho*10);
+    float b = atan2(rho*10,LaserHt); //20241205 Arguments were reverse ordered.
     // sprintf(debugMsg,"Ht %d, rho %d, ret %d",LaserHt, rho, (int)(b*STEPS_PER_RAD + 0.5));
     // uartPrint(debugMsg);
     return (int)(b*TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
@@ -1489,13 +1508,20 @@ uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin){//, int &rhoMax, int 
     return (uint8_t)temp;
 }
 
-uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) {
-    for (uint8_t i = fstInd; i < nbrZnPts; i++) {
+uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd) {//Get the segment of the perimeter that the tilt value falls in.
+    uint8_t i = 0;  
+    for (i = fstInd; i < nbrZnPts; i++) {
         if ((Vertices[1][i] <= tilt && Vertices[1][i + 1] > tilt) ||
             (Vertices[1][i] > tilt && Vertices[1][i + 1] <= tilt)) {
-            return i;
+            // return i;
+            break;
         }
     }
+    #ifdef GHOST
+        sprintf(debugMsg,"Tilt %d, i %d, fstInd %d, V1i %d, V1i+1 %d", tilt, i, fstInd, Vertices[1][i], Vertices[1][i+1]);
+        uartPrint(debugMsg);
+    #endif	
+    return i;
 }
 
 int sign(int x) {
@@ -1512,23 +1538,31 @@ void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]){
         uartPrint(debugMsg);
     #endif
 }
-// Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate ((i + 1)/n), and return polars of interpolated point (thisRes).
 // Take 2 polar specified points (last and nxt), convert to cartesian (c1, c2), interpolate (num/den), and return polars of interpolated point (thisRes).
 void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2]) {
     int c1[2], c2[2]; //The cartesian end points.
     getCart(last[0], last[1], c1); //Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-    #ifdef DEBUG
-        sprintf(debugMsg,"l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d",last[0],last[1],nxt[0],nxt[1],c1[0],c2[0],c1[1],c2[1]);
+    #ifdef GHOST
+        sprintf(debugMsg,"num %d, den %d, l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d",num, den, last[0],last[1],nxt[0],nxt[1],c1[0],c2[0],c1[1],c2[1]);
         uartPrint(debugMsg);
     #endif
     // Do the Cartesian interpolation, storing results in thisRes
-    uint16_t temp = num * abs(c2[0] - c1[0]);
+    // uint16_t temp = num * abs(c2[0] - c1[0]);
+    int temp = num * abs(c2[0] - c1[0]); //20241204: Changed to int from uint16_t.  Though note sign() used below.
     res[0] = c1[0] + temp/den *sign(c2[0] - c1[0]);
     temp = num * abs(c2[1] - c1[1]);
     res[1] = c1[1] + temp/den * sign(c2[1] - c1[1]);
     //Use the cartesian values stored in res and write the corresponding polar values to the same variable.
+    #ifdef GHOST
+        sprintf(debugMsg,"Cartesian: res0 %d, res1 %d",res[0],res[1]);
+        uartPrint(debugMsg);
+    #endif
     getPolars(res[0],res[1], res);
+    #ifdef GHOST
+        sprintf(debugMsg,"Polar: res0 %d, res1 %d",res[0],res[1]);
+        uartPrint(debugMsg);
+    #endif
 }
 
 void midPt(int tilt, uint8_t seg,int (&res)[2]){
@@ -1631,6 +1665,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
                 X = res[0];
                 Y = res[1];
+                if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
             } 
             else{//For wiggly points get a few randomly positioned around the start of the (dense) segment.
                 X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
@@ -1646,10 +1681,6 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             seg++;
             segPt = 0;
         }
-        // #ifdef BASE_PRINT
-        //     sprintf(debugMsg,"pat %d, seg %d, segPt %d, wigglyPt %d, nbrSegPts %d, ind %d, X %d, Y %d", pat, seg, segPt, wigglyPt, nbrSegPts, ind, X, Y);
-        //     uartPrint(debugMsg);            
-        // #endif
     //Now deal with the rungs - above is just boundary.
     } else {
         if(startRung){ //If a rung is not set, calculate both end points for a new rung.  Set x,y to the start of the segment.
@@ -1920,6 +1951,7 @@ uint16_t CalcSpeed(bool fst) {
             // _delay_ms(50);
         }
         s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
+        if(s<Step_Rate_Max) s = Step_Rate_Max;//20241204: Ensure that the speed is not too high.
         // s *= SpeedScale;
         // s /= 100;
     } else s = HOMING_SPEED;
@@ -2064,7 +2096,7 @@ void RunSweep(uint8_t zn) {
                 uartPrint(debugMsg);
             #endif
         #endif
-        while (ind < Nbr_Rnd_Pts) {
+        while (ind < Nbr_Rnd_Pts) { //ind is incremented in getXY(), but not for the boundary, only for rungs.
             startRung = getXY(PatType, zn, ind, rhoMin, nbrRungs);
             #ifdef DEBUG
                 sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
@@ -2300,6 +2332,9 @@ void DoHouseKeeping() {
         TransmitData();
         PrintAppData();
         GetLaserTemperature();
+        #ifdef THROTTLE
+            ThrottleLaser();
+        #endif
         if (Z_AccelFlag == 0) {
             ThrottleLaser();
         }
@@ -2308,8 +2343,10 @@ void DoHouseKeeping() {
 
     if (AbsY >= TILT_SENSOR_IGNORE) {
         if((PINB & (1 << TILT_STOP)) != 0){  //if Tilt_stop pin is on
-            StopTimer3();
-            // TCCR3B &= ~((1 << CS32) | (1 << CS30));
+            #ifndef THROTTLE
+                StopTimer3(); //20241205: This will cause the watchdog to trigger. 
+            #endif
+            // uartPrintFlash(F("StopTimer3 would have been called.\r"));
         }
     }
 
@@ -2395,7 +2432,7 @@ void setup() {
     ReadEramVars();  //Reads user data from EEPROM to RAM.
     // initMPU();
     PORTE |= (1 << FAN); //Turn fan on.
-    for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.
+    for (int battCount = 0; battCount < 10; battCount++) {  //BatteryVoltage should be populated by this.  20241205 The limit, 10, is also the size of the relevant array. Change to use a constant? 
         GetBatteryVoltage();   //Load up the battery voltage array
     } 
     SetLaserVoltage(0);                                     //Lasers switched off
@@ -2437,10 +2474,10 @@ int main() {
             if (MapTotalPoints > 0){
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++) {   
                     //20241202.  Use ActiveMapZones to filter which zones are run.
-                    #ifdef ISOLATED_BOARD
-                        sprintf(debugMsg,"ActiveMapZones: %d, Zn: %d: X %d, AbsX %d,Y: %d, AbsY %d", ActiveMapZones, Zn, X,  AbsX,Y, AbsY);
-                        uartPrint(debugMsg);
-                    #endif
+                    // #ifdef ISOLATED_BOARD
+                    //     sprintf(debugMsg,"ActiveMapZones: %d, Zn: %d: X %d, AbsX %d,Y: %d, AbsY %d", ActiveMapZones, Zn, X,  AbsX,Y, AbsY);
+                    //     uartPrint(debugMsg);
+                    // #endif
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0) {                  
                         if (MapCount[0][Zn-1] > 0) { //MapCount index is zero base
                             MapRunning = Zn; //But map index in app is 1 based.

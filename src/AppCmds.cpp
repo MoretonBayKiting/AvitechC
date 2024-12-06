@@ -1,6 +1,7 @@
 #include "shared_Vars.h"
 #include "pin_mappings.h"
 #include "AppCmds.h"
+#include "const.h"
 // #include <Arduino.h>
 #include <util/delay.h>
 #include <stdio.h>
@@ -8,6 +9,16 @@
 #include <math.h>
 // uint8_t Command;
 // uint16_t Instruction;
+
+// 20241206: Use new ReScale to reinterpret previously used variables (mostly SpeedZone values)
+uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax) {
+    // Perform the calculation using floating-point arithmetic
+    if (val < oldMin) val = oldMin;
+    if (val > oldMax) val = oldMax;
+    float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+    float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    return static_cast<uint16_t>(r);
+}
 
 void DecodeCommsData() {
 
@@ -30,6 +41,8 @@ void DecodeCommsData() {
         case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
         case 14: Cmd14(); break;  //Delete last way point
         case 16: Cmd16(); break;  //SpeedScale - see notes with function below.
+        case 17: Cmd17(); break;  //Nbr_Rnd_Pts
+        case 18: Cmd18(); break;  //testConst() 
         // case 15: Cmd15(); break;  //MinimumLaserPower - needs attention
         case 21: Cmd21(); break;  //Needed, as null, to listen to bespoke app.
         // case 24: Cmd24(); break;
@@ -345,18 +358,23 @@ void Cmd14() {    // 20240522: Delete a map point.  It's always the last map poi
 //     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
 //     // MinimumLaserPower = Instruction;
 // }
-// void Cmd16(){
-//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
-//     // MinimumLaserPower = Instruction;
-// }
-// void Cmd17(){
-//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
-//     // MinimumLaserPower = Instruction;
-// }
-// void Cmd18(){
-//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
-//     // MinimumLaserPower = Instruction;
-// }
+
+void Cmd16() { //20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
+    uint16_t  NewInstruction = ReScale(Instruction,OLD_SPEED_ZONE_MIN,OLD_SPEED_ZONE_MAX,SPEED_SCALE_MIN,SPEED_SCALE_MAX);
+    eeprom_update_byte(&EramSpeedScale, NewInstruction);
+    SpeedScale = NewInstruction;
+    Audio2(1,2,0);//,"AC22");
+}
+
+void Cmd17(){//Previously SpeedZone 2 (with 1st numbered 1)
+    uint16_t NewInstruction = ReScale(Instruction,OLD_SPEED_ZONE_MIN,OLD_SPEED_ZONE_MAX,NBR_RND_MIN,NBR_RND_MAX);
+    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
+    Nbr_Rnd_Pts = NewInstruction;
+}
+void Cmd18(){
+    // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+    // MinimumLaserPower = Instruction;
+}
 
 void Cmd21() { //Need to listen for this from app.  Was previously something to do with map zones.
     // eeprom_update_word(&EramResetSeconds, Instruction);
@@ -470,13 +488,6 @@ void Cmd51() {
     Audio2(1,2,0);//,"AC21");
 }
 
-void Cmd16() { //20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
-    eeprom_update_byte(&EramSpeedScale, Instruction);
-    SpeedScale = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC22");
-}
-
 void Cmd52() { //
     eeprom_update_byte(&EramSpeedScale, Instruction);
     SpeedScale = Instruction;
@@ -490,3 +501,4 @@ void Cmd53() { //
     // LoadActiveMapZones(); //Does this need to be run?
     Audio2(1,2,0);//,"AC23");
 }
+

@@ -583,11 +583,12 @@ void ProcessBuffer(char* buffer) {
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
 
                 // Debug print: Log parsed command and instruction
-                uartPrint("Cmd: ");
-                uartPrint(String(Command).c_str());
-                uartPrint("Instruction: ");
-                uartPrint(String(Instruction).c_str());
-
+                #ifdef BASE_PRINT
+                    uartPrint("Cmd: ");
+                    uartPrint(String(Command).c_str());
+                    uartPrint("Instruction: ");
+                    uartPrint(String(Instruction).c_str());
+                #endif
                 DecodeCommsData();  // Process the command and instruction
             }
             token = strchr(end + 1, '<');  // Find the start of the next command

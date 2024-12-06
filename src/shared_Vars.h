@@ -13,7 +13,7 @@
     #define ISOLATED_BOARD_INTERVAL 10
 #endif
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
-#define BASE_PRINT
+// #define BASE_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

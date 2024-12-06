@@ -97,3 +97,10 @@
 #define Y_WIGGLY_BORDER_RANGE 40
 #define NBR_WIGGLY_POINTS 0
 
+// Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
+#define OLD_SPEED_ZONE_MIN 0
+#define OLD_SPEED_ZONE_MAX 100 
+#define SPEED_SCALE_MIN 100
+#define SPEED_SCALE_MAX 50 //Higher speed requires a lower value of SpeedScale
+#define NBR_RND_MIN 20
+#define NBR_RND_MAX 300

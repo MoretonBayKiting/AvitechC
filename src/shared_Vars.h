@@ -13,7 +13,7 @@
     #define ISOLATED_BOARD_INTERVAL 10
 #endif
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
-// #define BASE_PRINT
+#define BASE_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables
@@ -119,6 +119,7 @@ extern uint8_t Eram_Nbr_Rnd_Pts;
 extern uint8_t Nbr_Rnd_Pts;
 extern uint8_t Eram_Tilt_Sep;
 extern uint8_t Tilt_Sep;
+extern uint8_t nbrWigglyPts;
 extern uint8_t EramSpeedScale;
 extern uint8_t SpeedScale;
 extern uint8_t EramLaserHt;
@@ -132,6 +133,8 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// 
 void ProcessCoordinates();
 void ProgrammingMode();
 void setupWatchdog();
+void TransmitData();    
+void PrintAppData();
 void PrintConfigData();
 // void CalcSpeedZone();
 uint16_t CalcSpeed();

@@ -17,6 +17,8 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
     if (val > oldMax) val = oldMax;
     float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
     float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %d", Command, val, static_cast<uint16_t>(r));
+    uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
@@ -40,9 +42,11 @@ void DecodeCommsData() {
         case 12: Cmd12(); break;  // Store the accelerometer trip point
         case 13: Cmd13(); break;  //Update OperationMode (in EEPROM)
         case 14: Cmd14(); break;  //Delete last way point
-        case 16: Cmd16(); break;  //SpeedScale - see notes with function below.
-        case 17: Cmd17(); break;  //Nbr_Rnd_Pts
-        case 18: Cmd18(); break;  //testConst() 
+        case 16: Cmd16(); break;  //BASCOM: SpeedZone1.  Now SpeedScale - see notes with function below.
+        case 17: Cmd17(); break;  //BASCOM: SpeedZone2.  Now Nbr_Rnd_Pts
+        case 18: Cmd18(); break;  //BASCOM: SpeedZone3.  Now tilt_sep (rung density) 
+        case 19: Cmd19(); break;  //BASCOM: SpeedZone4.  Now wiggly points 
+        case 20: Cmd20(); break;  //BASCOM: SpeedZone5.  LaserHt 
         // case 15: Cmd15(); break;  //MinimumLaserPower - needs attention
         case 21: Cmd21(); break;  //Needed, as null, to listen to bespoke app.
         // case 24: Cmd24(); break;
@@ -62,15 +66,16 @@ void DecodeCommsData() {
         case 38: Cmd38(); break;  //Update FactoryLightTripLevel (in EEPROM)
         case 39: Cmd39(); break;  //20240612: Test function set up by TJ
 
-        case 45: Cmd45(); break;  //Tilt_Sep
+        // case 45: Cmd45(); break;  //Tilt_Sep
         case 46: Cmd46(); break;  //Step_Rate_Min
         case 47: Cmd47(); break;  //Step_Rate_Max
         case 48: Cmd48(); break;  //Rho_Min;
         case 49: Cmd49(); break;  //Rho_Max;
         case 50: Cmd50(); break;  //Nbr_Rnd_Pts
         case 51: Cmd51(); break;  //Update ActiveMapZones (in EEPROM)
-        case 52: Cmd52(); break;  //SpeedScale
-        case 53: Cmd53(); break;  //LaserHt
+        // case 52: Cmd52(); break;  //SpeedScale
+        // case 53: Cmd53(); break;  //LaserHt
+        // case 54: Cmd54(); break;  //WigglyPts
     }
 }
 
@@ -94,6 +99,7 @@ void Cmd2() {
     // Process Pan Stop/Start Register
     TiltEnableFlag = 0;  //20240620: Added by TJ.
     PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
+    if(PanEnableFlag==0) X = AbsX; //Attempt to stop kink at direction changes
     // Process Pan Direction Register
     PanDirection = (Instruction & 0b00000010) ? 1 : 0;
     // Process Pan Speed Register
@@ -106,6 +112,7 @@ void Cmd3() {
     // Process Tilt Stop/Start Register
     PanEnableFlag = 0; //20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
+    if(TiltEnableFlag==0) Y = AbsY;
     // Process Tilt Direction Register
     TiltDirection = (Instruction & 0b00000010) ? 0 : 1; //20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
     //20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
@@ -180,9 +187,11 @@ void Cmd9() {
     
     // uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
     uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0xFF); // Get Map Point number from Instruction
-    sprintf(debugMsg,"MPNbr: %d",MapPointNumber);
+    #ifdef BASE_PRINT
+    sprintf(debugMsg,"MPNbr: %d \n",MapPointNumber);
     uartPrint(debugMsg);
     _delay_ms(50); //20240727: Output (through BT snooper) clashes with next print (MapPoint:) with no delay.  Ref AndDebug20240726Q_SPP.csv
+    #endif
     MapTotalPoints = MapPointNumber;
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);//20240726 This had not been included
     // Debug message for Map Point Number extraction
@@ -217,8 +226,10 @@ void Cmd9() {
 
     Audio2(1,2,0);//,"AC9");
     // Debug message to indicate function completion
-    // sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x", X, Y, OperationZone, Command, Instruction);
-    // uartPrint(debugMsg);
+    #ifdef BASE_PRINT
+        sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x, \n", X, Y, OperationZone, Command, Instruction);
+        uartPrint(debugMsg);
+    #endif
     setupTimer3();
 }
 
@@ -267,8 +278,12 @@ void Cmd10() { //Setup/Run mode selection. Delete all map points. Cold restart
 
     if (A == 0b00100000) {      //App telling the micro that the bluetooth is connected
         BT_ConnectedFlag = 1;
+        // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
+        // 20241209.  Put back to zero.  Dom has added refresh button to app.
         SendDataFlag = 0;       //Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
         Audio2(1,2,0);//,"AC10:32");
+        PrintAppData(); //20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
+        TransmitData();
         PrintConfigData();      //Send area data back to the app for user to see
     }
 
@@ -371,9 +386,21 @@ void Cmd17(){//Previously SpeedZone 2 (with 1st numbered 1)
     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
     Nbr_Rnd_Pts = NewInstruction;
 }
-void Cmd18(){
-    // eeprom_update_word(&EramMinimumLaserPower, Instruction);
-    // MinimumLaserPower = Instruction;
+void Cmd18() {
+    uint16_t  NewInstruction = ReScale(Instruction,OLD_SPEED_ZONE_MIN,OLD_SPEED_ZONE_MAX,TILT_SEP_MIN,TILT_SEP_MAX);
+    eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
+    Tilt_Sep = NewInstruction;
+}
+
+void Cmd19() { //
+    uint16_t  NewInstruction = ReScale(Instruction,OLD_SPEED_ZONE_MIN,OLD_SPEED_ZONE_MAX,WIGGLY_MIN,WIGGLY_MAX);
+    nbrWigglyPts = NewInstruction;
+    // nbrWigglyPts not stored to EEPROM.  Just for testing.  Set to 0 when declared .
+}
+void Cmd20() {
+    uint16_t  NewInstruction = ReScale(Instruction,OLD_SPEED_ZONE_MIN,OLD_SPEED_ZONE_MAX,LASER_HT_MIN,LASER_HT_MAX);
+    eeprom_update_byte(&EramLaserHt, NewInstruction);
+    LaserHt = NewInstruction;
 }
 
 void Cmd21() { //Need to listen for this from app.  Was previously something to do with map zones.
@@ -453,10 +480,7 @@ void Cmd39(){
     uartPrint(debugMsg);
 }
 
-void Cmd45() {
-    eeprom_update_byte(&Eram_Tilt_Sep, Instruction);
-    Tilt_Sep = Instruction;
-}
+
 void Cmd46() { //
     eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
     Step_Rate_Min = Instruction;
@@ -477,9 +501,6 @@ void Cmd50() { //
     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
     Nbr_Rnd_Pts = Instruction;
 }
-// void Cmd20() {
-//     cmdSpeedZone(4);
-// }
 
 void Cmd51() {
     eeprom_update_byte(&EramActiveMapZones, Instruction);
@@ -488,17 +509,17 @@ void Cmd51() {
     Audio2(1,2,0);//,"AC21");
 }
 
-void Cmd52() { //
-    eeprom_update_byte(&EramSpeedScale, Instruction);
-    SpeedScale = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC22");
-}
+// void Cmd52() { //
+//     eeprom_update_byte(&EramSpeedScale, Instruction);
+//     SpeedScale = Instruction;
+//     // LoadActiveMapZones(); //Does this need to be run?
+//     Audio2(1,2,0);//,"AC22");
+// }
 
-void Cmd53() { //
-    eeprom_update_byte(&EramLaserHt, Instruction);
-    LaserHt = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1,2,0);//,"AC23");
-}
+// void Cmd53() { //
+//     eeprom_update_byte(&EramLaserHt, Instruction);
+//     LaserHt = Instruction;
+//     // LoadActiveMapZones(); //Does this need to be run?
+//     Audio2(1,2,0);//,"AC23");
+// }
 

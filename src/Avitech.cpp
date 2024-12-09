@@ -271,7 +271,8 @@ uint8_t Rho_Max = 200;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 uint8_t Nbr_Rnd_Pts = 120;
 uint8_t EEMEM Eram_Tilt_Sep;
-uint8_t Tilt_Sep = 1;
+uint8_t Tilt_Sep = 5;//20241209 Previously 1.  Needs testing.
+uint8_t nbrWigglyPts = 0;
 uint8_t EEMEM EramSpeedScale;
 uint8_t SpeedScale = 100; //Treat as percentage
 uint8_t EEMEM EramLaserHt;
@@ -1388,12 +1389,16 @@ void LoadZoneMap(uint8_t zn) {
     // int temp;
 
     if (MapTotalPoints == 0) {
-        // uartPrint("Zero points");
+        #ifdef BASE_PRINT
+        uartPrint("LZM: Zero points");
+        #endif
         return;
     }
     else {
-        // sprintf(debugMsg,"MapTotalPoints: %d",MapTotalPoints);
-        // uartPrint(debugMsg);
+        #ifdef BASE_PRINT
+        sprintf(debugMsg,"LZM: MapTotalPoints: %d \r\n",MapTotalPoints);
+        uartPrint(debugMsg);
+        #endif
     }
     for (MapIndex = 0; MapIndex < MapCount[0][zn_1]-1; MapIndex++) { //Upper limit.  See notes below in next loop. With n-1 distinct points, there are n points in total
     // and they are indexed from 0 to n-2 - hence 0 to < n -1.
@@ -1662,7 +1667,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             }
             #ifdef BASE_PRINT
                 // #ifndef ISOLATED_BOARD
-                    sprintf(debugMsg,"Distance %u", distance(pt1,pt2));
+                    sprintf(debugMsg,"Distance %u \r\n", distance(pt1,pt2));
                     uartPrint(debugMsg);            
                 // #endif
             #endif
@@ -1676,7 +1681,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
                 X = res[0];
                 Y = res[1];
-                if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
+                // if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
             } 
             else{//For wiggly points get a few randomly positioned around the start of the (dense) segment.
                 X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
@@ -1684,7 +1689,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
             }
             wigglyPt++; //20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
         }
-        if(wigglyPt > NBR_WIGGLY_POINTS) { //Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
+        if(wigglyPt > nbrWigglyPts) { //Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
             wigglyPt = 0;
             segPt++;
             }
@@ -1754,7 +1759,7 @@ void ProcessCoordinates() {
         static int LastY = 0;
         if (X != LastX || Y != LastY) {
             // #ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "T_S: %d, P_S: %d, AbsX: %d, AbsY: %d, X: %d, Y: %d", (PINB & (1 << TILT_STOP)) != 0, (PINB & (1 << PAN_STOP)) != 0,AbsX, AbsY, X, Y);
+                sprintf(debugMsg, "T_S: %d, P_S: %d, AbsX: %d, AbsY: %d, X: %d, Y: %d \r\n", (PINB & (1 << TILT_STOP)) != 0, (PINB & (1 << PAN_STOP)) != 0,AbsX, AbsY, X, Y);
                 uartPrint(debugMsg);
             // #endif
             LastX = X;
@@ -1795,7 +1800,8 @@ void ProcessCoordinates() {
     }
 }
 
-void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) {
+
+void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) { // Call from JogMotors: MoveMotor(axis, pos, 1);
     // static uint16_t MM_n2 = 0;
     if (axis == 0) { // pan
         X = steps;
@@ -1939,7 +1945,10 @@ void JogMotors(bool prnt) {//
         #ifdef ISOLATED_BOARD
             pos = 0;
         #endif
-        MoveMotor(axis, pos, 1);
+        // MoveMotor(axis, pos, 1);  //20241209.  Replace with next, including ProcessCoordinates(), in order to smooth jogging.
+        if(axis==0) X = pos;
+        else Y = pos;
+        ProcessCoordinates();
     }
     JogFlag = 0;
 }
@@ -1995,8 +2004,8 @@ void HomeMotor(uint8_t axis, int steps) { //Move specified motor until it reache
         AbsY = 0;
     }
     #ifdef BASE_PRINT 
-        sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
-        uartPrint(debugMsg);   
+        // sprintf(debugMsg,"End of HomeMotor :axis %d, X %d, Y %d", axis, X, Y);
+        // uartPrint(debugMsg);   
     #endif
 }
 void MoveLaserMotor() {
@@ -2040,14 +2049,14 @@ void HomeAxis() {
     // *********PAN AXIS HOME****************
     #ifndef ISOLATED_BOARD
         if ((PINB & (1 << PAN_STOP))){  //If pan_stop pin is high... "Move blade out of stop sensor at power up"
-            uartPrintFlash(F("Move from pan stop \n"));
+            // uartPrintFlash(F("Move from pan stop \n"));
             MoveMotor(0, -300, 1); //20241206 This seems to have been lost at some stage.
         }
         
         HomeMotor(0, 17000); //Pan motor to limit switch and set X and AbsX to 0 .
         // *********TILT AXIS HOME****************
         if ((PINB & (1 << TILT_STOP))) {   //If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-            uartPrintFlash(F("Move from tilt stop \n"));
+            // uartPrintFlash(F("Move from tilt stop \n"));
             MoveMotor(1, 300, 1);
         }
         
@@ -2164,7 +2173,7 @@ void TransmitData() {
     uint8_t i;
 
     Variables[0] = MaxLaserPower;
-    Variables[1] = Accel_Z.Z_accel;
+    Variables[1] = Accel.Acceltemp; //BASCOM: AccelTemp
     Variables[2] = Index;
     Variables[3] = X;
     Variables[4] = Y;
@@ -2186,16 +2195,18 @@ void TransmitData() {
 
     if (SendDataFlag == 1) {
         for (i = 0; i <= 18; i++) {
-            Hexresult = Variables[i];
-            sprintf(Result, "%X", Hexresult);
+            // Hexresult = Variables[i];
+            // sprintf(Result, "%X", Hexresult);
             if (i == 0) {
                 // printToBT(20,Result);// In original MaxLaserPower has code 20, not 30. Write over 29 and sort out later.
-                uartPrint(Result);  
+                // uartPrint(Result);  
+                printToBT(20,Variables[i]);
             } else {
-                // printToBT((i+29),Result);// In original MaxLaserPower has code 20, not 30. Write over 29 and sort out later.
-                uartPrint(Result);  
+                // printToBT((i+29),Result);// Target commands in app start, apart from MaxLaserPower, dealt with above, at 30
+                // uartPrint(Result);  
+                printToBT(i+29,Variables[i]);
             }
-            _delay_ms(50);
+            // _delay_ms(50); //20241209. printToBT() includes _delay_ms(20).
         }
     }
 }
@@ -2341,8 +2352,8 @@ void DoHouseKeeping() {
     // avoidLimits(true); //20240731 
     // avoidLimits(false);
     if (Tick > 4) {
-        TransmitData();
-        PrintAppData();
+        // TransmitData();
+        // PrintAppData(); //20241209.  Too much data in log.  Send on refresh.
         GetLaserTemperature();
         #ifdef THROTTLE
             ThrottleLaser();

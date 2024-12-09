@@ -11,15 +11,15 @@
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
 #define HOMING_SPEED 50 //20240801 Should this be 100.  50 seems better.
-#define TILT_SLOW_STEP_RATE 1500
-#define TILT_FAST_STEP_RATE 1500
-#define PAN_SLOW_STEP_RATE 400
-#define PAN_FAST_STEP_RATE 10
+#define TILT_SLOW_STEP_RATE 300//1500
+#define TILT_FAST_STEP_RATE 70//1500
+#define PAN_SLOW_STEP_RATE 300//400
+#define PAN_FAST_STEP_RATE 50//10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
 #define TILT_SENSOR_IGNORE 325 //Should this and MAX_TILT be the same (ie only one required)
-#define MAX_TILT 317 //20241204: Ref GM email: "Y shouldnt go above (physically below) Y: 317"
+// #define MAX_TILT 317 //20241204: Ref GM email: "Y shouldnt go above (physically below) Y: 317"
 #define NUM_BATT_READINGS 10
 #define NUM_TEMP_READINGS 10
 #define NIGHT_TRIP_TIME_FROM_STARTUP 240
@@ -35,8 +35,8 @@
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
 #define BUFFER_SIZE 100 //Length of buffer to use for income serial messages.
-#define HIGH_JOG_POS 40 //These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
-#define LOW_JOG_POS 10
+#define HIGH_JOG_POS 400 //These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 100
 #define MIN_PERIMETER_TILT 2// Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
 #define FIXED_PAN_DIFF 200//Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50//Steps between dense perimeter points on tilt only (ie constant pan) boundary segment
@@ -93,14 +93,20 @@
 
 #define SEG_LENGTH 100 //Length (in steps) between straightening points along boundary segments.    
 // 20241119: WigglyBorder_
-#define X_WIGGLY_BORDER_RANGE 40
-#define Y_WIGGLY_BORDER_RANGE 40
-#define NBR_WIGGLY_POINTS 0
+#define X_WIGGLY_BORDER_RANGE 20
+#define Y_WIGGLY_BORDER_RANGE 20
+// #define NBR_WIGGLY_POINTS 0
 
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 
-#define SPEED_SCALE_MIN 100
-#define SPEED_SCALE_MAX 50 //Higher speed requires a lower value of SpeedScale
-#define NBR_RND_MIN 20
+#define SPEED_SCALE_MIN 130
+#define SPEED_SCALE_MAX 20 //Higher speed requires a lower value of SpeedScale
+#define NBR_RND_MIN 1
 #define NBR_RND_MAX 300
+#define TILT_SEP_MIN 1
+#define TILT_SEP_MAX 30
+#define WIGGLY_MIN 0
+#define WIGGLY_MAX 4
+#define LASER_HT_MIN 40 //Decimetres.  ie 40 decimetres = 4m
+#define LASER_HT_MAX 60

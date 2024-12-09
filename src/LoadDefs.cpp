@@ -75,6 +75,8 @@ void ReadEramVars(void){                // Transfer EEPROM user data to RAM
     //     SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
     // }
     SpeedScale = eeprom_read_byte(&EramSpeedScale);
+    LaserHt = eeprom_read_byte(&EramLaserHt);
+    Tilt_Sep = eeprom_read_byte(&Eram_Tilt_Sep);
     ActiveMapZones = eeprom_read_byte(&EramActiveMapZones);
     LaserID = eeprom_read_word(&EramLaserID);
     AccelTripPoint = eeprom_read_word(&EramAccelTripPoint);

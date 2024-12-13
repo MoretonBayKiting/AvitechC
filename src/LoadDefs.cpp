@@ -20,9 +20,7 @@ void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if the
     eeprom_update_byte(&EramLaser2OperateFlag, DEF_LASER_2_OPERATE_FLAG);
     // Map Settings
     eeprom_update_byte(&EramMapTotalPoints, DEF_MAP_TOTAL_PTS);
-    // for(int i = 0; i < 5; i++) {
-    //     eeprom_update_byte(&EramSpeedZone[i], DEF_SPEED);
-    // }
+
     
     eeprom_update_byte(&EramActiveMapZones, DEF_ACTIVE_MAP_ZONES);
     eeprom_update_word(&EramLaserID, DEF_LASER_ID);
@@ -34,19 +32,7 @@ void LoadEramDefaults(void) {  // Load default values to EEPROM (only run if the
     eeprom_update_byte(&EramFactoryLightTripLevel, DEF_FACTORY_LIGHT_TRIP_LEVEL);
     eeprom_update_byte(&EramLightTriggerOperation, DEF_LIGHT_TRIGGER_OPERATION);
     eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
-
-    // // Write a few EEPROM addresses to serial for testing.
-    // sprintf(debugMsg, "EramUserLaserPower: %04x", (uint16_t)&EramUserLaserPower); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramMaxLaserPower: %04x", (uint16_t)&EramMaxLaserPower); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramActiveMapZones: %04x", (uint16_t)&EramActiveMapZones); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramFirstTimeOn: %04x", (uint16_t)&EramFirstTimeOn); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramLightTriggerOperation: %04x", (uint16_t)&EramLightTriggerOperation); uartPrint(debugMsg);
-    // // Read back a few values written to EEPROM
-    // sprintf(debugMsg, "EramUserLaserPower: %d", eeprom_read_byte(&EramUserLaserPower)); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramMaxLaserPower: %d", eeprom_read_byte(&EramMaxLaserPower)); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramActiveMapZones: %d", eeprom_read_byte(&EramActiveMapZones)); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramFirstTimeOn: %d", eeprom_read_byte(&EramFirstTimeOn)); uartPrint(debugMsg);
-    // sprintf(debugMsg, "EramLightTriggerOperation: %d", eeprom_read_byte(&EramLightTriggerOperation)); uartPrint(debugMsg);
+    eeprom_update_byte(&Eram_Tilt_Sep, DEF_TILT_SEP);  
 }
 
 void ReadEramVars(void){                // Transfer EEPROM user data to RAM

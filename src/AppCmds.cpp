@@ -17,7 +17,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
     if (val > oldMax) val = oldMax;
     float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
     float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
-    sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %d", Command, val, static_cast<uint16_t>(r));
+    sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %u", Command, val, static_cast<uint16_t>(r));
     uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
@@ -45,11 +45,11 @@ void DecodeCommsData() {
         case 16: Cmd16(); break;  //BASCOM: SpeedZone1.  Now SpeedScale - see notes with function below.
         case 17: Cmd17(); break;  //BASCOM: SpeedZone2.  Now Nbr_Rnd_Pts
         case 18: Cmd18(); break;  //BASCOM: SpeedZone3.  Now tilt_sep (rung density) 
-        case 19: Cmd19(); break;  //BASCOM: SpeedZone4.  Now wiggly points 
+        case 19: Cmd19(); break;  //BASCOM: SpeedZone4.  20241209.  Wiggly points.
         case 20: Cmd20(); break;  //BASCOM: SpeedZone5.  LaserHt 
         // case 15: Cmd15(); break;  //MinimumLaserPower - needs attention
         case 21: Cmd21(); break;  //Needed, as null, to listen to bespoke app.
-        // case 24: Cmd24(); break;
+        case 24: Cmd24(); break;
         // case 25: Cmd25(); break;
         // case 26: Cmd26(); break;
         // case 27: Cmd27(); break;
@@ -408,6 +408,13 @@ void Cmd21() { //Need to listen for this from app.  Was previously something to 
     // ResetSeconds = Instruction;
     // Audio2(1,2,0);//,"AC30");
 }
+
+void Cmd24(){//20241212 Report vertices to app
+    for (uint8_t zn=1;zn<=NBR_ZONES;zn++){
+        LoadZoneMap(zn,true);
+    }
+}
+
 void Cmd30() {
     eeprom_update_word(&EramResetSeconds, Instruction);
     ResetSeconds = Instruction;
@@ -475,7 +482,6 @@ void Cmd38() {
 void Cmd39(){
     received39 = true;
     // testLaserPower();
-    // SetLaserVoltage(255);
     sprintf(debugMsg,"Cmd39: LaserPower: %d,",LaserPower);
     uartPrint(debugMsg);
 }

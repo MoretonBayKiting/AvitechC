@@ -274,7 +274,7 @@ uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 5;//20241209 Previously 1.  Needs testing.
 uint8_t nbrWigglyPts = 0;
 uint8_t EEMEM EramSpeedScale;
-uint8_t SpeedScale = 100; //Treat as percentage
+uint8_t SpeedScale = 30; //Low value sets higher interrupt rate so higher speed.  30 seems to be a good fast value. Tune with <16:percentage> message.
 uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50;//Units are decimetres.  50 => 5metres
 
@@ -585,10 +585,12 @@ void ProcessBuffer(char* buffer) {
 
                 // Debug print: Log parsed command and instruction
                 #ifdef BASE_PRINT
-                    uartPrint("Cmd: ");
-                    uartPrint(String(Command).c_str());
-                    uartPrint("Instruction: ");
-                    uartPrint(String(Instruction).c_str());
+                    sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
+                    uartPrint(debugMsg);
+                    // uartPrint("Cmd: ");
+                    // uartPrint(String(Command).c_str());
+                    // uartPrint("Instruction: ");
+                    // uartPrint(String(Instruction).c_str());
                 #endif
                 DecodeCommsData();  // Process the command and instruction
             }
@@ -825,21 +827,26 @@ void GetBatteryVoltage() {
     }
 }
 
-// void SetLaserVoltage(uint8_t voltage) {
 void SetLaserVoltage(uint16_t voltage) {
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);  
+    static uint16_t prevVoltage = 0;
     uint16_t thisVoltage = voltage;
-    // sprintf(debugMsg,"In SetLV.  voltage: %d", voltage);
-    // uartPrint(debugMsg);
     if ((voltage<256) && (voltage>2)){ //If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
         thisVoltage = (voltage<<4);
     }
+    #ifdef BASE_PRINT
+        if(prevVoltage != thisVoltage){
+            sprintf(debugMsg,"In SetLV.  voltage: %u, prevVoltage: %u", thisVoltage, prevVoltage);
+            uartPrint(debugMsg);
+        }
+    #endif
     // 20241205 Imported from BASCOM version, previously not here.
     if(voltage>0 and BatteryTick>4){    //Laser on and sample every 2 sec's
       GetBatteryVoltage();
       BatteryTick=0;
     }
     DAC.setValue(thisVoltage);
+    prevVoltage = thisVoltage; 
 }
 
 void firstOn(){
@@ -1377,7 +1384,7 @@ void getMapPtCounts(bool doPrint) {  //Get the number of vertices (user specifie
         Prev_i = i;
     }
 }
-void LoadZoneMap(uint8_t zn) {
+void LoadZoneMap(uint8_t zn, bool print_flag) {
     //---------Gets vertices for given zone from EEPROM.
     //The Y dat MSB 4 bits are the operation zone and the 16 bits LSB is the map point number
     // 1111  1111111111111111
@@ -1407,29 +1414,37 @@ void LoadZoneMap(uint8_t zn) {
         } else {
             MI = MapIndex + MapCount[1][zn_1 - 1];//The index in EramPositions is across all zones whereas the loop index here is for a single zone
         }
-        Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
-        Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-        #ifdef BASE_PRINT   
-            printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
-        #endif
-     } //snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
-    // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
-    Vertices[0][MapIndex] = Vertices[0][0];
-    Vertices[1][MapIndex] = Vertices[1][0];
-    // Get the slope of each segment & store in Vertices[2][i]
-    for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++) { //MapCount[0][zn] is a count of the number of specified vertices, including the last repeated one, in zone 1.
-    // If there are 4 distinct points, then MapCount[0][zn] would be 5. Segments are 0:1, 1:2, 2:3, 3:4  So start from 1 and consider MapIndex and (MapIndex - 1) as the segment endpoints.
-        if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1])>MIN_PERIMETER_TILT){ //If the difference in Ys is big enough, get slope.
-            float num = static_cast<float>(Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10;
-            float den = static_cast<float>(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
-            if (abs(den)>=1) {
-                res = static_cast<float>(num)/den;
-            } else {
-                // uartPrint("Abs(den)<1");
-            }
-            Vertices[2][MapIndex - 1] = res;
+        if(!print_flag){
+            Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
+            Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
+            #ifdef BASE_PRINT   
+                printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex,MapIndex);
+            #endif
         } else {
-            Vertices[2][MapIndex - 1] = DEF_SLOPE ; //Set an extreme value where delta(x) is potentially large and delta(y) is small.
+            sprintf(debugMsg,"<24: Zn: %d, X: %d, Y: %d>", zn, eeprom_read_word(&EramPositions[MI].EramX), Vertices[1][MapIndex], eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF);
+            uartPrint(debugMsg);
+        }
+    }
+ //snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    // Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
+    if(!print_flag){
+        Vertices[0][MapIndex] = Vertices[0][0];
+        Vertices[1][MapIndex] = Vertices[1][0];
+        // Get the slope of each segment & store in Vertices[2][i]
+        for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++) { //MapCount[0][zn] is a count of the number of specified vertices, including the last repeated one, in zone 1.
+        // If there are 4 distinct points, then MapCount[0][zn] would be 5. Segments are 0:1, 1:2, 2:3, 3:4  So start from 1 and consider MapIndex and (MapIndex - 1) as the segment endpoints.
+            if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1])>MIN_PERIMETER_TILT){ //If the difference in Ys is big enough, get slope.
+                float num = static_cast<float>(Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10;
+                float den = static_cast<float>(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+                if (abs(den)>=1) {
+                    res = static_cast<float>(num)/den;
+                } else {
+                    // uartPrint("Abs(den)<1");
+                }
+                Vertices[2][MapIndex - 1] = res;
+            } else {
+                Vertices[2][MapIndex - 1] = DEF_SLOPE ; //Set an extreme value where delta(x) is potentially large and delta(y) is small.
+            }
         }
     }
 }
@@ -1508,12 +1523,13 @@ void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt) {
             maxTilt = y;
         }
     }
+    
 }
 uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin){//, int &rhoMax, int &rhoMin){
     rhoMin = getCartFromTilt(maxTilt);
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint8_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
-    #ifdef DEBUG
+    #ifdef BASE_PRINT
         sprintf(debugMsg,"rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ",rhoMax,rhoMin, minTilt, maxTilt,Tilt_Sep, temp);
         uartPrint(debugMsg);
     #endif
@@ -1665,13 +1681,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
                 pt2[0] = Vertices[0][seg+1];
                 pt2[1] = Vertices[1][seg+1];
             }
-            #ifdef BASE_PRINT
-                // #ifndef ISOLATED_BOARD
-                    sprintf(debugMsg,"Distance %u \r\n", distance(pt1,pt2));
-                    uartPrint(debugMsg);            
-                // #endif
-            #endif
             nbrSegPts = static_cast<uint8_t>(distance(pt1,pt2)/SEG_LENGTH);//This is the number of dense points to be placed along the segment, excluding wiggly points.
+            #ifdef BASE_PRINT
+                    sprintf(debugMsg,"Distance: %u, nbrSegPts: %u", distance(pt1,pt2), nbrSegPts);
+                    uartPrint(debugMsg);            
+            #endif
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
             segPt++; //20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
@@ -1733,8 +1747,18 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
         //     sprintf(debugMsg,"pat %d,rnd %d, nbrRungs %d,tilt %d, rhoMin %d, fstSeg %d, sndSeg %d, X %d, Y %d",pat, RndNbr, nbrRungs, tilt, rhoMin, fstSeg, sndSeg, X, Y);
         //     uartPrint(debugMsg);            
         // #endif
-
+    #ifdef BASE_PRINT
+        static int LastX = 0;
+        static int LastY = 0;
+        if (X != LastX || Y != LastY) {
+                sprintf(debugMsg, "<25: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
+                uartPrint(debugMsg);
+            LastX = X;
+            LastY = Y;
+        }
+    #endif
         ind++;
+
     }
     #ifdef DEBUG
         sprintf(debugMsg,"Index: %d, Rnd: %d, X: %d,Y: %d",ind, RndNbr, X,Y);
@@ -1753,19 +1777,6 @@ void ProcessCoordinates() {
 
     Dx = X - AbsX; // Distance to move
     Dy = Y - AbsY; // Distance to move
-
-    #ifdef BASE_PRINT
-        static int LastX = 0;
-        static int LastY = 0;
-        if (X != LastX || Y != LastY) {
-            // #ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "T_S: %d, P_S: %d, AbsX: %d, AbsY: %d, X: %d, Y: %d \r\n", (PINB & (1 << TILT_STOP)) != 0, (PINB & (1 << PAN_STOP)) != 0,AbsX, AbsY, X, Y);
-                uartPrint(debugMsg);
-            // #endif
-            LastX = X;
-            LastY = Y;
-        }
-    #endif
 
     if ((Dx==0) && (Dy == 0)){ //20240623: Explicitly exclude this case.
         StepCount = 0;
@@ -1824,18 +1835,6 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop) { // Call from Jo
         #endif
         while (SteppingStatus == 1) {
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
-            // CheckBlueTooth();  //This should not be necessary.
-            // if (!(MM_n % 10000)){// && false) { //20240624: Use && false to disable periodic printing.
-                // MM_n2++; //Use this to distinguish b/w apparently identical messages.
-                // sprintf(debugMsg,"MM: MM_n2, mode, C, I, axis, PEF, TEF, X, AbsX, DSS, PIND: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, SetupModeFlag, Command, Instruction, axis, PanEnableFlag, TiltEnableFlag,X, AbsX, DSS_preload, PIND);
-                // uartPrint(debugMsg);
-                // _delay_ms(30);
-                // sprintf(debugMsg,"MM2: X, Y, Dx, Dy, AbsX, AbsY, PIND: %d, %d, %d, %d, %d, %d, %d, %#04x",MM_n2, X, Y, Dx, Dy, AbsX, AbsY, PIND);
-                // uartPrint(debugMsg);
-                // _delay_ms(30);
-                DoHouseKeeping();
-            // }
-            // MM_n++;
         }
     }
 }
@@ -2098,11 +2097,9 @@ void RunSweep(uint8_t zn) {
     bool startRung = true;
 
     SetLaserVoltage(0);//20240727.  Off while GetPerimeter() is being calculated.
-    LoadZoneMap(zn);
+    LoadZoneMap(zn, false);
     getExtremeTilt(MapCount[0][zn],minTilt,maxTilt);
     uint8_t nbrRungs = getNbrRungs(maxTilt,minTilt,rhoMin);//rhoMin is set by this function
-    // sprintf(debugMsg,"Rungs %d rhoMin %d",nbrRungs,rhoMin);
-    // uartPrint(debugMsg);
     for (PatType = 1; PatType <= 4; PatType++) {
         #ifdef BASE_PRINT //GHOST
             if (LastPatType!=PatType){
@@ -2111,16 +2108,10 @@ void RunSweep(uint8_t zn) {
                 uartPrint(debugMsg);
             }
         #endif
-        #ifdef BASE_PRINT
-            #ifndef ISOLATED_BOARD 
-                sprintf(debugMsg, "RS. Zone: %d Pattern: %d Rungs: %d", zn, PatType, nbrRungs);
-                uartPrint(debugMsg);
-            #endif
-        #endif
         while (ind < Nbr_Rnd_Pts) { //ind is incremented in getXY(), but not for the boundary, only for rungs.
             startRung = getXY(PatType, zn, ind, rhoMin, nbrRungs);
             #ifdef DEBUG
-                sprintf(debugMsg,"StartRung: %d Ind: %d Rnd: %d X: %d Y: %d", startRung,Index, RndNbr, X,Y);
+                sprintf(debugMsg,"Ind: %d Rnd: %d X: %d Y: %d", ind, RndNbr, X,Y);
                 uartPrint(debugMsg);
             #endif
             // if (false){ //20241123ish.  Used for testing new cnt rather than index.  Removed, 20241129.
@@ -2464,6 +2455,11 @@ void setup() {
     // Audio2(5,1,1);//,"Setup"); 
     _delay_ms(AUDIO_DELAY);
     HomeAxis();
+    #ifdef BASE_PRINT
+        sprintf(debugMsg,"Setup: Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
+        uartPrint(debugMsg); 
+    #endif
+    
     #ifdef ISOLATED_BOARD
         uartPrintFlash(F("End setup \n"));
     #endif

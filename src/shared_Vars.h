@@ -8,7 +8,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-// #define ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
     #define ISOLATED_BOARD_INTERVAL 10
 #endif
@@ -155,5 +155,6 @@ void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 
 void PrintEramVars();
+void LoadZoneMap(uint8_t zn, bool print_flag);
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue); 
 #endif // SHARED_VARS_H

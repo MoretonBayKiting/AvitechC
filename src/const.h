@@ -31,7 +31,7 @@
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 //36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0 //20240803: 4000 steps for 90°
-// #define TILT_SEP 10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
+
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
 #define BUFFER_SIZE 100 //Length of buffer to use for income serial messages.
@@ -58,7 +58,7 @@
 #define DEF_OP_MODE 0 
 #define DEF_FIRST_TIME_ON 1
 #define DEF_LASER_ID 0
-
+#define DEF_TILT_SEP 10//Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define DEF_ACCEL_TRIP_POINT 600
 #define DEF_RESET_SECONDS 3600
 

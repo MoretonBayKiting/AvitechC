@@ -106,6 +106,7 @@
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30
+#define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
 #define LASER_HT_MIN 40 //Decimetres.  ie 40 decimetres = 4m

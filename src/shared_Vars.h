@@ -1,5 +1,5 @@
 // shared_vars.h
-// 20240523: Most of these shared variables are declared in Avitech.c, the main file, but used, perhaps only, in AppCmds.c.  It would probably 
+// 20240523: Most of these shared variables are declared in Avitech.c, the main file, but used, perhaps only, in AppCmds.c.  It would probably
 // be better to simply get rid of AppCmds.c.  But the BASCOM structure has been maintained.
 #include "const.h"
 #include <stdint.h>
@@ -10,7 +10,7 @@
 // #define GHOST
 #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
-    #define ISOLATED_BOARD_INTERVAL 10
+#define ISOLATED_BOARD_INTERVAL 10
 #endif
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
 #define BASE_PRINT
@@ -34,7 +34,7 @@ extern uint8_t TiltDirection;
 extern uint8_t TiltSpeed;
 extern uint8_t EramMapTotalPoints;
 extern uint8_t MapTotalPoints;
-extern uint8_t Tick;    
+extern uint8_t Tick;
 extern int X;
 extern int Y;
 extern int Dx;
@@ -62,7 +62,7 @@ extern uint8_t OperationMode;
 extern uint16_t DSS_preload;
 extern uint8_t EramActiveMapZones;
 extern uint8_t ActiveMapZones;
-extern uint16_t EramResetSeconds;  //NOLINT
+extern uint16_t EramResetSeconds; // NOLINT
 extern uint16_t ResetSeconds;
 extern uint8_t EramLaser2OperateFlag;
 extern uint8_t Laser2OperateFlag;
@@ -79,20 +79,21 @@ extern uint8_t FactoryLightTripLevel;
 extern float VoltPerStep;
 extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
-extern bool GyroOnFlag; 
+extern bool GyroOnFlag;
 extern uint8_t EramGyroAddress;
 
-extern uint32_t JM_n; 
+extern uint32_t JM_n;
 extern uint32_t MM_n;
 
 // Declare the EramPos struct
 
-typedef struct {
-    uint16_t EramX;             // X map location 2 bytes
-    uint16_t EramY;             // Y map location 2 bytes. Operation data is also stored in this variable in the first 4 bits
+typedef struct
+{
+    uint16_t EramX; // X map location 2 bytes
+    uint16_t EramY; // Y map location 2 bytes. Operation data is also stored in this variable in the first 4 bits
 } EramPos;
 // Declare the EramPositions array with elements of type EramPos
-extern EramPos EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
+extern EramPos EramPositions[MAX_NBR_MAP_PTS]; // NOLINT
 
 // extern union {
 //     int Z_accel;
@@ -105,7 +106,7 @@ extern EramPos EramPositions[MAX_NBR_MAP_PTS];  //NOLINT
 extern uint16_t Instruction;
 extern uint8_t Command;
 extern bool received39;
-extern char debugMsg[DEBUG_MSG_LENGTH];  // Buffer for debug messages
+extern char debugMsg[DEBUG_MSG_LENGTH]; // Buffer for debug messages
 // 20240726 Tuning parameters - possibly not required in production version
 extern uint16_t Eram_Step_Rate_Min;
 extern uint16_t Step_Rate_Min;
@@ -128,12 +129,12 @@ extern uint8_t LaserHt;
 // Functions
 void GetLaserTemperature();
 void ThrottleLaser();
-void Audio2(uint8_t cnt, uint8_t OnPd,uint8_t OffPd);
-void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char* debugInfo);// Declaration of Audio2, overloaded, with debugInfo
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd);
+void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo); // Declaration of Audio2, overloaded, with debugInfo
 void ProcessCoordinates();
 void ProgrammingMode();
 void setupWatchdog();
-void TransmitData();    
+void TransmitData();
 void PrintAppData();
 void PrintConfigData();
 // void CalcSpeedZone();
@@ -145,7 +146,7 @@ void GetLightLevel();
 void DecodeCommsData();
 void ReadEramVars();
 void LoadEramDefaults();
-void uartPrint(const char* str);
+void uartPrint(const char *str);
 // void uartPrintFlash(const __FlashStringHelper* message);
 void printToBT(uint8_t cmd, uint16_t inst);
 void StopTimer1();
@@ -153,8 +154,8 @@ void StopTimer3();
 void setupTimer1();
 void setupTimer3();
 void initMPU();
-void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue); 
+void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue);
 void PrintEramVars();
 void LoadZoneMap(uint8_t zn, bool print_flag);
-// void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue); 
+// void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
 #endif // SHARED_VARS_H

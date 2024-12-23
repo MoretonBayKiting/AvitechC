@@ -1,7 +1,6 @@
 #ifndef APPCMDS_H
 #define APPCMDS_H
 
-
 #include <stdint.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>

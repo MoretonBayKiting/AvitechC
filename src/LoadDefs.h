@@ -1,7 +1,5 @@
 // LoadDefaultsModule.h
 
-
-
 #ifndef LOAD_DEFS_H
 #define LOAD_DEFS_H
 

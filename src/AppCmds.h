@@ -53,6 +53,7 @@ void Cmd48(void);
 void Cmd49(void);
 void Cmd50(void);
 void Cmd51(void);
+void CmdStorePts(void);
 // void Cmd52(void);
 
 void DecodeCommsData(void);

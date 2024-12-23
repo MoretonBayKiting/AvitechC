@@ -155,6 +155,13 @@ void DecodeCommsData()
         // case 52: Cmd52(); break;  //SpeedScale
         // case 53: Cmd53(); break;  //LaserHt
         // case 54: Cmd54(); break;  //WigglyPts
+    case 60: // Check zones.
+        CheckZones(Instruction);
+        break; // Update ActiveMapZones (in EEPROM)
+
+    case FST_STORE_PT_INDEX ... 3 * MAX_NBR_MAP_PTS:
+        CmdStorePts();
+        break;
     }
 }
 
@@ -679,3 +686,32 @@ void Cmd51()
 //     // LoadActiveMapZones(); //Does this need to be run?
 //     Audio2(1,2,0);//,"AC23");
 // }
+
+void CmdStorePts()
+{
+    uint8_t z;
+    uint8_t index;
+    uint16_t eepromAddress;
+    index = (Command - FST_STORE_PT_INDEX) % MAX_NBR_MAP_PTS;
+    if (Command < FST_STORE_PT_INDEX + MAX_NBR_MAP_PTS) // Instruction is zone
+    {
+        z = 1 << (12 + Instruction);
+        eepromAddress = (uint16_t)&EramPositions[index].EramY;
+        eeprom_update_word((uint16_t *)eepromAddress, z);
+    }
+    if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS)
+    {
+        uint16_t OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
+        eepromAddress = (uint16_t)&EramPositions[index].EramY;
+        eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | (Instruction & 0x0FFF));
+    }
+    if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS)
+    {
+        eepromAddress = (uint16_t)&EramPositions[index].EramX;
+        eeprom_update_word((uint16_t *)eepromAddress, Instruction);
+    }
+    uint8_t MapPointNumber = static_cast<uint8_t>(index);
+    // MapTotalPoints = std:max(MapTotalPoints, MapPointNumber);
+    // if(MapPointNumber>MapTotalPoints)
+    MapTotalPoints = MapPointNumber;
+}

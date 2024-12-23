@@ -90,10 +90,10 @@ extern uint32_t MM_n;
 typedef struct
 {
     uint16_t EramX; // X map location 2 bytes
-    uint16_t EramY; // Y map location 2 bytes. Operation data is also stored in this variable in the first 4 bits
+    uint16_t EramY; // Y map location 2 bytes. Zone is stored in highest 4 bits, Y value in lowest 12 bits
 } EramPos;
 // Declare the EramPositions array with elements of type EramPos
-extern EramPos EramPositions[MAX_NBR_MAP_PTS]; // NOLINT
+extern EramPos EramPositions[MAX_NBR_MAP_PTS];
 
 // extern union {
 //     int Z_accel;
@@ -157,5 +157,7 @@ void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue);
 void PrintEramVars();
 void LoadZoneMap(uint8_t zn, bool print_flag);
+uint8_t GetZone(uint8_t i);
+void CheckZones(uint8_t zone);
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
 #endif // SHARED_VARS_H

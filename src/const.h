@@ -27,7 +27,7 @@
 #define ONE_SECOND 20
 #define NBR_ZONES 4
 #define MAX_NBR_VERTICES 10 // This is the maximum number of vertices per zone/map
-#define MAX_NBR_MAP_PTS 40  // This is the maximum overall number of vertices
+#define MAX_NBR_MAP_PTS 32  // This is the maximum overall number of vertices
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
@@ -111,3 +111,5 @@
 #define WIGGLY_MAX 4
 #define LASER_HT_MIN 40 // Decimetres.  ie 40 decimetres = 4m
 #define LASER_HT_MAX 60
+
+#define FST_STORE_PT_INDEX 128

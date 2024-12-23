@@ -1589,6 +1589,7 @@ uint8_t GetZone(uint8_t i)
         return 0;
     }
 }
+
 void getMapPtCounts(bool doPrint)
 { // Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
     uint8_t MapIndex;
@@ -1717,6 +1718,7 @@ void LoadZoneMap(uint8_t zn, bool print_flag)
         }
     }
 }
+
 void floatToString(char *buffer, float value, int precision)
 {
     dtostrf(value, 0, precision, buffer);
@@ -2382,14 +2384,14 @@ void HomeMotor(uint8_t axis, int steps)
     {
         while (!(PINB & (1 << PAN_STOP)))
         { // While pan_stop pin is low.
-            // do nothing while motor moves
+          // do nothing while motor moves
         }
     }
     else
     {
         while (!(PINB & (1 << TILT_STOP)))
         { // While tilt_stop pin is low.
-            // do nothing while motor moves
+          // do nothing while motor moves
         }
     }
 #endif
@@ -2420,8 +2422,8 @@ void MoveLaserMotor()
     setupTimer1();
     while (SteppingStatus == 1)
     { // do nothing while motor moves
-        // uartPrintFlash(F("In MLM"));
-        // DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
+      // uartPrintFlash(F("In MLM"));
+      // DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
     }
     StopTimer1();  // Stop the motor from stepping as sensor has been triggered.  20240615: The sensor has not been triggered. This is called when the target position is reached.
     StepCount = 0; // Clear the step count
@@ -2579,6 +2581,17 @@ void RunSweep(uint8_t zn)
         ind = 0;
     }
     ResetTiming();
+}
+
+void CheckZones(uint8_t zone)
+{
+    static uint8_t Current_Nbr_Rnd_Pts = 0;
+    Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
+    Nbr_Rnd_Pts = 0;                   // Set to zero so that RunSweep() only does the boundary.
+    getMapPtCounts(false);             // Load zone data (count of vertices by zone) from eeprom to MapCount array
+    LoadZoneMap(zone, false);
+    RunSweep(zone);
+    Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
 }
 
 void TransmitData()

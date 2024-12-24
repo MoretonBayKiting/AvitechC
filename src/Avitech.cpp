@@ -1677,7 +1677,7 @@ void LoadZoneMap(uint8_t zn, bool print_flag)
         {
             Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
             Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
-#ifdef BASE_PRINT // GHOST
+#ifdef LOG_PRINT // GHOST
             printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex, MapIndex);
 #endif
         }
@@ -1943,15 +1943,13 @@ uint16_t distance(int pt1[2], int pt2[2])
 #endif
     return dist;
 }
-bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRungs)
+bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint8_t nbrRungs)
 {
     static uint8_t wigglyPt = 0;
     static int thisRes[2], tilt = 0;
     static int nextRes[2], beginRes[2], endRes[2];
     static bool startRung = true;
     static bool endRung = false;
-    // static bool pat3=true; // Boolean to toggle if pattern 3 is being used.
-    static uint8_t lastPat = 0;
     static uint8_t rung = 0;
 
     static uint8_t nbrSegPts = 0;
@@ -1962,11 +1960,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
 
     static uint8_t rungMidPtCnt = 0; // 20241219.  Count of mid points passed while traversing a rung.
 
-    if (pat != lastPat)
+    if (newPatt)
     { // Test for a new pattern and, if so, reset seg.
         seg = 0;
     }
-    lastPat = pat;
     // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
     if (seg < MapCount[0][zn])
     { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
@@ -2105,7 +2102,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, uint8_t rhoMin, uint8_t nbrRun
         // sprintf(debugMsg, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
         // uartPrint(debugMsg);
     }
-#ifdef BASE_PRINT
+#ifdef LOG_PRINT
     static int LastX = 0;
     static int LastY = 0;
     if (X != LastX || Y != LastY)
@@ -2291,11 +2288,23 @@ void JogMotors(bool prnt)
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
+    static int lastAbsX = 0;
+    static int lastAbsY = 0;
     JogFlag = 0;
     int pos = 0;
     avoidLimits(false);
     avoidLimits(true);
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
+
+    if (AbsX != lastAbsX || AbsY != lastAbsY)
+    {
+        printToBT(34, AbsX);
+        printToBT(35, AbsY);
+    }
+
+    lastAbsX = AbsX;
+    lastAbsY = AbsY;
+
     if (PanEnableFlag == 1)
     {
         SteppingStatus = 1;
@@ -2332,9 +2341,15 @@ void JogMotors(bool prnt)
 #endif
         // MoveMotor(axis, pos, 1);  //20241209.  Replace with next, including ProcessCoordinates(), in order to smooth jogging.
         if (axis == 0)
+        {
             X = pos;
+            // printToBT(34, AbsX);
+        }
         else
+        {
             Y = pos;
+            // printToBT(35, AbsY);
+        }
         ProcessCoordinates();
     }
     JogFlag = 0;
@@ -2516,26 +2531,30 @@ void RunSweep(uint8_t zn)
     int maxTilt = 0;
     int rhoMin = 0;
     bool runSweepStartRung = true; // 20241221.  This was startRung.  Change to runSweepStartRung to distinguish from that used (locally) in getXY().
+    bool newPatt = true;
 
     SetLaserVoltage(0); // 20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn, false);
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint8_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
-    // for (PatType = 1; PatType <= 4; PatType++) {
-    for (PatType = 3; PatType <= 3; PatType++)
-    {             // Test pattern 3 ghost point
-#ifdef BASE_PRINT // GHOST
-        static uint8_t LastPatType;
-        if (LastPatType != PatType)
+    for (PatType = 1; PatType <= 4; PatType++)
+    {
+        // for (PatType = 3; PatType <= 3; PatType++) // Test pattern 3 ghost point
+        // {
+#ifdef LOG_PRINT // GHOST
+        // static uint8_t LastPatType;
+        // if (LastPatType != PatType)
+        if (cnt == 0)
         {
-            LastPatType = PatType;
+            // LastPatType = PatType;
             sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
             uartPrint(debugMsg);
         }
 #endif
         while (ind < Nbr_Rnd_Pts)
         { // ind is incremented in getXY(), but not for the boundary, only for rungs.
-            runSweepStartRung = getXY(PatType, zn, ind, rhoMin, nbrRungs);
+            runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
+            newPatt = false; // Set this
             if (cnt == 0 && PatType == 1)
             { // 20240727:Laser off as it moves towards 0th point of cycle.
                 CmdLaserOnFlag = false;
@@ -2581,6 +2600,7 @@ void RunSweep(uint8_t zn)
         ind = 0;
     }
     ResetTiming();
+    newPatt = true;
 }
 
 void CheckZones(uint8_t zone)

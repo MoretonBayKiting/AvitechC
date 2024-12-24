@@ -8,12 +8,13 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-#define ISOLATED_BOARD
+// #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 #endif
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
-#define BASE_PRINT
+// #define BASE_PRINT
+#define LOG_PRINT
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables
@@ -125,6 +126,7 @@ extern uint8_t EramSpeedScale;
 extern uint8_t SpeedScale;
 extern uint8_t EramLaserHt;
 extern uint8_t LaserHt;
+extern uint8_t MapCount[2][NBR_ZONES];
 
 // Functions
 void GetLaserTemperature();
@@ -147,7 +149,7 @@ void DecodeCommsData();
 void ReadEramVars();
 void LoadEramDefaults();
 void uartPrint(const char *str);
-// void uartPrintFlash(const __FlashStringHelper* message);
+// void uartPrintFlash(const __FlashStringHelper *message);
 void printToBT(uint8_t cmd, uint16_t inst);
 void StopTimer1();
 void StopTimer3();
@@ -159,5 +161,7 @@ void PrintEramVars();
 void LoadZoneMap(uint8_t zn, bool print_flag);
 uint8_t GetZone(uint8_t i);
 void CheckZones(uint8_t zone);
+void GoToMapIndex();
+void getMapPtCounts(bool doPrint);
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
 #endif // SHARED_VARS_H

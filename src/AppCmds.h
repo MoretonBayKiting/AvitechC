@@ -54,6 +54,8 @@ void Cmd49(void);
 void Cmd50(void);
 void Cmd51(void);
 void CmdStorePts(void);
+void GoToMapIndex();
+void ReportVertices();
 // void Cmd52(void);
 
 void DecodeCommsData(void);

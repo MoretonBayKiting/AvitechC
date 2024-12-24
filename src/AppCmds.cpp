@@ -156,8 +156,12 @@ void DecodeCommsData()
         // case 53: Cmd53(); break;  //LaserHt
         // case 54: Cmd54(); break;  //WigglyPts
     case 60: // Check zones.
-        CheckZones(Instruction);
-        break; // Update ActiveMapZones (in EEPROM)
+        GoToMapIndex();
+        // CheckZones(Instruction);
+        break;            // Update ActiveMapZones (in EEPROM)
+    case 61:              // Check zones.
+        ReportVertices(); // Report vertices back to app
+        break;
 
     case FST_STORE_PT_INDEX ... 3 * MAX_NBR_MAP_PTS:
         CmdStorePts();
@@ -699,13 +703,13 @@ void CmdStorePts()
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
         eeprom_update_word((uint16_t *)eepromAddress, z);
     }
-    if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS)
+    else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS)
     {
         uint16_t OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
         eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | (Instruction & 0x0FFF));
     }
-    if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS)
+    else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS)
     {
         eepromAddress = (uint16_t)&EramPositions[index].EramX;
         eeprom_update_word((uint16_t *)eepromAddress, Instruction);
@@ -714,4 +718,38 @@ void CmdStorePts()
     // MapTotalPoints = std:max(MapTotalPoints, MapPointNumber);
     // if(MapPointNumber>MapTotalPoints)
     MapTotalPoints = MapPointNumber;
+}
+
+void GoToMapIndex()
+{
+    // uint8_t z;
+    uint16_t eepromAddress;
+    // getMapPtCounts(false); // Load zone data (count of vertices by zone) from eeprom to MapCount array
+    X = eeprom_read_word(&EramPositions[Instruction].EramX);
+    Y = eeprom_read_word(&EramPositions[Instruction].EramY) & 0x0FFF;
+    setupTimer1();
+    ProcessCoordinates();
+}
+
+void ReportVertices()
+{
+    getMapPtCounts(false);
+    for (uint8_t i = 0; i < MapTotalPoints; i++)
+    {
+        uint8_t n = 0;
+        uint8_t z = 0;
+        z = GetZone(i) - 1;
+        // sprintf(debugMsg, "i: %d, z: %d, MC0i: %d, MC1i: %d, X: %d, Y: %d", i, z, MapCount[0][i], MapCount[1][i], eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF);
+        // uartPrint(debugMsg);
+        if (z > 0)
+            n = i - MapCount[1][z - 1]; // MapCount[1][z] is the cumulative number of vertices (not including doubling the first vertex) to zone z.
+        else
+            n = i;
+
+        sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF);
+        uartPrint(debugMsg);
+        _delay_ms(REPORT_VERTICES_DELAY);
+    }
+    // uartPrintFlash(F("<61:>"));
+    uartPrint("<61:>");
 }

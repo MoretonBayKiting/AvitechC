@@ -8,13 +8,16 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-// #define ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
+extern bool isolated_board_flag;
+extern uint16_t isolated_board_factor;
 #endif
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
 // #define BASE_PRINT
 #define LOG_PRINT
+#define NEW_APP
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables
@@ -151,6 +154,8 @@ void LoadEramDefaults();
 void uartPrint(const char *str);
 // void uartPrintFlash(const __FlashStringHelper *message);
 void printToBT(uint8_t cmd, uint16_t inst);
+void printToBT(uint8_t cmd, int inst);
+void printToBT(uint8_t cmd, long inst);
 void StopTimer1();
 void StopTimer3();
 void setupTimer1();

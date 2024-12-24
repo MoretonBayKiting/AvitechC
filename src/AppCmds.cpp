@@ -155,6 +155,9 @@ void DecodeCommsData()
         // case 52: Cmd52(); break;  //SpeedScale
         // case 53: Cmd53(); break;  //LaserHt
         // case 54: Cmd54(); break;  //WigglyPts
+    case 59:
+        isolated_board_factor = Instruction;
+        break;
     case 60: // Check zones.
         GoToMapIndex();
         // CheckZones(Instruction);
@@ -690,7 +693,7 @@ void Cmd51()
 //     // LoadActiveMapZones(); //Does this need to be run?
 //     Audio2(1,2,0);//,"AC23");
 // }
-
+#ifdef NEW_APP
 void CmdStorePts()
 {
     uint8_t z;
@@ -753,3 +756,4 @@ void ReportVertices()
     // uartPrintFlash(F("<61:>"));
     uartPrint("<61:>");
 }
+#endif

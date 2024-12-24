@@ -41,8 +41,12 @@ int X = 0;              // X position requested to move EG X=100   .Move X 100 s
 int Y = 0;              // Y position requested to move EG X=100   .Move X 100 steps
 int AbsX = 0;           // X absolute position from home position
 int AbsY = 0;           // Y absolute position from home position
-int Dy;                 // Used to calulate how many steps required on Y axis from last position
-int Dx;                 // Used to calulate how many steps required on X axis from last position
+#ifdef ISOLATED_BOARD
+bool isolated_board_flag = false;
+uint16_t isolated_board_factor = 20;
+#endif
+int Dy; // Used to calulate how many steps required on Y axis from last position
+int Dx; // Used to calulate how many steps required on X axis from last position
 
 bool rndLadBit; // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
@@ -683,6 +687,22 @@ void printToBT(uint8_t cmd, uint16_t inst)
 {
     char printToBTMsg[20];
     sprintf(printToBTMsg, "<%02d:%04x>", cmd, inst);
+    uartPrint(printToBTMsg);
+    _delay_ms(20);
+}
+
+void printToBT(uint8_t cmd, int inst) // 20241225 Overload printToBT to allow int as 2nd argument.
+{
+    char printToBTMsg[20];
+    sprintf(printToBTMsg, "<%02d:%04x>", cmd, inst);
+    uartPrint(printToBTMsg);
+    _delay_ms(20);
+}
+
+void printToBT(uint8_t cmd, long inst) // Overload further to cover the printToBT(25, LightLevel); case.  There's likely a better solution.
+{
+    char printToBTMsg[20];
+    sprintf(printToBTMsg, "<%02d:%08lx>", cmd, inst);
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
@@ -2121,8 +2141,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 void ProcessCoordinates()
 {
 #ifdef ISOLATED_BOARD
-    AbsX = X;
-    AbsY = Y;
+    if (isolated_board_flag)
+    {
+        AbsX = X;
+        AbsY = Y;
+    }
     StepCount = 0;
     SteppingStatus = 0;
 #endif
@@ -2295,13 +2318,17 @@ void JogMotors(bool prnt)
     avoidLimits(false);
     avoidLimits(true);
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
-
+#ifdef NEW_APP
+#ifdef LOG_PRINT
     if (AbsX != lastAbsX || AbsY != lastAbsY)
     {
+        // sprintf(debugMsg,"AbsX: %d, AbsY: %d", AbsX, AbsY);
+        // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
     }
-
+#endif
+#endif
     lastAbsX = AbsX;
     lastAbsY = AbsY;
 
@@ -2323,8 +2350,11 @@ void JogMotors(bool prnt)
     }
 
     pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
-    pos = pos * (dir ? 1 : -1);                      // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
-    pos += (axis == 0) ? AbsX : AbsY;                // 2024620: Add an amount, pos, to AbsX.  This becomes X (or Y) when MoveMotor is called. So (X - AbsX) is the increment.  When that is reached,
+#ifdef ISOLATED_BOARD
+    pos = pos / isolated_board_factor;
+#endif
+    pos = pos * (dir ? 1 : -1);       // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
+    pos += (axis == 0) ? AbsX : AbsY; // 2024620: Add an amount, pos, to AbsX.  This becomes X (or Y) when MoveMotor is called. So (X - AbsX) is the increment.  When that is reached,
     // JogMotors would be called again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments
     // AbsX (which would have been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is HIGH_JOG_POS, MoveMotor() should, given
     // the while loop, increment AbsX by HIGH_JOG_POS before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
@@ -2336,19 +2366,22 @@ void JogMotors(bool prnt)
     else
     {
         setupTimer1(); // 20240620.  Could be only if necessary?
-#ifdef ISOLATED_BOARD
-        pos = 0;
-#endif
-        // MoveMotor(axis, pos, 1);  //20241209.  Replace with next, including ProcessCoordinates(), in order to smooth jogging.
+
         if (axis == 0)
         {
             X = pos;
-            // printToBT(34, AbsX);
+            // #ifdef ISOLATED_BOARD
+            //             if (isolated_board_flag)
+            //                 AbsX = X;
+            // #endif
         }
         else
         {
             Y = pos;
-            // printToBT(35, AbsY);
+            // #ifdef ISOLATED_BOARD
+            //             if (isolated_board_flag)
+            //                 AbsY = Y;
+            // #endif
         }
         ProcessCoordinates();
     }
@@ -2398,15 +2431,13 @@ void HomeMotor(uint8_t axis, int steps)
     if (axis == 0)
     {
         while (!(PINB & (1 << PAN_STOP)))
-        { // While pan_stop pin is low.
-          // do nothing while motor moves
+        { // While pan_stop pin is low do nothing while motor moves.
         }
     }
     else
     {
         while (!(PINB & (1 << TILT_STOP)))
-        { // While tilt_stop pin is low.
-          // do nothing while motor moves
+        { // While tilt_stop pin is low do nothing while motor moves.
         }
     }
 #endif
@@ -2432,7 +2463,6 @@ void MoveLaserMotor()
     SteppingStatus = 1;
 #ifdef ISOLATED_BOARD
     SteppingStatus = 0;
-    // break;
 #endif
     setupTimer1();
     while (SteppingStatus == 1)
@@ -2458,6 +2488,14 @@ void NeutralAxis()
     // sprintf(debugMsg,"AbsY %d, Y %d",AbsX, X);
     // uartPrint(debugMsg);
     MoveLaserMotor();
+#ifdef ISOLATED_BOARD
+    X = -4000;
+    AbsX = X;
+    Y = 500;
+    AbsY = Y;
+    // uartPrintFlash(F("HomeAxis \n"));
+#endif
+
     Audio2(1, 2, 0, "Neut");
     // _delay_ms(AUDIO_DELAY);
 }
@@ -2602,7 +2640,7 @@ void RunSweep(uint8_t zn)
     ResetTiming();
     newPatt = true;
 }
-
+#ifdef NEW_APP
 void CheckZones(uint8_t zone)
 {
     static uint8_t Current_Nbr_Rnd_Pts = 0;
@@ -2613,7 +2651,7 @@ void CheckZones(uint8_t zone)
     RunSweep(zone);
     Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
 }
-
+#endif
 void TransmitData()
 {
     int Hexresult;
@@ -2807,14 +2845,20 @@ void DoHouseKeeping()
     DecodeAccelerometer();
 #ifdef ISOLATED_BOARD
     static uint16_t lastTick;
-    if (TJTick != lastTick + ISOLATED_BOARD_INTERVAL)
+    isolated_board_flag = false;
+    if (TJTick != lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor))
     {
         lastTick = TJTick;
         X = AbsX;
         Y = AbsY;
         StepCount = 0;
         SteppingStatus = 0;
+        isolated_board_flag = true;
     }
+    Z_AccelFlag = false;
+    LaserTemperature = 50;
+    SystemFaultFlag = false;
+
 #endif
     // avoidLimits(true); //20240731
     // avoidLimits(false);
@@ -2851,7 +2895,9 @@ void DoHouseKeeping()
         StopTimer1();
         SteppingStatus = 0;
         if (!(dhkn % 30000))
-            uartPrintFlash(F("DHKErr"));
+            sprintf(debugMsg, "DHKerr. IMU: %d, LaserTemp: %d, IMU: %d", Z_AccelFlag, LaserTemperature);
+        uartPrint(debugMsg);
+        // uartPrintFlash(F("DHKErr"));
         ProcessError();
         return;
     }
@@ -2904,7 +2950,6 @@ void setup()
     uartPrint(debugMsg);
 #endif
 #ifdef ISOLATED_BOARD
-    // _delay_ms(2000);
     uartPutChar('\n');
     sprintf(debugMsg, "In setup, ISOLATED_BOARD true");
     uartPrint(debugMsg);

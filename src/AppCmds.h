@@ -53,9 +53,11 @@ void Cmd48(void);
 void Cmd49(void);
 void Cmd50(void);
 void Cmd51(void);
+#ifdef NEW_APP
 void CmdStorePts(void);
 void GoToMapIndex();
 void ReportVertices();
+#endif
 // void Cmd52(void);
 
 void DecodeCommsData(void);

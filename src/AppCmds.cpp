@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-// uint8_t Command;
-// uint16_t Instruction;
 
 // 20241206: Use new ReScale to reinterpret previously used variables (mostly SpeedZone values)
 uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax)
@@ -156,7 +154,9 @@ void DecodeCommsData()
         // case 53: Cmd53(); break;  //LaserHt
         // case 54: Cmd54(); break;  //WigglyPts
     case 59:
+#ifdef ISOLATED_BOARD
         isolated_board_factor = Instruction;
+#endif
         break;
     case 60: // Check zones.
         GoToMapIndex();
@@ -167,6 +167,8 @@ void DecodeCommsData()
         break;
 
     case FST_STORE_PT_INDEX ... 3 * MAX_NBR_MAP_PTS:
+        sprintf(debugMsg, "CmdStorePts about to be called with Cmd: %d, Instr: %d", Command, Instruction);
+        uartPrint(debugMsg);
         CmdStorePts();
         break;
     }
@@ -694,6 +696,14 @@ void Cmd51()
 //     Audio2(1,2,0);//,"AC23");
 // }
 #ifdef NEW_APP
+void printVertices()
+{
+    for (uint8_t i = 0; i < MapTotalPoints; i++)
+    {
+        sprintf(debugMsg, "WPi: %d x: %d y: %d", i, (int)eeprom_read_word(&EramPositions[i].EramX), (int)(eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF));
+        uartPrint(debugMsg);
+    }
+}
 void CmdStorePts()
 {
     uint8_t z;
@@ -705,22 +715,29 @@ void CmdStorePts()
         z = 1 << (12 + Instruction);
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
         eeprom_update_word((uint16_t *)eepromAddress, z);
+        // uartPrintFlash(F("Writing zone"));
+        uartPrint("Writing zone");
     }
     else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS)
     {
         uint16_t OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
         eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | (Instruction & 0x0FFF));
+        // uartPrintFlash(F("Writing EramY"));
+        uartPrint("Writing EramY");
     }
     else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS)
     {
         eepromAddress = (uint16_t)&EramPositions[index].EramX;
         eeprom_update_word((uint16_t *)eepromAddress, Instruction);
+        // uartPrintFlash(F("Writing EramX"));
+        uartPrint("Writing EramX");
     }
     uint8_t MapPointNumber = static_cast<uint8_t>(index);
     // MapTotalPoints = std:max(MapTotalPoints, MapPointNumber);
     // if(MapPointNumber>MapTotalPoints)
     MapTotalPoints = MapPointNumber;
+    printVertices();
 }
 
 void GoToMapIndex()

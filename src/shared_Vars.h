@@ -8,7 +8,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-#define ISOLATED_BOARD
+// #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;

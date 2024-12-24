@@ -1698,7 +1698,7 @@ void LoadZoneMap(uint8_t zn, bool print_flag)
             Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
             Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
 #ifdef LOG_PRINT // GHOST
-            printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex], MapIndex, MapIndex);
+            printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
 #endif
         }
         else

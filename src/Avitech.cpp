@@ -2602,7 +2602,7 @@ void RunSweep(uint8_t zn)
     newPatt = true;
 }
 #ifdef NEW_APP
-void CheckZones(uint8_t zone)
+void TraceBoundary(uint8_t zone)
 {
     static uint8_t Current_Nbr_Rnd_Pts = 0;
     Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
@@ -2748,6 +2748,7 @@ void PrintConfigData()
 
 void sendStatusData()
 {
+    TransmitData();
     PrintAppData();
     PrintConfigData();
 }

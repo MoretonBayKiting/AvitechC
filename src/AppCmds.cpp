@@ -161,7 +161,6 @@ void DecodeCommsData()
         break;
     case 60: // Check zones.
         GoToMapIndex();
-        // CheckZones(Instruction);
         break; // Update ActiveMapZones (in EEPROM)
     case 61:   // ReportVertices and store MapTotalPoints.
         if (Instruction == 0)
@@ -180,6 +179,10 @@ void DecodeCommsData()
 
     case 63:
         sendStatusData();
+        break;
+
+    case 64:
+        TraceBoundary(Instruction); // Instruction is zone (1 based)
         break;
     }
 
@@ -664,6 +667,7 @@ void Cmd54()
         eeprom_update_byte(&EramActiveMapZones, Instruction);
         ActiveMapZones = Instruction;
     }
+    // printToBT(54, 255);
     // else
     //     printToBT(51, ActiveMapZones);
 }
@@ -675,6 +679,7 @@ void Cmd52()
         eeprom_update_byte(&EramActivePatterns, Instruction);
         ActivePatterns = Instruction;
     }
+    // printToBT(52, 255);
     // else
     //     printToBT(52, ActivePatterns);
 }

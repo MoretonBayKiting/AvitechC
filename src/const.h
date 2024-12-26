@@ -54,7 +54,8 @@
 #define DEF_LASER_2_OPERATE_FLAG 0
 #define DEF_MAP_TOTAL_PTS 0
 #define DEF_SPEED 50
-#define DEF_ACTIVE_MAP_ZONES 1
+#define DEF_ACTIVE_MAP_ZONES 15 // 00001111b.
+#define DEF_ACTIVE_PATTERNS 15  // 00001111b.
 #define DEF_OP_MODE 0
 #define DEF_FIRST_TIME_ON 1
 #define DEF_LASER_ID 0
@@ -114,3 +115,4 @@
 
 #define FST_STORE_PT_INDEX 128
 #define REPORT_VERTICES_DELAY 20
+#define REPORT_PERIOD 60 // TJTick increments every 50ms.  Report each time it increments REPORT_PERIOD times.  So 60 will give 3s report period.

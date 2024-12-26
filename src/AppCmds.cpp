@@ -18,17 +18,14 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         val = oldMax;
     float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
     float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
-    sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %u", Command, val, static_cast<uint16_t>(r));
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %u", Command, val, static_cast<uint16_t>(r));
+    // uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
 void DecodeCommsData()
 {
 
-    // sprintf(debugMsg, "In DecodeCommsData: Command: %d, Instruction: %d",Command, Instruction);
-    // uartPrint(debugMsg);
-    // _delay_ms(500);
     switch (Command)
     {
     case 1:
@@ -147,12 +144,16 @@ void DecodeCommsData()
     case 50:
         Cmd50();
         break; // Nbr_Rnd_Pts
-    case 51:
-        Cmd51();
+
+    case 52:
+        Cmd52(); // ActivePatterns
+        break;   // Update ActiveMapZones (in EEPROM)
+    case 53:
+        printPos = Instruction; // printPos is bool so True for any positive value, false if zero.
+        // printPos  determines if some regular run time data is printed - not needed for normal app use.
+    case 54:
+        Cmd54();
         break; // Update ActiveMapZones (in EEPROM)
-        // case 52: Cmd52(); break;  //SpeedScale
-        // case 53: Cmd53(); break;  //LaserHt
-        // case 54: Cmd54(); break;  //WigglyPts
     case 59:
 #ifdef ISOLATED_BOARD
         isolated_board_factor = Instruction;
@@ -161,16 +162,30 @@ void DecodeCommsData()
     case 60: // Check zones.
         GoToMapIndex();
         // CheckZones(Instruction);
-        break;            // Update ActiveMapZones (in EEPROM)
-    case 61:              // Check zones.
-        ReportVertices(); // Report vertices back to app
+        break; // Update ActiveMapZones (in EEPROM)
+    case 61:   // ReportVertices and store MapTotalPoints.
+        if (Instruction == 0)
+        {
+            ReportVertices(); // Report vertices back to app
+        }
+        break;
+        if (Instruction == 1)
+        {
+            eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // MapTotalPoints is set whenever a point is stored.  The app sends <61:1> when it has finished sending points.
+        }
+    case 62:
+        printToBT(54, ActiveMapZones);
+        printToBT(52, ActivePatterns);
         break;
 
-    case FST_STORE_PT_INDEX ... 3 * MAX_NBR_MAP_PTS:
-        sprintf(debugMsg, "CmdStorePts about to be called with Cmd: %d, Instr: %d", Command, Instruction);
-        uartPrint(debugMsg);
-        CmdStorePts();
+    case 63:
+        sendStatusData();
         break;
+    }
+
+    if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
+    {
+        CmdStorePts();
     }
 }
 
@@ -263,11 +278,6 @@ void Cmd8()
 
 void Cmd9()
 {
-    // Debug message to indicate function entry and show received Instruction
-    // sprintf(debugMsg, "Entering cmd9. Instruction: %04x", Instruction);
-    // uartPrint(debugMsg);
-
-    // uint16_t Mask;
     uint16_t OperationZone;
     int16_t ZoneY = Y; // 20240628 ZoneY is Y with zone added. Y populates the 12LSBs and zone is one of the 4MSBs.
 
@@ -276,9 +286,6 @@ void Cmd9()
     // OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
     OperationZone = Instruction & 0xF00; // Get raw Operation Zone from Instruction
     OperationZone >>= 8;                 // Position the Operation Zone bits
-    // Debug message for Operation Zone extraction
-    // sprintf(debugMsg, "Extracted OperationZone: %d", OperationZone);
-    // uartPrint(debugMsg);
     // Decode the binary data for Operation Zone
     switch (OperationZone)
     {
@@ -298,22 +305,10 @@ void Cmd9()
         uartPrint("Invalid Operation Zone!");
         break; // Handle invalid Operation Zone
     }
-    // Debug message for Operation Zone decoding
-    // sprintf(debugMsg, "Decoded OperationZone: %d", OperationZone);
-    // uartPrint(debugMsg);
-
-    // uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0b000011111111); // Get Map Point number from Instruction
     uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0xFF); // Get Map Point number from Instruction
-#ifdef BASE_PRINT
-    sprintf(debugMsg, "MPNbr: %d \n", MapPointNumber);
-    uartPrint(debugMsg);
-    _delay_ms(50); // 20240727: Output (through BT snooper) clashes with next print (MapPoint:) with no delay.  Ref AndDebug20240726Q_SPP.csv
-#endif
+
     MapTotalPoints = MapPointNumber;
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // 20240726 This had not been included
-    // Debug message for Map Point Number extraction
-    // sprintf(debugMsg, "Extracted MapPointNumber: %d", MapPointNumber);
-    // uartPrint(debugMsg);
 
     if (MapPointNumber >= MAX_NBR_MAP_PTS)
     {
@@ -343,11 +338,6 @@ void Cmd9()
 #endif
 
     Audio2(1, 2, 0); //,"AC9");
-// Debug message to indicate function completion
-#ifdef BASE_PRINT
-    sprintf(debugMsg, "cmd9 completed. X: %d, Y: %d, OpZone: %d, Cmd: %d, Inst: %04x, \n", X, Y, OperationZone, Command, Instruction);
-    uartPrint(debugMsg);
-#endif
     setupTimer3();
 }
 
@@ -454,9 +444,6 @@ void Cmd11()
         initMPU();
         Audio2(1, 2, 0); //,"AC11:8");
     }
-    // sprintf(debugMsg,"Gyro add & val: %p, %02x, z_accel: %d",(void*)&EramGyroAddress, GyroAddress, Accel_Z.Z_accel);
-    sprintf(debugMsg, "Gyro add & val: %p, %02x", (void *)&EramGyroAddress, GyroAddress);
-    uartPrint(debugMsg);
 }
 
 void Cmd12()
@@ -465,8 +452,6 @@ void Cmd12()
     eeprom_update_word(&EramAccelTripPoint, Instruction);
     AccelTripPoint = Instruction;
     Audio2(3, 4, 2); //,"AC12");
-    sprintf(debugMsg, "AccelTripPoint: %d", AccelTripPoint);
-    uartPrint(debugMsg);
 }
 
 void Cmd13()
@@ -506,7 +491,7 @@ void Cmd14()
         OpZone = 4;
         break;
     }
-    // uartPrint("<19:%X>", OpZone); // Tell App what point on what map was deleted
+
     printToBT(19, OpZone);
     MapTotalPoints -= 1;
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
@@ -643,9 +628,6 @@ void Cmd38()
 void Cmd39()
 {
     received39 = true;
-    // testLaserPower();
-    sprintf(debugMsg, "Cmd39: LaserPower: %d,", LaserPower);
-    uartPrint(debugMsg);
 }
 
 void Cmd46()
@@ -674,70 +656,72 @@ void Cmd50()
     Nbr_Rnd_Pts = Instruction;
 }
 
-void Cmd51()
-{
-    eeprom_update_byte(&EramActiveMapZones, Instruction);
-    ActiveMapZones = Instruction;
-    // LoadActiveMapZones(); //Does this need to be run?
-    Audio2(1, 2, 0); //,"AC21");
-}
-
-// void Cmd52() { //
-//     eeprom_update_byte(&EramSpeedScale, Instruction);
-//     SpeedScale = Instruction;
-//     // LoadActiveMapZones(); //Does this need to be run?
-//     Audio2(1,2,0);//,"AC22");
-// }
-
-// void Cmd53() { //
-//     eeprom_update_byte(&EramLaserHt, Instruction);
-//     LaserHt = Instruction;
-//     // LoadActiveMapZones(); //Does this need to be run?
-//     Audio2(1,2,0);//,"AC23");
-// }
 #ifdef NEW_APP
-void printVertices()
+void Cmd54()
 {
-    for (uint8_t i = 0; i < MapTotalPoints; i++)
+    if ((Instruction < 0x10) && (Instruction >= 0))
     {
-        sprintf(debugMsg, "WPi: %d x: %d y: %d", i, (int)eeprom_read_word(&EramPositions[i].EramX), (int)(eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF));
-        uartPrint(debugMsg);
+        eeprom_update_byte(&EramActiveMapZones, Instruction);
+        ActiveMapZones = Instruction;
     }
+    // else
+    //     printToBT(51, ActiveMapZones);
 }
+
+void Cmd52()
+{
+    if ((Instruction < 0x10) && (Instruction >= 0))
+    {
+        eeprom_update_byte(&EramActivePatterns, Instruction);
+        ActivePatterns = Instruction;
+    }
+    // else
+    //     printToBT(52, ActivePatterns);
+}
+void Cmd53()
+{
+    sendStatusData();
+}
+
 void CmdStorePts()
 {
-    uint8_t z;
-    uint8_t index;
-    uint16_t eepromAddress;
+    uint8_t z = 0;
+    uint16_t OpZone = 0;
+    uint8_t index = 0;
+    uint16_t eepromAddress = 0;
     index = (Command - FST_STORE_PT_INDEX) % MAX_NBR_MAP_PTS;
     if (Command < FST_STORE_PT_INDEX + MAX_NBR_MAP_PTS) // Instruction is zone
     {
-        z = 1 << (12 + Instruction);
+        z = ((Instruction + 1) & 0x0F); // Store the zone in the upper 4 bits
+        OpZone = z << 12;
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
-        eeprom_update_word((uint16_t *)eepromAddress, z);
-        // uartPrintFlash(F("Writing zone"));
-        uartPrint("Writing zone");
+        eeprom_update_word((uint16_t *)eepromAddress, OpZone);
+        sprintf(debugMsg, "Zone stored: Cmd: %d, Instr: %d, OpZone: %04x, index: %d", Command, Instruction, z, index);
+        uartPrint(debugMsg);
     }
-    else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS)
+    else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS) // Instruction is Y
     {
-        uint16_t OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
+        OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
         eepromAddress = (uint16_t)&EramPositions[index].EramY;
-        eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | (Instruction & 0x0FFF));
-        // uartPrintFlash(F("Writing EramY"));
-        uartPrint("Writing EramY");
+
+        // Correctly handle negative values and mask the lower 12 bits
+        int16_t y_value = static_cast<int16_t>(Instruction);
+        uint16_t masked_y_value = static_cast<uint16_t>(y_value) & 0x0FFF;
+
+        sprintf(debugMsg, "Cmd: %d, Instr: %d, OpZone: %d, index: %d, high: %d, lo: %d", Command, Instruction, OpZone >> 12, index, (OpZone & 0xF000) >> 12, masked_y_value);
+        uartPrint(debugMsg);
+
+        eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | masked_y_value);
     }
-    else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS)
+    else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS) // Instruction is X
     {
         eepromAddress = (uint16_t)&EramPositions[index].EramX;
         eeprom_update_word((uint16_t *)eepromAddress, Instruction);
-        // uartPrintFlash(F("Writing EramX"));
-        uartPrint("Writing EramX");
     }
     uint8_t MapPointNumber = static_cast<uint8_t>(index);
-    // MapTotalPoints = std:max(MapTotalPoints, MapPointNumber);
-    // if(MapPointNumber>MapTotalPoints)
-    MapTotalPoints = MapPointNumber;
-    printVertices();
+    MapTotalPoints = MapPointNumber + 1;
+    _delay_ms(REPORT_VERTICES_DELAY);
+    printToBT(61, 10);
 }
 
 void GoToMapIndex()
@@ -758,19 +742,26 @@ void ReportVertices()
     {
         uint8_t n = 0;
         uint8_t z = 0;
-        z = GetZone(i) - 1;
-        // sprintf(debugMsg, "i: %d, z: %d, MC0i: %d, MC1i: %d, X: %d, Y: %d", i, z, MapCount[0][i], MapCount[1][i], eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF);
-        // uartPrint(debugMsg);
+        uint16_t eepromY = eeprom_read_word(&EramPositions[i].EramY);
+        // z = (eepromY >> 12) & 0x0F - 1;      // Extract the zone from the upper 4 bits
+        z = GetZone(i) - 1;                  // GetZone() returns 1 based index of zone
+        uint16_t y_value = eepromY & 0x0FFF; // Extract the Y value from the lower 12 bits
+
+        // Handle negative Y values if necessary
+        if (y_value & 0x0800)
+        {
+            y_value |= 0xF000; // Sign-extend to 16 bits
+        }
+
         if (z > 0)
             n = i - MapCount[1][z - 1]; // MapCount[1][z] is the cumulative number of vertices (not including doubling the first vertex) to zone z.
         else
             n = i;
 
-        sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF);
+        sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
         uartPrint(debugMsg);
         _delay_ms(REPORT_VERTICES_DELAY);
     }
-    // uartPrintFlash(F("<61:>"));
     uartPrint("<61:>");
 }
 #endif

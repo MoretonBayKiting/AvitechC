@@ -8,7 +8,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-// #define ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;
@@ -29,6 +29,7 @@ extern uint8_t LaserPower;
 extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
+extern bool printPos;
 extern uint8_t JogFlag;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
@@ -66,6 +67,8 @@ extern uint8_t OperationMode;
 extern uint16_t DSS_preload;
 extern uint8_t EramActiveMapZones;
 extern uint8_t ActiveMapZones;
+extern uint8_t EramActivePatterns;
+extern uint8_t ActivePatterns;
 extern uint16_t EramResetSeconds; // NOLINT
 extern uint16_t ResetSeconds;
 extern uint8_t EramLaser2OperateFlag;
@@ -168,5 +171,6 @@ uint8_t GetZone(uint8_t i);
 void CheckZones(uint8_t zone);
 void GoToMapIndex();
 void getMapPtCounts(bool doPrint);
+void sendStatusData();
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
 #endif // SHARED_VARS_H

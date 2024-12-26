@@ -23,6 +23,7 @@ void LoadEramDefaults(void)
     eeprom_update_byte(&EramMapTotalPoints, DEF_MAP_TOTAL_PTS);
 
     eeprom_update_byte(&EramActiveMapZones, DEF_ACTIVE_MAP_ZONES);
+    eeprom_update_byte(&EramActivePatterns, DEF_ACTIVE_PATTERNS);
     eeprom_update_word(&EramLaserID, DEF_LASER_ID);
     eeprom_update_word(&EramAccelTripPoint, DEF_ACCEL_TRIP_POINT);
     eeprom_update_word(&EramResetSeconds, DEF_RESET_SECONDS); // NOLINT
@@ -65,6 +66,7 @@ void ReadEramVars(void)
     LaserHt = eeprom_read_byte(&EramLaserHt);
     Tilt_Sep = eeprom_read_byte(&Eram_Tilt_Sep);
     ActiveMapZones = eeprom_read_byte(&EramActiveMapZones);
+    ActivePatterns = eeprom_read_byte(&EramActivePatterns);
     LaserID = eeprom_read_word(&EramLaserID);
     AccelTripPoint = eeprom_read_word(&EramAccelTripPoint);
     ResetSeconds = eeprom_read_word(&EramResetSeconds); // NOLINT

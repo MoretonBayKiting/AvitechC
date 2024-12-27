@@ -18,6 +18,10 @@ extern uint16_t isolated_board_factor;
 // #define BASE_PRINT
 #define LOG_PRINT
 #define NEW_APP
+#define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
+#ifdef DEBUG61
+#define DEBUG61_INTERVAL 100
+#endif
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

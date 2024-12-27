@@ -92,11 +92,6 @@ void DecodeCommsData()
     case 24:
         Cmd24();
         break;
-    // case 25: Cmd25(); break;
-    // case 26: Cmd26(); break;
-    // case 27: Cmd27(); break;
-    // case 28: Cmd28(); break;
-    // case 29: Cmd29(); break;
     case 30:
         Cmd30();
         break; // Update ResetSeconds (in EEPROM)

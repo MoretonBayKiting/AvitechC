@@ -561,69 +561,8 @@ void ProcessError()
     }
 }
 
-// void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
-
-//     if (DataInBufferFlag == true) { // We have got something
-//         // processReceivedData();
-//         char *token;
-//         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
-//          // Clear the buffer and reset the flag immediately after copying the data
-//         memset((void*)ReceivedData, 0, sizeof(ReceivedData));
-//         DataInBufferFlag = false;
-
-//         token = strchr(RecdDataConst, '<');  // Find the start of the command
-//         if (token != NULL) {
-//             Command = atoi(token + 1);// Convert the command to an integer
-//             token = strchr(token, ':');  // Find the start of the instruction
-
-//             if (token != NULL) {
-//                 char *end = strchr(token, '>');
-//                 if (end != NULL) {
-//                     *end = '\0'; // Replace '>' with '\0' to end the string
-//                     Instruction = atoi(token + 1);
-//                     DecodeCommsData();  // Process the command and instruction
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// 20240924: This version of CheckBlueTooth() replaced with double buffering version.  But reverted, hopefully temporarily, when double buffering didn't work.
-// void CheckBlueTooth() { //20240616: Search this date in Avitech.rtf for background.  But app was not sending \r\n with <10:1>. So detect > rather than null.
-//     if (DataInBufferFlag == true) { // We have got something
-//         // processReceivedData();
-//         char *token;
-//         memcpy(RecdDataConst, (const char*)ReceivedData, BUFFER_SIZE);
-//          // Clear the buffer and reset the flag immediately after copying the data
-//         memset((void*)ReceivedData, 0, sizeof(ReceivedData));
-//         DataInBufferFlag = false;
-//         uartPrint("Received data: "); //20240923 Sort out problem with <10:0><21:1> from bespoke app.
-//         uartPrint(RecdDataConst);
-//         token = strchr(RecdDataConst, '<');  // Find the start of the command
-//         while (token != NULL) {
-//             char *end = strchr(token, '>');  // Find the end of the command
-//             if (end != NULL) {
-//                 *end = '\0'; // Replace '>' with '\0' to end the string
-//                 char *colon = strchr(token, ':');  // Find the start of the instruction
-//                 if (colon != NULL) {
-//                     *colon = '\0'; // Replace ':' with '\0' to separate command and instruction
-//                     Command = atoi(token + 1); // Convert the command to an integer
-//                     Instruction = atoi(colon + 1); // Convert the instruction to an integer
-//                     DecodeCommsData();  // Process the command and instruction
-//                 }
-//                 token = strchr(end + 1, '<');  // Find the start of the next command
-//             } else {
-//                 break; // No more complete commands in the buffer
-//             }
-//         }
-//     }
-// }
 void ProcessBuffer(char *buffer)
 {
-    // Debug print: Log buffer contents
-    // uartPrint("ProcessingBuffer: ");
-    // uartPrint(buffer);
-
     // Trim leading and trailing whitespace
     char *start = buffer;
     while (isspace(*start))
@@ -647,9 +586,9 @@ void ProcessBuffer(char *buffer)
                 Command = atoi(token + 1);     // Convert the command to an integer
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
 
-#ifdef BASE_PRINT
-                // sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
-                // uartPrint(debugMsg);
+#ifdef DEBUG61
+                sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
+                uartPrint(debugMsg);
 #endif
                 DecodeCommsData(); // Process the command and instruction
             }
@@ -1052,39 +991,6 @@ void Audio3()
     else
         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
 }
-
-// void Audio(uint8_t pattern){
-//     uint8_t repeatCount = 2; //2 repeats for all but pattern 1
-//     uint8_t i;
-//     // sprintf(debugMsg,"Audio. P:%d",pattern);
-//     // uartPrint(debugMsg);
-
-//     if (pattern ==1) {repeatCount = 1;}
-//     // if (pattern ==6) {repeatCount = 3;}  //20240625 Use 2 repeats
-//     if (pattern ==7) {repeatCount = 5;}
-//     //20240528:  _delay_ms() takes a constant argument.  So previous strategy of passsing a parameter to it didn't work.
-//     for (i = 0; i < repeatCount; i++) {
-//         PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-//         switch (pattern) {
-//             case 1: _delay_ms(100); break;
-//             case 2: _delay_ms(50); break;   // 20240624 Originally 1ms on, 100ms off, repeat 2.  Could that be heard?
-//             case 3: _delay_ms(500); break;  //Initially 500.  Changed to 2500 for testing (20240601).
-//             case 4: _delay_ms(50); break;
-//             case 5: _delay_ms(50); break;
-//             case 6: _delay_ms(500); break;
-//             case 7: _delay_ms(200); break;
-//         }
-//         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
-//         switch (pattern) {
-//             case 2: _delay_ms(200); break;
-//             case 3: _delay_ms(100); break;
-//             case 4: _delay_ms(150); break;
-//             case 5: _delay_ms(50); break;
-//             case 6: _delay_ms(500); break;
-//             case 7: _delay_ms(100); break;
-//         }
-//     }
-// }
 
 void WaitAfterPowerUp()
 {
@@ -2222,6 +2128,22 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
 #endif
         while (SteppingStatus == 1)
         {
+#ifdef DEBUG61
+            static uint16_t cnt = 0;              // Test calling DHK in this blocking loop.
+            static unsigned long prevTime = 0;    // Store the previous time
+            unsigned long currentTime = millis(); // now(); // Get the current time
+
+            if (cnt == DEBUG61_INTERVAL)
+            {
+                cnt = 0;
+                unsigned long interval = currentTime - prevTime;                                               // Calculate the interval
+                prevTime = currentTime;                                                                        // Update the previous time
+                sprintf(debugMsg, "Test DHK in MM. Interval: %lu ms, NbrPds: %d", interval, DEBUG61_INTERVAL); // Report the interval
+                uartPrint(debugMsg);
+            }
+            cnt++;
+            DoHouseKeeping();
+#endif
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
         }
     }
@@ -2532,6 +2454,7 @@ void RunSweep(uint8_t zn)
 
     SetLaserVoltage(0); // 20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn, false);
+    printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint8_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
     for (PatType = 1; PatType <= 4; PatType++)
@@ -2539,6 +2462,7 @@ void RunSweep(uint8_t zn)
         if (ActivePatterns & (1 << PatType - 1)) // PatType runs from 1 to 4.  ActivePatterns stored in 4 least significant bits.
         {
             PatternRunning = PatType;
+            printToBT(18, PatternRunning);
 
 #ifdef LOG_PRINT // GHOST
             // static uint8_t LastPatType;
@@ -2549,8 +2473,12 @@ void RunSweep(uint8_t zn)
                 uartPrint(debugMsg);
             }
 #endif
-            while (ind < Nbr_Rnd_Pts)
+            bool doWhile = true;
+            while (doWhile)
             { // ind is incremented in getXY(), but not for the boundary, only for rungs.
+                // sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
+                // uartPrint(debugMsg);
+                doWhile = ((ind < Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
                 newPatt = false; // Set this
                 if (cnt == 0 && PatType == 1)
@@ -2597,6 +2525,7 @@ void RunSweep(uint8_t zn)
             cnt = 0;
             ind = 0;
         }
+        printToBT(18, 0); // Set current pattern to zero
     }
     ResetTiming();
     newPatt = true;
@@ -3019,6 +2948,7 @@ int main()
                         {                     // MapCount index is zero base
                             MapRunning = Zn;  // But map index in app is 1 based.
                             RunSweep(Zn - 1); //
+                            printToBT(17, 0); // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
                         }
                     }
                 }

@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "shared_Vars.h"
 #include "pin_mappings.h"
 #include "AppCmds.h"
@@ -166,6 +167,7 @@ void DecodeCommsData()
         if (Instruction == 1)
         {
             eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // MapTotalPoints is set whenever a point is stored.  The app sends <61:1> when it has finished sending points.
+            CmdStorePts(true);
         }
     case 62:
         printToBT(54, ActiveMapZones);
@@ -183,7 +185,7 @@ void DecodeCommsData()
 
     if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
     {
-        CmdStorePts();
+        CmdStorePts(false);
     }
 }
 
@@ -561,6 +563,8 @@ void Cmd31()
 {
     eeprom_update_byte(&EramMapTotalPoints, 0);
     MapTotalPoints = 0;
+    sprintf(debugMsg, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+    uartPrint(debugMsg);
     Audio2(2, 1, 3); //,"AC31");
 }
 
@@ -683,45 +687,76 @@ void Cmd53()
     sendStatusData();
 }
 
-void CmdStorePts()
+void CmdStorePts(bool test)
 {
-    uint8_t z = 0;
-    uint16_t OpZone = 0;
-    uint8_t index = 0;
-    uint16_t eepromAddress = 0;
-    index = (Command - FST_STORE_PT_INDEX) % MAX_NBR_MAP_PTS;
-    if (Command < FST_STORE_PT_INDEX + MAX_NBR_MAP_PTS) // Instruction is zone
+    static uint16_t outFunctionTime = 0;
+    static uint16_t inFunctionTime = 0;
+    static uint16_t cnt;
+
+    if (!test)
     {
-        z = ((Instruction + 1) & 0x0F); // Store the zone in the upper 4 bits
-        OpZone = z << 12;
-        eepromAddress = (uint16_t)&EramPositions[index].EramY;
-        eeprom_update_word((uint16_t *)eepromAddress, OpZone);
-        sprintf(debugMsg, "Zone stored: Cmd: %d, Instr: %d, OpZone: %04x, index: %d", Command, Instruction, z, index);
+        uint8_t z = 0;
+        uint16_t OpZone = 0;
+        uint8_t index = 0;
+        uint16_t eepromAddress = 0;
+        static uint16_t lastMillisStart = 0;
+        static uint16_t lastMillisEnd = 0;
+
+        index = (Command - FST_STORE_PT_INDEX) % MAX_NBR_MAP_PTS;
+        if (index == 0)
+        {
+            cnt = 0;
+            inFunctionTime = 0;
+            outFunctionTime = 0;
+            lastMillisStart = millis();
+            lastMillisEnd = millis();
+        }
+        cnt++;
+        lastMillisStart = millis();
+        outFunctionTime = millis() - lastMillisEnd;
+
+        if (Command < FST_STORE_PT_INDEX + MAX_NBR_MAP_PTS) // Instruction is zone
+        {
+            z = ((Instruction + 1) & 0x0F); // Store the zone in the upper 4 bits
+            OpZone = 1 << (12 + Instruction);
+            eepromAddress = (uint16_t)&EramPositions[index].EramY;
+            eeprom_update_word((uint16_t *)eepromAddress, OpZone);
+            // sprintf(debugMsg, "Zone stored: Cmd: %d, Instr: %d, OpZone: %04x, index: %d, eZone: %04x", Command, Instruction, z, index, eeprom_read_word(&EramPositions[index].EramY));
+            // uartPrint(debugMsg);
+        }
+        else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS) // Instruction is Y
+        {
+            OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
+            eepromAddress = (uint16_t)&EramPositions[index].EramY;
+
+            // Correctly handle negative values and mask the lower 12 bits
+            int16_t y_value = static_cast<int16_t>(Instruction);
+            uint16_t masked_y_value = static_cast<uint16_t>(y_value) & 0x0FFF;
+
+            // sprintf(debugMsg, "Cmd: %d, Instr: %d, OpZone: %d, index: %d, high: %d, lo: %d", Command, Instruction, OpZone >> 12, index, (OpZone & 0xF000) >> 12, masked_y_value);
+            // uartPrint(debugMsg);
+
+            eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | masked_y_value);
+        }
+        else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS) // Instruction is X
+        {
+            eepromAddress = (uint16_t)&EramPositions[index].EramX;
+            eeprom_update_word((uint16_t *)eepromAddress, Instruction);
+        }
+        // uint8_t MapPointNumber = static_cast<uint8_t>(index);
+        // MapTotalPoints = MapPointNumber + 1;
+        MapTotalPoints = index + 1;
+        _delay_ms(REPORT_VERTICES_DELAY);
+        printToBT(61, 10);
+
+        inFunctionTime = millis() - lastMillisStart;
+        lastMillisEnd = millis();
+    }
+    else
+    {
+        sprintf(debugMsg, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
         uartPrint(debugMsg);
     }
-    else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS) // Instruction is Y
-    {
-        OpZone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[index].EramY));
-        eepromAddress = (uint16_t)&EramPositions[index].EramY;
-
-        // Correctly handle negative values and mask the lower 12 bits
-        int16_t y_value = static_cast<int16_t>(Instruction);
-        uint16_t masked_y_value = static_cast<uint16_t>(y_value) & 0x0FFF;
-
-        sprintf(debugMsg, "Cmd: %d, Instr: %d, OpZone: %d, index: %d, high: %d, lo: %d", Command, Instruction, OpZone >> 12, index, (OpZone & 0xF000) >> 12, masked_y_value);
-        uartPrint(debugMsg);
-
-        eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | masked_y_value);
-    }
-    else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS) // Instruction is X
-    {
-        eepromAddress = (uint16_t)&EramPositions[index].EramX;
-        eeprom_update_word((uint16_t *)eepromAddress, Instruction);
-    }
-    uint8_t MapPointNumber = static_cast<uint8_t>(index);
-    MapTotalPoints = MapPointNumber + 1;
-    _delay_ms(REPORT_VERTICES_DELAY);
-    printToBT(61, 10);
 }
 
 void GoToMapIndex()
@@ -757,6 +792,9 @@ void ReportVertices()
             n = i - MapCount[1][z - 1]; // MapCount[1][z] is the cumulative number of vertices (not including doubling the first vertex) to zone z.
         else
             n = i;
+
+        // sprintf(debugMsg, "i: %d, GZ(i): %d, z: %d, n: %d, MTP: %d, eMTP: %d, MC[1][z-1]: %d", i, GetZone(i), z, n, MapTotalPoints, eeprom_read_byte(&EramMapTotalPoints), MapCount[1][z - 1]);
+        // uartPrint(debugMsg);
 
         sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
         uartPrint(debugMsg);

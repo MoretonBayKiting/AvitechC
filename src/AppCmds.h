@@ -56,7 +56,7 @@ void Cmd51(void);
 void Cmd52(void);
 void Cmd54(void);
 #ifdef NEW_APP
-void CmdStorePts(void);
+void CmdStorePts(bool test);
 void GoToMapIndex();
 void ReportVertices();
 #endif

@@ -103,7 +103,7 @@
 #define OLD_SPEED_ZONE_MAX 100
 #define SPEED_SCALE_MIN 130
 #define SPEED_SCALE_MAX 20 // Higher speed requires a lower value of SpeedScale
-#define NBR_RND_MIN 1
+#define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30

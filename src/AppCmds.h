@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include "FieldDeviceProperty.h"
 
 // Function prototypes
 void Cmd1(void);
@@ -59,7 +60,8 @@ void Cmd54(void);
 void CmdStorePts(bool test);
 void GoToMapIndex();
 void ReportVertices();
-#endif
+void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
+#endif // NEW_APP
 // void Cmd52(void);
 
 void DecodeCommsData(void);

@@ -21,6 +21,7 @@
 // #include <wiringPiI2C.h>
 // #include "i2cmaster.h"
 // #include "vars_main.h"
+#include "FieldDeviceProperty.h"
 #include "shared_Vars.h"
 #include "pin_mappings.h"
 #include "const.h"
@@ -2894,17 +2895,139 @@ void DoHouseKeeping()
     }
 }
 
-// bool getReportFlag()
-// {
-//     static uint16_t lastTJTick = 0;
-//     if (TJTick - lastTJTick >= REPORT_PERIOD)
-//     {
-//         lastTJTick = TJTick;
-//         return true;
-//     }
-//     else
-//         return false;
-// }
+// Property get functions:
+uint8_t getBatteryVoltageAdc()
+{
+    return static_cast<uint8_t>(BatteryVoltage);
+}
+
+uint8_t getTimeMode()
+{
+    switch (LightTriggerOperation)
+    {
+    case 0:
+        return static_cast<uint8_t>(TimeMode::always);
+    case 1:
+        return static_cast<uint8_t>(TimeMode::day);
+    case 2:
+        return static_cast<uint8_t>(TimeMode::night);
+        // default:
+        //     return TimeMode::always;
+    }
+}
+uint8_t getBeamMode()
+{
+    // switch (????)
+    // {
+    // case 0:
+    //     return static_cast<uint8_t>(BeamMode::continuous);
+    // case 1:
+    //     return static_cast<uint8_t>(BeamMode::continuousPulsing);
+    // }
+}
+uint8_t getLocationMode()
+{
+    // switch (????)
+    // {
+    // case 0:
+    //     return static_cast<uint8_t>(LocationMode::outdoor);
+    // case 1:
+    //     return static_cast<uint8_t>(LocationMode::indoor);
+    // case 2:
+    //     return static_cast<uint8_t>(LocationMode::indoorInverted);
+    // }
+}
+
+uint8_t getTripodHeight() { return LaserHt; }    // LaserHt is stored in decimetres.  Eg LaserHt = 50 is 5.0m.
+uint8_t getLineSeparation() { return Tilt_Sep; } // Tilt_Sep is metres (in Cartesian space)
+uint8_t getLinesPerPattern() { return Nbr_Rnd_Pts; }
+uint8_t getActiveMapZones() { return ActiveMapZones; }
+uint8_t getActivePatterns() { return ActivePatterns; }
+uint8_t getMaxLaserPower() { return MaxLaserPower; }
+uint8_t getUserLaserPower() { return UserLaserPower; }
+uint8_t getCurrentLaserPower() { return LaserPower; }
+uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
+uint8_t getRandomizeSpeed() { return 0; }                  // TJ: I don't know what this is supposed to do.
+uint8_t getSpeedScale() { return SpeedScale; }
+uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
+
+// Property set functions
+
+void sendProperty(FieldDeviceProperty property, uint8_t value)
+{
+    sprintf(debugMsg, "argument received by sendProperty. Property: %d, value: %d", property, value);
+    uartPrint(debugMsg);
+    uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
+    printToBT(PROPERTY_GET_CHANNEL, result);
+}
+
+void handleGetPropertyRequest(FieldDeviceProperty property)
+{
+    sprintf(debugMsg, "argument sent to handleGetPropertyRequest: %d", property);
+    uartPrint(debugMsg);
+    switch (property)
+    {
+    // First 2 cases need further investigation by TJ.
+    // case FieldDeviceProperty::microMajorVersion:
+    //     sendProperty(property, MICRO_MAJOR_VERSION);
+    //     break;
+    // case FieldDeviceProperty::microMinorVersion:
+    //     sendProperty(property, MICRO_MINOR_VERSION);
+    //     break;
+    case FieldDeviceProperty::batteryVoltAdc:
+        sendProperty(property, getBatteryVoltageAdc());
+        break;
+    case FieldDeviceProperty::timeMode:
+        sendProperty(property, getTimeMode());
+        break;
+    case FieldDeviceProperty::beamMode:
+        sendProperty(property, getBeamMode());
+        break;
+    case FieldDeviceProperty::locationMode:
+        sendProperty(property, getLocationMode());
+        break;
+    case FieldDeviceProperty::tripodHeight:
+        sendProperty(property, getTripodHeight());
+        break;
+    case FieldDeviceProperty::lineSeparation:
+        sendProperty(property, getLineSeparation());
+        break;
+    case FieldDeviceProperty::linesPerPattern:
+        sendProperty(property, getLinesPerPattern());
+        break;
+    case FieldDeviceProperty::activeMapZones:
+        sendProperty(property, getActiveMapZones());
+        break;
+    case FieldDeviceProperty::activePatterns:
+        sendProperty(property, getActivePatterns());
+        break;
+    case FieldDeviceProperty::maxLaserPower:
+        sendProperty(property, getMaxLaserPower());
+        break;
+    case FieldDeviceProperty::userLaserPower:
+        sendProperty(property, getUserLaserPower());
+        break;
+    case FieldDeviceProperty::currentLaserPower:
+        sendProperty(property, getCurrentLaserPower());
+        break;
+    case FieldDeviceProperty::laserTemperature:
+        sendProperty(property, getLaserTemperature());
+        break;
+    case FieldDeviceProperty::randomizeSpeed:
+        sendProperty(property, getRandomizeSpeed());
+        break;
+    case FieldDeviceProperty::speedScale:
+        sendProperty(property, getSpeedScale());
+        break;
+    case FieldDeviceProperty::lightSensorReading:
+        sendProperty(property, getLightSensorReading());
+        break;
+    default:
+        // Handle unknown property
+        break;
+    }
+}
+
 void setup()
 {
     sei();             // Enable global interrupts.

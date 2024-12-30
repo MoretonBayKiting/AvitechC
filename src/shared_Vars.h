@@ -1,6 +1,7 @@
 // shared_vars.h
 // 20240523: Most of these shared variables are declared in Avitech.c, the main file, but used, perhaps only, in AppCmds.c.  It would probably
 // be better to simply get rid of AppCmds.c.  But the BASCOM structure has been maintained.
+#include "FieldDeviceProperty.h"
 #include "const.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,7 +9,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-// #define ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;
@@ -176,5 +177,7 @@ void TraceBoundary(uint8_t zone);
 void GoToMapIndex();
 void getMapPtCounts(bool doPrint);
 void sendStatusData();
+void handleGetPropertyRequest(FieldDeviceProperty property);
+// void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
 // void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
 #endif // SHARED_VARS_H

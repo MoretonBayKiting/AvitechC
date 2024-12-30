@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "FieldDeviceProperty.h"
 #include "shared_Vars.h"
 #include "pin_mappings.h"
 #include "AppCmds.h"
@@ -150,6 +151,15 @@ void DecodeCommsData()
     case 54:
         Cmd54();
         break; // Update ActiveMapZones (in EEPROM)
+    case PROPERTY_GET_CHANNEL:
+        handleGetPropertyRequest(Instruction);
+        break;
+    case PROPERTY_SET_CHANNEL:
+        FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
+        uint8_t value = Instruction & 0x00FF;
+        handleSetPropertyRequest(prop, value);
+        break;
+
     case 59:
 #ifdef ISOLATED_BOARD
         isolated_board_factor = Instruction;
@@ -802,4 +812,84 @@ void ReportVertices()
     }
     uartPrint("<61:>");
 }
+
+void setProperty(FieldDeviceProperty property, uint8_t value)
+{
+    if (value == 255)
+    {
+        sprintf(debugMsg, "Property not settable", property);
+        uartPrint(debugMsg);
+    }
+    else
+    {
+    }
+}
+
+void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
+{
+    sprintf(debugMsg, "Arguments received by handleSetPropertyRequest. Property: %d, value: %d", property, value);
+    uartPrint(debugMsg);
+    uint8_t currentValue = 0;
+    switch (property)
+    {
+    case FieldDeviceProperty::batteryVoltAdc:
+        setProperty(property, 255);
+        break;
+    case FieldDeviceProperty::tripodHeight:
+        currentValue = eeprom_read_byte(&EramLaserHt);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&EramLaserHt, value);
+        }
+        LaserHt = value;
+        break;
+    case FieldDeviceProperty::lineSeparation:
+        currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&Eram_Tilt_Sep, value);
+        }
+        LaserHt = value;
+        break;
+    case FieldDeviceProperty::linesPerPattern:
+        currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
+        }
+        Nbr_Rnd_Pts = value;
+        break;
+    case FieldDeviceProperty::activePatterns:
+        currentValue = eeprom_read_byte(&EramActivePatterns);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&EramActivePatterns, value);
+        }
+        ActivePatterns = value;
+        break;
+    case FieldDeviceProperty::maxLaserPower:
+        Instruction = value;
+        Cmd4();
+        break;
+    case FieldDeviceProperty::laserTemperature:
+        setProperty(property, 255);
+        break;
+    case FieldDeviceProperty::randomizeSpeed:
+        setProperty(property, 255);
+        break;
+    case FieldDeviceProperty::speedScale:
+        uint8_t newValue = ReScale(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX);
+        currentValue = eeprom_read_byte(&EramSpeedScale);
+        if (newValue != currentValue)
+        {
+            eeprom_update_byte(&EramSpeedScale, value);
+        }
+        SpeedScale = newValue;
+        break;
+    case FieldDeviceProperty::lightSensorReading:
+        setProperty(property, 255);
+        break;
+    }
+}
+
 #endif

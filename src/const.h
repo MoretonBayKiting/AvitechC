@@ -116,3 +116,4 @@
 #define FST_STORE_PT_INDEX 128
 #define REPORT_VERTICES_DELAY 20
 #define REPORT_PERIOD 60 // TJTick increments every 50ms.  Report each time it increments REPORT_PERIOD times.  So 60 will give 3s report period.
+#define CONVEX_TOLERANCE 100

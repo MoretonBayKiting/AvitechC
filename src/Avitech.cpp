@@ -1840,6 +1840,49 @@ void midPt(int tilt, uint8_t seg, int (&res)[2])
 #endif
 }
 
+int crossProduct(int pt1[], int pt2[])
+{
+    return pt1[0] * pt2[1] - pt1[1] * pt2[0];
+}
+
+void vectorDiff(int pt1[], int pt2[], int vec[])
+{
+    vec[0] = pt2[0] - pt1[0];
+    vec[1] = pt2[1] - pt1[1];
+}
+
+uint16_t length(int pt[])
+{
+    uint32_t l = pt[0] * pt[0] + pt[1] * pt[1];
+    return sqrt(l);
+}
+
+bool testInternal(uint8_t zone, int pt[])
+{
+    bool inside = true;
+    uint8_t vertexCount = MapCount[0][zone] + 1; // Adjust to include the last edge
+    for (uint8_t i = 0; i < vertexCount; i++)
+    {
+        int next = (i + 1) % vertexCount; // Wrap around to the first vertex
+        int vec1[2], vec2[2];
+        int vertex1[2] = {Vertices[0][i], Vertices[1][i]};
+        int vertex2[2] = {Vertices[0][next], Vertices[1][next]};
+        vectorDiff(vertex1, vertex2, vec1);
+        vectorDiff(vertex1, pt, vec2);
+        int CP = crossProduct(vec1, vec2);
+        uint16_t l = length(vec1);
+        sprintf(debugMsg, "zone: %d, vertex: %d, CP: %d, l: %d", zone, i, CP, l);
+        uartPrint(debugMsg);
+        // if (crossProduct(vec1, vec2) < CONVEX_TOLERANCE / length(vec1))
+        if (CP < CONVEX_TOLERANCE / l)
+        {
+            inside = false;
+            break;
+        }
+    }
+    return inside;
+}
+
 uint16_t cartDistance(int pt1[2], int pt2[2])
 {
     uint32_t dx = static_cast<uint32_t>(abs(pt2[0] - pt1[0]));
@@ -1895,15 +1938,17 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     else
         CmdLaserOnFlag = true;
     // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
+    sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
+    uartPrint(debugMsg);
     if (seg < MapCount[0][zn])
     { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
         if (segPt == 0)
         { // First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
             pt1[0] = Vertices[0][seg];
             pt1[1] = Vertices[1][seg];
-            if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts > 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
+            if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
             // 2nd conditional deals with path mode where first point should not be repeated.
-            {                                                    
+            {
                 pt2[0] = Vertices[0][0];
                 pt2[1] = Vertices[1][0];
             }
@@ -1955,63 +2000,63 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             seg++;
             segPt = 0;
         }
+        if (seg >= MapCount[0][zn] - 1)
+            ind++; // Quick and dirty fix for path mode.
     }
-    else
+    else if (Nbr_Rnd_Pts > 0)
     { // Now deal with the rungs - above is just boundary.
-        // sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
-        // uartPrint(debugMsg);
-        // If ind  is zero and this else clause is entered, then this is the first required rung.
-        if (Nbr_Rnd_Pts > 0)
-        { // 20241229: Allow for Path mode - ie user specifies way points and laser just follows those, turns off, goes back to start, and repeats.
-            // Implement path mode, at least initially, by putting Nbr_Rnd_Pts to zero.  NBR_RND_MIN changed to zero.  This conditional means that autofill will not run.
-            if ((ind == 0) || (endRung))
+      // sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
+      // uartPrint(debugMsg);
+      // If ind  is zero and this else clause is entered, then this is the first required rung.
+      // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
+
+        if ((ind == 0) || (endRung))
+        {
+            if (startRung)
             {
-                if (startRung)
-                {
-                    RndNbr = rand() % nbrRungs; //
-                    if (pat == 4)
-                    { // Sequentially cross the zone with rungs, not randomly
-                        RndNbr = rung++;
-                        if (RndNbr == nbrRungs)
-                            rung = 0;
-                    }
-                    if (RndNbr == 0)
-                        RndNbr = 1;
-                    tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);                  // Argument is Cartesian offset from laser.  Get tilt angle for this.
-                    fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
-                    sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
-                    // For each boundary segment get the interpolated point in the segment needed for the new rung.
-                    midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
-                    midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
-                    if (pat == 3)
-                    {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
-                        int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
-                        fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
-                        sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
-                        midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
-                    }
-                } // When starting a new pass, whether with startRung ture or false, set beginning and end points of rung.
-                ind++;
-                rungMidPtCnt = 0;
-                if (startRung)
-                { // First call in  1st direction.  End points as calculated above
-                    endRes[0] = nextRes[0];
-                    endRes[1] = nextRes[1];
-                    beginRes[0] = thisRes[0];
-                    beginRes[1] = thisRes[1];
+                RndNbr = rand() % nbrRungs; //
+                if (pat == 4)
+                { // Sequentially cross the zone with rungs, not randomly
+                    RndNbr = rung++;
+                    if (RndNbr == nbrRungs)
+                        rung = 0;
                 }
-                else
-                { // First call in  reverse direction.  Beginning point is end point of previous rung, end point is beginning point of new rung.
-                    endRes[0] = thisRes[0];
-                    endRes[1] = thisRes[1];
-                    beginRes[0] = res[0]; // res[] is last point targeted.  If this is the start of a new rung in reverse direction, last point of old rung is starting point (possibly?).
-                    beginRes[1] = res[1];
+                if (RndNbr == 0)
+                    RndNbr = 1;
+                tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);                  // Argument is Cartesian offset from laser.  Get tilt angle for this.
+                fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
+                sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
+                // For each boundary segment get the interpolated point in the segment needed for the new rung.
+                midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
+                midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
+                if (pat == 3)
+                {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
+                    int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
+                    fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
+                    sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
+                    midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
                 }
-#ifdef BASE_PRINT
-                sprintf(debugMsg, "ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
-                uartPrint(debugMsg);
-#endif
+            } // When starting a new pass, whether with startRung ture or false, set beginning and end points of rung.
+            ind++;
+            rungMidPtCnt = 0;
+            if (startRung)
+            { // First call in  1st direction.  End points as calculated above
+                endRes[0] = nextRes[0];
+                endRes[1] = nextRes[1];
+                beginRes[0] = thisRes[0];
+                beginRes[1] = thisRes[1];
             }
+            else
+            { // First call in  reverse direction.  Beginning point is end point of previous rung, end point is beginning point of new rung.
+                endRes[0] = thisRes[0];
+                endRes[1] = thisRes[1];
+                beginRes[0] = res[0]; // res[] is last point targeted.  If this is the start of a new rung in reverse direction, last point of old rung is starting point (possibly?).
+                beginRes[1] = res[1];
+            }
+#ifdef BASE_PRINT
+            sprintf(debugMsg, "ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+            uartPrint(debugMsg);
+#endif
         }
 
         uint16_t num = abs(rungMidPtCnt * PAN_SEP);
@@ -2037,13 +2082,14 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         // sprintf(debugMsg, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
         // uartPrint(debugMsg);
     }
+
 #ifdef LOG_PRINT
     static int LastX = 0;
     static int LastY = 0;
     if ((X != LastX || Y != LastY) && printPos)
     {
-        sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
+        // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
 
@@ -2051,7 +2097,9 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         LastY = Y;
     }
 #endif
-
+    // if (testInternal(zn, [ X, Y ]) > 0) // Test that autofill point is internal to zone.  Not necessary for boundary?
+    // {
+    // }
     return startRung; // Use this to set speed and (possibly) laser on.
 }
 
@@ -2484,9 +2532,9 @@ void RunSweep(uint8_t zn)
             bool doWhile = true;
             while (doWhile)
             { // ind is incremented in getXY(), but not for the boundary, only for rungs.
-                // sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
-                // uartPrint(debugMsg);
-                doWhile = ((ind < Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
+                sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
+                uartPrint(debugMsg);
+                doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
                 newPatt = false; // Set this
                 if (cnt == 0 && PatType == 1)
@@ -2507,7 +2555,9 @@ void RunSweep(uint8_t zn)
                         DSS_preload = CalcSpeed(false); // Passing false makes the speed depend on tilt angle.
                     }
                 }
-
+                // if (testInternal(zn,[X,Y]) > 0) // Test that autofill point is internal to zone.  Not necessary for boundary?
+                // {
+                // }
                 ProcessCoordinates();
                 SteppingStatus = 1;
                 setupTimer1();
@@ -2534,9 +2584,9 @@ void RunSweep(uint8_t zn)
             ind = 0;
         }
         printToBT(18, 0); // Set current pattern to zero
+        newPatt = true;
     }
     ResetTiming();
-    newPatt = true;
 }
 #ifdef NEW_APP
 void TraceBoundary(uint8_t zone)

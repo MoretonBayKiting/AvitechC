@@ -1674,8 +1674,6 @@ int getNextTiltVal(int thisTilt, uint8_t dirn)
 { // 20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.
     // getNextTiltVal() should calculate the required tilt value to get the specified separation.  TILT_SEP will need calibration.
     int rho = getCartFromTilt(thisTilt);
-    //    sprintf(debugMsg,"rho %d, thisTilt %d", rho, thisTilt);
-    //    uartPrint(debugMsg);
     if (dirn == 1)
     {
         rho = rho - Tilt_Sep;
@@ -1696,7 +1694,7 @@ void getPolars(int c1, int c2, int thisRes[2])
 { // Take cartesian coordinates as input, return, via thisRes[2], polars.
     // 20241205 Change r from long to double.
     double r = sqrt(static_cast<double>(c1) * c1 + static_cast<double>(c2) * c2); // Get the distance from the laser to the point by Pythagoras.
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "c1 %d, c2 %d, r %d", c1, c2, static_cast<int>(r));
     uartPrint(debugMsg);
 #endif
@@ -1743,7 +1741,7 @@ uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
     rhoMin = getCartFromTilt(maxTilt);
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint8_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
-#ifdef DEBUG
+#ifdef xDEBUG
     sprintf(debugMsg, "rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
     uartPrint(debugMsg);
 #endif
@@ -1784,7 +1782,7 @@ void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2])
     temp = num * abs(nxt[1] - last[1]);
     res[1] = last[1] + temp / den * sign(nxt[1] - last[1]);
 #ifdef DEBUG
-    sprintf(debugMsg, "num %d, den %d, x0 %d, y0 %d, x1 %d, y1 %d, res0 %d, res1 %d", num, den, last[0], last[1], nxt[0], nxt[1], res[0], res[1]);
+    sprintf(debugMsg, "PI: num: %d, den: %d, x0: %d, y0: %d, x1: %d, y1: %d, res0: %d, res1: %d", num, den, last[0], last[1], nxt[0], nxt[1], res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -1794,8 +1792,8 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     int c1[2], c2[2];              // The cartesian end points.
     getCart(last[0], last[1], c1); // Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-#ifdef GHOST
-    sprintf(debugMsg, "num %d, den %d, l0 %d, l1 %d, n0 %d, n1 %d,c10 %d, c20 %d, c11 %d, c21 %d", num, den, last[0], last[1], nxt[0], nxt[1], c1[0], c2[0], c1[1], c2[1]);
+#ifdef xGHOST
+    sprintf(debugMsg, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d, c10: %d, c20: %d, c11: %d, c21: %d", num, den, last[0], last[1], nxt[0], nxt[1], c1[0], c2[0], c1[1], c2[1]);
     uartPrint(debugMsg);
 #endif
     uint32_t temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[0] - c1[0])); // 20241204: Changed to uint32_t from int. Though note sign() used below.
@@ -1804,12 +1802,12 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
 // Use the cartesian values stored in res and write the corresponding polar values to the same variable.
 #ifdef GHOST
-    sprintf(debugMsg, "Cartesian: res0 %d, res1 %d", res[0], res[1]);
+    sprintf(debugMsg, "CI: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
     getPolars(res[0], res[1], res);
 #ifdef GHOST
-    sprintf(debugMsg, "Polar: res0 %d, res1 %d", res[0], res[1]);
+    sprintf(debugMsg, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -1858,13 +1856,14 @@ uint16_t length(int pt[])
     return sqrt(l);
 }
 
-bool testInternal(uint8_t zone, int pt[])
+bool testConvex(uint8_t zone, int pt[])
 {
     bool inside = true;
-    uint8_t vertexCount = MapCount[0][zone] + 1; // Adjust to include the last edge
+    uint8_t vertexCount = MapCount[0][zone] - 1; // For a quadrilateral, for example, there are 4 vertices but MapCount[0][z] is 5 as it includes allowance for the repeated 1st point.
+    // There are 4 segments to be tested  with the end point of the last being the (repeated) first vertex.
     for (uint8_t i = 0; i < vertexCount; i++)
     {
-        int next = (i + 1) % vertexCount; // Wrap around to the first vertex
+        int next = i + 1; //(i + 1) % vertexCount; // I don't think % vertexCount is necessary?
         int vec1[2], vec2[2];
         int vertex1[2] = {Vertices[0][i], Vertices[1][i]};
         int vertex2[2] = {Vertices[0][next], Vertices[1][next]};
@@ -1872,13 +1871,18 @@ bool testInternal(uint8_t zone, int pt[])
         vectorDiff(vertex1, pt, vec2);
         int CP = crossProduct(vec1, vec2);
         uint16_t l = length(vec1);
-        sprintf(debugMsg, "zone: %d, vertex: %d, CP: %d, l: %d", zone, i, CP, l);
-        uartPrint(debugMsg);
-        // if (crossProduct(vec1, vec2) < CONVEX_TOLERANCE / length(vec1))
+        bool CPTest = (CP < CONVEX_TOLERANCE / l);
+#ifdef xGHOST // TEST_CONVEX
+        if (!CPTest)
+        {
+            sprintf(debugMsg, "zone: %d, vertex: %d, CP: %d, l: %d, X: %d, Y: %d, CPTest: %d", zone, i, CP, l, pt[0], pt[1], CPTest);
+            uartPrint(debugMsg);
+        }
+#endif
         if (CP < CONVEX_TOLERANCE / l)
         {
             inside = false;
-            break;
+            // break;
         }
     }
     return inside;
@@ -1935,12 +1939,15 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     { // Test for a new pattern and, if so, reset seg.
         seg = 0;
         CmdLaserOnFlag = false; // 20241229.  Laser off if moving to first point of pattern (and hence also zone)
+        endRung = true;
     }
     else
         CmdLaserOnFlag = true;
-    // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
+// This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
+#ifdef TEST_PATH_MODE
     sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
     uartPrint(debugMsg);
+#endif
     if (seg < MapCount[0][zn])
     { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
         if (segPt == 0)
@@ -2001,16 +2008,18 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             seg++;
             segPt = 0;
         }
-        if (seg >= MapCount[0][zn] - 1)
+        // if (seg >= MapCount[0][zn] - 1)
+        if (seg > MapCount[0][zn] - 1)
             ind++; // Quick and dirty fix for path mode.
     }
     else if (Nbr_Rnd_Pts > 0)
     { // Now deal with the rungs - above is just boundary.
-      // sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
-      // uartPrint(debugMsg);
-      // If ind  is zero and this else clause is entered, then this is the first required rung.
-      // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
-
+#ifdef GHOST
+        sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
+        uartPrint(debugMsg);
+#endif
+        // If ind  is zero and this else clause is entered, then this is the first required rung.
+        // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
         if ((ind == 0) || (endRung))
         {
             if (startRung)
@@ -2089,18 +2098,22 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     static int LastY = 0;
     if ((X != LastX || Y != LastY) && printPos)
     {
+#ifdef GHOST
         // sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
-        // uartPrint(debugMsg);
+        sprintf(debugMsg, "ind: %d, X: %d, Y: %d, MC[zn] %d>", ind, X, Y, MapCount[0][zn]);
+        uartPrint(debugMsg);
+#endif
         printToBT(34, AbsX);
         printToBT(35, AbsY);
-
         LastX = X;
         LastY = Y;
     }
 #endif
-    // if (testInternal(zn, [ X, Y ]) > 0) // Test that autofill point is internal to zone.  Not necessary for boundary?
-    // {
-    // }
+    int pt[2] = {X, Y};      // Create an array with X and Y values
+    if (!testConvex(zn, pt)) // Test that autofill point is internal to zone.  Not necessary for boundary?
+    {
+        uartPrintFlash(F("fail convex \n"));
+    }
     return startRung; // Use this to set speed and (possibly) laser on.
 }
 
@@ -2499,10 +2512,6 @@ void HomeAxis()
 void RunSweep(uint8_t zn)
 {
     uint8_t PatType, ind = 0;
-    // #ifdef GHOST //BASE_PRINT
-    //     static uint8_t LastPatType;
-    // #endif
-    // int last[2],nxt[2];//,nbrMidPts;
     int minTilt = 0, cnt = 0;
     int maxTilt = 0;
     int rhoMin = 0;
@@ -2533,11 +2542,13 @@ void RunSweep(uint8_t zn)
             bool doWhile = true;
             while (doWhile)
             { // ind is incremented in getXY(), but not for the boundary, only for rungs.
+#ifdef TEST_PATH_MODE
                 sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
                 uartPrint(debugMsg);
+#endif
                 doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
-                newPatt = false; // Set this
+                newPatt = false;
                 if (cnt == 0 && PatType == 1)
                 { // 20240727:Laser off as it moves towards 0th point of cycle.
                     CmdLaserOnFlag = false;

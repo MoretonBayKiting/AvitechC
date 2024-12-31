@@ -20,8 +20,6 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         val = oldMax;
     float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
     float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
-    // sprintf(debugMsg, "ReScale: cmd: %d, input: %d, output: %u", Command, val, static_cast<uint16_t>(r));
-    // uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
@@ -160,11 +158,11 @@ void DecodeCommsData()
         handleSetPropertyRequest(prop, value);
         break;
 
-    case 59:
-#ifdef ISOLATED_BOARD
-        isolated_board_factor = Instruction;
-#endif
-        break;
+        //     case 59:
+        // #ifdef ISOLATED_BOARD
+        //         isolated_board_factor = Instruction;
+        // #endif
+        //         break;
     case 60: // Check zones.
         GoToMapIndex();
         break; // Update ActiveMapZones (in EEPROM)
@@ -573,8 +571,8 @@ void Cmd31()
 {
     eeprom_update_byte(&EramMapTotalPoints, 0);
     MapTotalPoints = 0;
-    sprintf(debugMsg, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+    // uartPrint(debugMsg);
     Audio2(2, 1, 3); //,"AC31");
 }
 
@@ -731,8 +729,6 @@ void CmdStorePts(bool test)
             OpZone = 1 << (12 + Instruction);
             eepromAddress = (uint16_t)&EramPositions[index].EramY;
             eeprom_update_word((uint16_t *)eepromAddress, OpZone);
-            // sprintf(debugMsg, "Zone stored: Cmd: %d, Instr: %d, OpZone: %04x, index: %d, eZone: %04x", Command, Instruction, z, index, eeprom_read_word(&EramPositions[index].EramY));
-            // uartPrint(debugMsg);
         }
         else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS) // Instruction is Y
         {
@@ -742,9 +738,6 @@ void CmdStorePts(bool test)
             // Correctly handle negative values and mask the lower 12 bits
             int16_t y_value = static_cast<int16_t>(Instruction);
             uint16_t masked_y_value = static_cast<uint16_t>(y_value) & 0x0FFF;
-
-            // sprintf(debugMsg, "Cmd: %d, Instr: %d, OpZone: %d, index: %d, high: %d, lo: %d", Command, Instruction, OpZone >> 12, index, (OpZone & 0xF000) >> 12, masked_y_value);
-            // uartPrint(debugMsg);
 
             eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | masked_y_value);
         }
@@ -764,8 +757,10 @@ void CmdStorePts(bool test)
     }
     else
     {
+#ifdef TEST_FDP
         sprintf(debugMsg, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
         uartPrint(debugMsg);
+#endif
     }
 }
 
@@ -803,9 +798,6 @@ void ReportVertices()
         else
             n = i;
 
-        // sprintf(debugMsg, "i: %d, GZ(i): %d, z: %d, n: %d, MTP: %d, eMTP: %d, MC[1][z-1]: %d", i, GetZone(i), z, n, MapTotalPoints, eeprom_read_byte(&EramMapTotalPoints), MapCount[1][z - 1]);
-        // uartPrint(debugMsg);
-
         sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
         uartPrint(debugMsg);
         _delay_ms(REPORT_VERTICES_DELAY);
@@ -827,8 +819,10 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
 
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
 {
-    sprintf(debugMsg, "Arguments received by handleSetPropertyRequest. Property: %d, value: %d", property, value);
+#ifdef TEST_FDP
+    sprintf(debugMsg, "Received by hSPR. Prop: %d, val: %d", property, value);
     uartPrint(debugMsg);
+#endif
     uint8_t currentValue = 0;
     switch (property)
     {

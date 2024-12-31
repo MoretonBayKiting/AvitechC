@@ -9,7 +9,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-#define ISOLATED_BOARD
+// #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;
@@ -23,6 +23,9 @@ extern uint16_t isolated_board_factor;
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
+// #define TEST_PATH_MODE
+// #define TEST_FDP //FieldDeviceProperty
+// #define TEST_CONVEX
 // #define DEBUG
 // #define PRINT_CMD9
 // Variables

@@ -44,11 +44,12 @@ int AbsX = 0;           // X absolute position from home position
 int AbsY = 0;           // Y absolute position from home position
 #ifdef ISOLATED_BOARD
 bool isolated_board_flag = false;
-uint16_t isolated_board_factor = 100;
+uint16_t isolated_board_factor = 1;
 #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
-int Dy;               // Used to calulate how many steps required on Y axis from last position
-int Dx;               // Used to calulate how many steps required on X axis from last position
+// bool audioOn = true;  //
+int Dy; // Used to calulate how many steps required on Y axis from last position
+int Dx; // Used to calulate how many steps required on X axis from last position
 
 bool rndLadBit; // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
@@ -92,8 +93,8 @@ bool X_TravelLimitFlag = false; // Over travel flag
 bool Y_TravelLimitFlag = false; // Over travel flag
 // Use JogFlag to stop jogging if device is out of range.  0: allow jogging.  1: AbsX>X_MAXCOUNT; 2: AbsX<>>X_MINCOUNT; 3: AbsY > y_maxcount; 4: AbsY < 0;
 uint8_t JogFlag = 0;
-uint16_t y_maxCount;                 // = 1800;
-int y_minCount = 0;                  // -220
+uint16_t y_maxCount = 500;           // = 1800;
+int y_minCount = 20;                 // -220
 uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[2][i] is cumulative of MapCount[1][i]
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
@@ -350,23 +351,15 @@ void StartBuzzerInProgMode()
     }
 }
 
-// eerpom_update_word and eerpom_update_byte are available in avr/eeprom.h
-// void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue) {// Update EEPROM word only if the current value is different
-//     uint16_t currentValue = eeprom_read_word(eepromAddress); // Read the current value from EEPROM
-//     if (currentValue != newValue) {     // Compare the current value with the new value
-//         eeprom_write_word(eepromAddress, newValue);
-//     }
-// }
-// void eeprom_update_byte(uint8_t *eepromAddress, uint8_t newValue) {// Update EEPROM word only if the current value is different
-//     uint16_t currentValue = eeprom_read_byte(eepromAddress); // Read the current value from EEPROM
-//     if (currentValue != newValue) {     // Compare the current value with the new value
-//         eeprom_write_byte(eepromAddress, newValue);
-//     }
-// }
 void TickCounter_50ms_isr()
 {
     Counter50ms++;
     TJTick++;
+    // if (TJTick % 40 == 0)
+    // {
+    //     sprintf(debugMsg, "About to call Audio3. TJTick %d", TJTick);
+    //     uartPrint(debugMsg);
+    // }
     // Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0)
     {
@@ -960,37 +953,49 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo)
 }
 void Audio3()
 { // Call this in ISR to implement buzzer when it has been setup by Audio2().
-    static bool BuzzerOn = false;
-    if (PrevAudioLength != AudioLength)
+    // if (TJTick % 40 == 0)
+    // {
+    //     sprintf(debugMsg, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
+    //     uartPrint(debugMsg);
+    // }
+    // if (audioOn)
     {
-        PrevAudioLength = AudioLength;
-    }
-    // If FstTick is not set, there's nothing to do.
-    if ((FstTick == 0) || (TJTick - FstTick >= AudioLength) || (TJTick < FstTick))
-    { // If the pattern has completed or TJTick has rolled over to zero, reset FstTick to zero and return.
-        FstTick = 0;
-        PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
-        return;
-    }
-    // if((TJTick - FstTick) % AudioLength <= OnTicks) {
-    if ((TJTick - FstTick) % (OnTicks + OffTicks) <= OnTicks)
-    {
-        if (!BuzzerOn)
+        static bool BuzzerOn = false;
+        if (PrevAudioLength != AudioLength)
         {
-            BuzzerOn = true;
+            PrevAudioLength = AudioLength;
         }
-    }
-    else
-    {
+        // If FstTick is not set, there's nothing to do.
+        if ((FstTick == 0) || (TJTick - FstTick >= AudioLength) || (TJTick < FstTick))
+        { // If the pattern has completed or TJTick has rolled over to zero, reset FstTick to zero and return.
+            FstTick = 0;
+            PORTE &= ~(1 << BUZZER); // BUZZER LOW
+            return;
+        }
+
+        if ((TJTick - FstTick) % (OnTicks + OffTicks) <= OnTicks)
+        {
+            if (!BuzzerOn)
+            {
+                BuzzerOn = true;
+            }
+        }
+        else
+        {
+            if (BuzzerOn)
+            {
+                BuzzerOn = false;
+            }
+        }
         if (BuzzerOn)
-        {
-            BuzzerOn = false;
-        }
+            PORTE |= (1 << BUZZER); // BUZZER HIGH
+        else
+            PORTE &= ~(1 << BUZZER); // BUZZER LOW
     }
-    if (BuzzerOn)
-        PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-    else
-        PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
+    // else
+    // {
+    //     PORTE &= ~(1 << BUZZER); // BUZZER LOW
+    // }
 }
 
 void WaitAfterPowerUp()
@@ -1177,24 +1182,16 @@ void MrSleepyTime()
     // Ylocal = 0;
     Xlocal = 0;
     LoopCount = 0;
-
-    for (Xlocal = 1; Xlocal <= 4; Xlocal++)
-    {
-        PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-        _delay_ms(50);
-        PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-        _delay_ms(1000);
-    }
-
-    PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-    _delay_ms(1000);
-    PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
+    Audio2(4, 1, 20);
+    _delay_ms(4200); // Wait while the buzzer sounds
+    Audio2(1, 20, 1);
+    _delay_ms(1100); // Wait while the buzzer sounds
 
     SetLaserVoltage(0);
     PORTE &= ~(1 << FAN); // Fan = Off;
 
     StopTimer1();
-    // TCCR1B &= ~((1 << CS12) | (1 << CS10));
+
     SteppingStatus = 0;
     PORTD |= (1 << X_ENABLEPIN); // Disable X - TMC2130 enable is low
     PORTD |= (1 << Y_ENABLEPIN); // Disable Y
@@ -1202,24 +1199,22 @@ void MrSleepyTime()
     while (LightSensorModeFlag == 1)
     {
         GetLightLevel();
-        if (LightSensorModeFlag == 0)
+        if (LightSensorModeFlag == 0) // If 0 then light level has been triggered check again in 5 seconds to comfirm
         {
             _delay_ms(5000);
-            GetLightLevel();
+            GetLightLevel(); // This will reset LightSensorModeFlag to 1 if it had been set to 0 as a result of transient rather than persistent light.
         }
 
         if (Tick > 10)
         {
-            PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-            _delay_ms(25);
-            PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-            Tick = 0;
+            Audio2(1, 1, 1); // Brief beep before restarting while loop.
         }
     }
 
-    StopTimer3();
+    uartPrintFlash(F("ST3 MrST \n"));
+    StopTimer3(); // Watchdog reset
     // TCCR3B &= ~((1 << CS32) | (1 << CS30));
-    _delay_ms(5000);
+    _delay_ms(5000); //' Wait for watchdog to overflow and system will reboot
 }
 
 void ResetTiming()
@@ -1425,13 +1420,21 @@ void initMPU()
         uartPrintFlash(F("Full scale set \n"));
     }
 }
-void StartTimer1()
+// void StartTimer1()
+// {
+//     // Set prescaler to 256 and start Timer1
+//     TCCR1B |= (1 << CS12); //(1 << CS12)|(1 << CS10) for 1024 prescalar (4 times slower)
+//     TCCR1B &= ~(1 << CS11);
+//     TCCR1B &= ~(1 << CS10);
+//     OCR1A = DSS_preload; // 20240614.
+// }
+
+void setupTimer3()
 {
-    // Set prescaler to 256 and start Timer1
-    TCCR1B |= (1 << CS12); //(1 << CS12)|(1 << CS10) for 1024 prescalar (4 times slower)
-    TCCR1B &= ~(1 << CS11);
-    TCCR1B &= ~(1 << CS10);
-    OCR1A = DSS_preload; // 20240614.
+    TCCR3B |= (1 << WGM32);              // Configure timer for CTC mode
+    TCCR3B |= (1 << CS32) | (1 << CS30); // Bits 0 and 2 set.  TCCR: Timer/Counter Control Register.  Prescaler:1024
+    OCR3A = 780;                         // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
+    TIMSK3 |= (1 << OCIE3A);             // Enable the compare match interrupt
 }
 
 // void StartTimer3() {
@@ -1444,6 +1447,7 @@ void StartTimer1()
 void StopTimer3()
 {
     // Clear all CS1 bits to stop Timer3
+    // uartPrintFlash(F("StopTimer3 \n"));
     TCCR3B &= ~(1 << CS32);
     TCCR3B &= ~(1 << CS31);
     TCCR3B &= ~(1 << CS30);
@@ -1462,13 +1466,6 @@ void setupTimer1()
     OCR1A = DSS_preload;    // Set the compare value to desired value.  DSS_preload is order 100.  2*7812 for testing - 1 second period
     // With a prescalar of 256 and compare value of 100, frequency: 16MHz/256 ~ 64kHz/100 ~ 640Hz which is a period of about 1.6ms.
     TIMSK1 |= (1 << OCIE1A); // Enable the compare match interrupt
-}
-void setupTimer3()
-{
-    TCCR3B |= (1 << WGM32);              // Configure timer for CTC mode
-    TCCR3B |= (1 << CS32) | (1 << CS30); // Bits 0 and 2 set.  TCCR: Timer/Counter Control Register.  Prescaler:1024
-    OCR3A = 780;                         // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
-    TIMSK3 |= (1 << OCIE3A);             // Enable the compare match interrupt
 }
 
 void TurnOnGyro()
@@ -1611,8 +1608,8 @@ void LoadZoneMap(uint8_t zn, bool print_flag)
         }
         else
         {
-            sprintf(debugMsg, "<24: Zn: %d, X: %d, Y: %d>", zn, eeprom_read_word(&EramPositions[MI].EramX), Vertices[1][MapIndex], eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF);
-            uartPrint(debugMsg);
+            // sprintf(debugMsg, "<24: Zn: %d, X: %d, Y: %d>", zn, eeprom_read_word(&EramPositions[MI].EramX), Vertices[1][MapIndex], eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF);
+            // uartPrint(debugMsg);
         }
     }
     // snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
@@ -2137,10 +2134,10 @@ void ProcessCoordinates()
 #ifdef ISOLATED_BOARD
     if (isolated_board_flag)
     {
-        AbsX = X;
+        AbsX = X; // Increment position, simulating movement of the stepper motors, at specified period.
         AbsY = Y;
     }
-    StepCount = 0;
+    StepCount = 0; // Put StepCount and SteppingStatus to zero #ifdef ISOLATED_BOARD so that motors never run.
     SteppingStatus = 0;
 #endif
     StepOverRatio = 0;
@@ -2792,6 +2789,7 @@ void OperationModeSetup(int OperationMode)
     {
     case 0:
         name = "Field-i";
+        y_minCount = 20; // 20 steps with TILT_STEPS_PER_RAD 2052.0 implies tan of 0.01R.  LaserHt = 5m implies 500m range.
         y_maxCount = 1800;
         strcpy(OpModeTxt, "0:Field-i");
         break;
@@ -2827,20 +2825,22 @@ void DoHouseKeeping()
 {
     static uint16_t dhkn = 0;
     dhkn++;
+    if (!(TJTick % 200))
+        uartPrintFlash(F("DHK running \n"));
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
 #ifdef ISOLATED_BOARD
     static uint16_t lastTick;
     isolated_board_flag = false;
-    if (TJTick != lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor))
+    // if (TJTick >= lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor)) // TJTick increments every 50ms.
     {
         lastTick = TJTick;
         X = AbsX;
         Y = AbsY;
         StepCount = 0;
         SteppingStatus = 0;
-        isolated_board_flag = true;
+        isolated_board_flag = true; // Reset to true, so that notional movement occurs, if there has been an interval as defined above
     }
     Z_AccelFlag = false;
     LaserTemperature = 50;
@@ -2866,9 +2866,11 @@ void DoHouseKeeping()
 
     if (AbsY >= TILT_SENSOR_IGNORE)
     {
-        if ((PINB & (1 << TILT_STOP)) != 0)
+        if ((PINB & (1 << TILT_STOP)))
         { // if Tilt_stop pin is on
 #ifndef THROTTLE
+            if (!(TJTick % 40))
+                uartPrintFlash(F("Tilt limit switch \n"));
             StopTimer3(); // 20241205: This will cause the watchdog to trigger.
 #endif
             // uartPrintFlash(F("StopTimer3 would have been called.\r"));
@@ -3055,6 +3057,15 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     case FieldDeviceProperty::lightSensorReading:
         sendProperty(property, getLightSensorReading());
         break;
+    case FieldDeviceProperty::deviceMode:
+        sendProperty(property, SetupModeFlag); // 0 Run  mode, 1 prog mode?
+        break;
+    case FieldDeviceProperty::currentZoneRunning:
+        sendProperty(property, MapRunning);
+        break;
+    case FieldDeviceProperty::currentPatternRunning:
+        sendProperty(property, PatternRunning);
+        break;
     default:
         // Handle unknown property
         break;
@@ -3098,9 +3109,9 @@ void setup()
         return;
     }; // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    firstOn();      // Load defaults to EEPROM if first time on.
-    ReadEramVars(); // Reads user data from EEPROM to RAM.
-    // initMPU();
+    firstOn();           // Load defaults to EEPROM if first time on.
+    ReadEramVars();      // Reads user data from EEPROM to RAM.
+    initMPU();           // 20241231 This was commented out.  It will error if the wrong address for the given board is in EEPROM (and read from preious statement)
     PORTE |= (1 << FAN); // Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++)
     {                        // BatteryVoltage should be populated by this.  20241205 The limit, 10, is also the size of the relevant array. Change to use a constant?

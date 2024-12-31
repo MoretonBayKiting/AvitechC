@@ -8,11 +8,11 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define GHOST
-#define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
+// #define GHOST
+// #define TEST_LASER_POWER
 #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
-#define ISOLATED_BOARD_INTERVAL 10
+#define ISOLATED_BOARD_INTERVAL 2
 extern bool isolated_board_flag;
 extern uint16_t isolated_board_factor;
 #endif
@@ -20,8 +20,7 @@ extern uint16_t isolated_board_factor;
 // #define BASE_PRINT
 #define LOG_PRINT
 #define NEW_APP
-// #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
-
+#define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
@@ -40,6 +39,7 @@ extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
 extern bool printPos;
+// extern bool audioOn;
 extern uint8_t JogFlag;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
@@ -183,6 +183,5 @@ void GoToMapIndex();
 void getMapPtCounts(bool doPrint);
 void sendStatusData();
 void handleGetPropertyRequest(FieldDeviceProperty property);
-// void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
-// void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
+
 #endif // SHARED_VARS_H

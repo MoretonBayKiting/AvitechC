@@ -1734,18 +1734,25 @@ void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
         {
             maxTilt = y;
         }
+        if (minTilt < getTiltFromCart(MAX_RANGE))
+            minTilt = getTiltFromCart(MAX_RANGE);
+        if (maxTilt > getTiltFromCart(MIN_RANGE))
+            maxTilt = getTiltFromCart(MIN_RANGE);
     }
 }
-uint8_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
+uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
 { //, int &rhoMax, int &rhoMin){
     rhoMin = getCartFromTilt(maxTilt);
     int rhoMax = getCartFromTilt(minTilt);
-    int temp = static_cast<uint8_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
-#ifdef xDEBUG
+    int temp = static_cast<uint16_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
+#ifdef GHOST
+    sprintf(debugMsg, "Ints: rhoMax: %d rhoMin: %d tilt_sep: %d nbrRungs: %d ", static_cast<int>(rhoMax), static_cast<int>(rhoMin), static_cast<int>(Tilt_Sep));
+    uartPrint(debugMsg);
+
     sprintf(debugMsg, "rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
     uartPrint(debugMsg);
 #endif
-    return (uint8_t)temp;
+    return (uint16_t)temp;
 }
 
 uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd)
@@ -1918,7 +1925,7 @@ uint16_t distance(int pt1[2], int pt2[2])
 #endif
     return dist;
 }
-bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint8_t nbrRungs)
+bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
 {
     static uint8_t wigglyPt = 0;
     static int thisRes[2], tilt = 0;
@@ -1939,10 +1946,12 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     { // Test for a new pattern and, if so, reset seg.
         seg = 0;
         CmdLaserOnFlag = false; // 20241229.  Laser off if moving to first point of pattern (and hence also zone)
+        SetLaserVoltage(0);
         endRung = true;
     }
     else
         CmdLaserOnFlag = true;
+    SetLaserVoltage(LaserPower);
 // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
 #ifdef TEST_PATH_MODE
     sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
@@ -2102,6 +2111,12 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         // sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
         sprintf(debugMsg, "ind: %d, X: %d, Y: %d, MC[zn] %d>", ind, X, Y, MapCount[0][zn]);
         uartPrint(debugMsg);
+#endif
+#ifdef TEST_LASER_POWER
+        if (CmdLaserOnFlag)
+            uartPrintFlash(F("On \n"));
+        else
+            uartPrintFlash(F("Off \n"));
 #endif
         printToBT(34, AbsX);
         printToBT(35, AbsY);
@@ -2473,7 +2488,8 @@ void HomeAxis()
     }
 
     CmdLaserOnFlag = false; // 20240731
-    HomeMotor(1, -5000);    // Tilt motor homing position
+    SetLaserVoltage(0);
+    HomeMotor(1, -5000); // Tilt motor homing position
 #endif
 #ifdef ISOLATED_BOARD
     X = 0;
@@ -2502,10 +2518,12 @@ void HomeAxis()
 
     MoveMotor(1, Correctionstepping, 1);
     CmdLaserOnFlag = false; // 20240731
-    NeutralAxis();          // Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
+    SetLaserVoltage(0);
+    NeutralAxis(); // Take pan to -4000 and tilt to 500 (both magic numbers in NeutralAxis()).
     ClearSerial();
     // Audio2(2,1,1,"HA");
     CmdLaserOnFlag = false;
+    SetLaserVoltage(0);
     IsHome = 1;
 }
 
@@ -2522,7 +2540,7 @@ void RunSweep(uint8_t zn)
     LoadZoneMap(zn, false);
     printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
-    uint8_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
+    uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
     for (PatType = 1; PatType <= 4; PatType++)
     {
         if (ActivePatterns & (1 << PatType - 1)) // PatType runs from 1 to 4.  ActivePatterns stored in 4 least significant bits.
@@ -2552,6 +2570,7 @@ void RunSweep(uint8_t zn)
                 if (cnt == 0 && PatType == 1)
                 { // 20240727:Laser off as it moves towards 0th point of cycle.
                     CmdLaserOnFlag = false;
+                    SetLaserVoltage(0);
                     DSS_preload = Step_Rate_Max;
                 }
                 else
@@ -2559,11 +2578,13 @@ void RunSweep(uint8_t zn)
                     if ((PatType == 2 && runSweepStartRung))
                     { // Laser off and high speed if going to start of rung in pat 2
                         CmdLaserOnFlag = false;
+                        SetLaserVoltage(0);
                         DSS_preload = CalcSpeed(true); // Passing true makes the speed fast, independent of tilt angle.
                     }
                     else
                     {
                         CmdLaserOnFlag = true;
+                        SetLaserVoltage(LaserPower);
                         DSS_preload = CalcSpeed(false); // Passing false makes the speed depend on tilt angle.
                     }
                 }
@@ -2886,6 +2907,7 @@ void DoHouseKeeping()
         IsHome = 0;
         WaitAfterPowerUp();
         if (CmdLaserOnFlag && MapTotalPoints >= 2)
+        // if (MapTotalPoints >= 2)
         {
             WarnLaserOn();
             SetLaserVoltage(LaserPower);

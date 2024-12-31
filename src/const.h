@@ -31,6 +31,8 @@
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
+#define MAX_RANGE 250             // Maximum range from laser to target.
+#define MIN_RANGE 10              // Maximum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.

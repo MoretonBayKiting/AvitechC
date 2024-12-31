@@ -8,8 +8,9 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-// #define GHOST
-// #define ISOLATED_BOARD
+#define GHOST
+#define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;
@@ -20,6 +21,7 @@ extern uint16_t isolated_board_factor;
 #define LOG_PRINT
 #define NEW_APP
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
+
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif

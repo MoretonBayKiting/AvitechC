@@ -39,7 +39,7 @@ extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
 extern bool printPos;
-// extern bool audioOn;
+extern bool audioOn;
 extern uint8_t JogFlag;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
@@ -98,7 +98,10 @@ extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
 extern bool GyroOnFlag;
 extern uint8_t EramGyroAddress;
-
+extern uint8_t MicroMajor;
+extern uint8_t EEMEM EramMicroMajor;
+extern uint8_t MicroMinor;
+extern uint8_t EEMEM EramMicroMinor;
 extern uint32_t JM_n;
 extern uint32_t MM_n;
 
@@ -183,5 +186,5 @@ void GoToMapIndex();
 void getMapPtCounts(bool doPrint);
 void sendStatusData();
 void handleGetPropertyRequest(FieldDeviceProperty property);
-
+void sendProperty(FieldDeviceProperty property, uint8_t value);
 #endif // SHARED_VARS_H

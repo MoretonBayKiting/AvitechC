@@ -23,7 +23,9 @@ enum FieldDeviceProperty
     lightSensorReading, // uint
     deviceMode,         //
     currentZoneRunning,
-    currentPatternRunning
+    currentPatternRunning,
+    microMajor,
+    microMinor,
 };
 
 enum TimeMode
@@ -50,6 +52,11 @@ enum FieldDeviceMode
 {
     running,
     programming,
+    restart,
+    lightSensor,
+    lightTrigger,
+    btConnected,
+    btDisconnected
 };
 
 #endif // FIELD_DEVICE_PROPERTY_H

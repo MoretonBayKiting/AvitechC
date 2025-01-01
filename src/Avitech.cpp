@@ -47,9 +47,9 @@ bool isolated_board_flag = false;
 uint16_t isolated_board_factor = 1;
 #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
-// bool audioOn = true;  //
-int Dy; // Used to calulate how many steps required on Y axis from last position
-int Dx; // Used to calulate how many steps required on X axis from last position
+bool audioOn = true;  //
+int Dy;               // Used to calulate how many steps required on Y axis from last position
+int Dx;               // Used to calulate how many steps required on X axis from last position
 
 bool rndLadBit; // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
@@ -149,6 +149,12 @@ uint8_t EEMEM EramLaser2BattTrip;
 
 uint8_t Laser2BattTrip;
 uint8_t Laser2BattTripFlag;
+
+uint8_t MicroMajor;
+uint8_t EEMEM EramMicroMajor;
+
+uint8_t MicroMinor;
+uint8_t EEMEM EramMicroMinor;
 
 //----------Communication Variables--------------------
 uint8_t A;
@@ -953,12 +959,12 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo)
 }
 void Audio3()
 { // Call this in ISR to implement buzzer when it has been setup by Audio2().
-    // if (TJTick % 40 == 0)
-    // {
-    //     sprintf(debugMsg, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
-    //     uartPrint(debugMsg);
-    // }
-    // if (audioOn)
+    if (TJTick % 40 == 0)
+    {
+        sprintf(debugMsg, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
+        uartPrint(debugMsg);
+    }
+    if (audioOn)
     {
         static bool BuzzerOn = false;
         if (PrevAudioLength != AudioLength)
@@ -992,10 +998,10 @@ void Audio3()
         else
             PORTE &= ~(1 << BUZZER); // BUZZER LOW
     }
-    // else
-    // {
-    //     PORTE &= ~(1 << BUZZER); // BUZZER LOW
-    // }
+    else
+    {
+        PORTE &= ~(1 << BUZZER); // BUZZER LOW
+    }
 }
 
 void WaitAfterPowerUp()
@@ -2730,10 +2736,10 @@ void PrintConfigData()
     ConfigData[2] = MapTotalPoints;
     ConfigCode[2] = 4; // 20240618: This is already printed from PrintZoneData()
 
-    ConfigData[3] = 0; //_version_major;
+    ConfigData[3] = eeprom_read_byte(&EramMicroMajor); //_version_major;
     ConfigCode[3] = 23;
 
-    ConfigData[4] = 0; //_version_minor;
+    ConfigData[3] = eeprom_read_byte(&EramMicroMinor); //_version_minor;
     ConfigCode[4] = 24;
 
     ConfigData[5] = UserLightTripLevel;
@@ -3066,8 +3072,13 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     case FieldDeviceProperty::currentPatternRunning:
         sendProperty(property, PatternRunning);
         break;
-    default:
-        // Handle unknown property
+    case FieldDeviceProperty::microMajor:
+        MicroMajor = eeprom_read_byte(&EramMicroMajor);
+        sendProperty(property, MicroMajor);
+        break;
+    case FieldDeviceProperty::microMinor:
+        MicroMinor = eeprom_read_byte(&EramMicroMinor);
+        sendProperty(property, MicroMinor);
         break;
     }
 }

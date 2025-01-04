@@ -21,6 +21,11 @@ enum FieldDeviceProperty
     randomizeSpeed,     // [0, 100] percent
     speedScale,         // [0, 100] percent
     lightSensorReading, // uint
+    deviceMode,         //
+    currentZoneRunning,
+    currentPatternRunning,
+    microMajor,
+    microMinor,
 };
 
 enum TimeMode
@@ -41,6 +46,17 @@ enum LocationMode
     outdoor,
     indoor,
     indoorInverted
+};
+
+enum FieldDeviceMode
+{
+    running,
+    programming,
+    // restart,
+    lightSensor,
+    // lightTrigger,
+    // btConnected,
+    // btDisconnected
 };
 
 #endif // FIELD_DEVICE_PROPERTY_H

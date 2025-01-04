@@ -11,15 +11,32 @@
 #include <math.h>
 
 // 20241206: Use new ReScale to reinterpret previously used variables (mostly SpeedZone values)
-uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax)
+uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut = true)
 {
-    // Perform the calculation using floating-point arithmetic
-    if (val < oldMin)
-        val = oldMin;
-    if (val > oldMax)
-        val = oldMax;
-    float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
-    float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    float ratio = 0.0;
+    float r = 0.0;
+    sprintf(debugMsg, "val %d, oldMin %d, oldMax %d, newMin %d, newMax %d, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
+    uartPrint(debugMsg);
+    if (inOut)
+    {
+        if (val < oldMin)
+            val = oldMin;
+        if (val > oldMax)
+            val = oldMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+        r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    }
+    else
+    {
+        if (val < newMin)
+            val = newMin;
+        if (val > newMax)
+            val = newMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
+        r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
+    }
+    // sprintf(debugMsg, "100ratio %d, 100r %d", 100 * ratio, 100 * r);
+    // uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 

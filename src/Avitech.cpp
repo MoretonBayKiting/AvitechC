@@ -34,7 +34,7 @@
 
 MCP4725 DAC(0x60); // (MCP4725ADD>>1);
 uint8_t printCnter = 0;
-// uint16_t eeprom_address = 0;
+uint16_t eeprom_address = 0;
 
 // volatile uint16_t n = 0;  //Counter used in debugging.
 uint16_t Boardrevision; // Board that program will be deployed to
@@ -148,6 +148,12 @@ uint8_t EEMEM EramLaser2BattTrip;
 
 uint8_t Laser2BattTrip;
 uint8_t Laser2BattTripFlag;
+
+uint8_t MicroMajor;
+uint8_t EEMEM EramMicroMajor;
+
+uint8_t MicroMinor;
+uint8_t EEMEM EramMicroMinor;
 
 //----------Communication Variables--------------------
 uint8_t A;
@@ -2285,8 +2291,8 @@ void JogMotors(bool prnt)
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
-    static int lastAbsX = 0;
-    static int lastAbsY = 0;
+    static int lastX = 0;
+    static int lastY = 0;
     JogFlag = 0;
     int pos = 0;
     avoidLimits(false);
@@ -2294,7 +2300,7 @@ void JogMotors(bool prnt)
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
 #ifdef NEW_APP
 #ifdef LOG_PRINT
-    if (AbsX != lastAbsX || AbsY != lastAbsY)
+    if (X != lastX || Y != lastY)
     {
         // sprintf(debugMsg,"AbsX: %d, AbsY: %d", AbsX, AbsY);
         // uartPrint(debugMsg);
@@ -2303,8 +2309,8 @@ void JogMotors(bool prnt)
     }
 #endif
 #endif
-    lastAbsX = AbsX;
-    lastAbsY = AbsY;
+    lastX = X;
+    lastY = Y;
 
     if (PanEnableFlag == 1)
     {
@@ -2733,10 +2739,10 @@ void PrintConfigData()
     ConfigData[2] = MapTotalPoints;
     ConfigCode[2] = 4; // 20240618: This is already printed from PrintZoneData()
 
-    ConfigData[3] = 0; //_version_major;
+    ConfigData[3] = eeprom_read_byte(&EramMicroMajor); //_version_major;
     ConfigCode[3] = 23;
 
-    ConfigData[4] = 0; //_version_minor;
+    ConfigData[4] = eeprom_read_byte(&EramMicroMinor); //_version_minor;
     ConfigCode[4] = 24;
 
     ConfigData[5] = UserLightTripLevel;
@@ -2775,12 +2781,9 @@ void sendStatusData()
 
 void ProgrammingMode()
 {
-    // uartPrintFlash(F("10:1 Laser0 \n"));
     SetLaserVoltage(0); // Turn off laser
-    // uartPrintFlash(F("10:1 HA \n"));
     HomeAxis();
     printToBT(9, 1);
-    // _delay_ms(100);
 }
 
 void OperationModeSetup(int OperationMode)
@@ -2792,6 +2795,7 @@ void OperationModeSetup(int OperationMode)
     {
     case 0:
         name = "Field-i";
+        y_minCount = 20; // 20 steps with TILT_STEPS_PER_RAD 2052.0 implies tan of 0.01R.  LaserHt = 5m implies 500m range.
         y_maxCount = 1800;
         strcpy(OpModeTxt, "0:Field-i");
         break;
@@ -2981,10 +2985,16 @@ uint8_t getUserLaserPower() { return UserLaserPower; }
 uint8_t getCurrentLaserPower() { return LaserPower; }
 uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
 uint8_t getRandomizeSpeed() { return 0; }                  // TJ: I don't know what this is supposed to do.
-uint8_t getSpeedScale() { return SpeedScale; }
+uint8_t getSpeedScale()
+{
+    uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
+    sprintf(debugMsg, "Invert SpeedScale %d,  r %d", SpeedScale, r);
+    uartPrint(debugMsg);
+    return r;
+}
 uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
 
-// Property set functions
+// Property send functions
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
@@ -3000,13 +3010,6 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     uartPrint(debugMsg);
     switch (property)
     {
-    // First 2 cases need further investigation by TJ.
-    // case FieldDeviceProperty::microMajorVersion:
-    //     sendProperty(property, MICRO_MAJOR_VERSION);
-    //     break;
-    // case FieldDeviceProperty::microMinorVersion:
-    //     sendProperty(property, MICRO_MINOR_VERSION);
-    //     break;
     case FieldDeviceProperty::batteryVoltAdc:
         sendProperty(property, getBatteryVoltageAdc());
         break;
@@ -3055,8 +3058,22 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     case FieldDeviceProperty::lightSensorReading:
         sendProperty(property, getLightSensorReading());
         break;
-    default:
-        // Handle unknown property
+    case FieldDeviceProperty::deviceMode:
+        sendProperty(property, SetupModeFlag); // 0 Run  mode, 1 prog mode?
+        break;
+    case FieldDeviceProperty::currentZoneRunning:
+        sendProperty(property, MapRunning);
+        break;
+    case FieldDeviceProperty::currentPatternRunning:
+        sendProperty(property, PatternRunning);
+        break;
+    case FieldDeviceProperty::microMajor:
+        MicroMajor = eeprom_read_byte(&EramMicroMajor);
+        sendProperty(property, MicroMajor);
+        break;
+    case FieldDeviceProperty::microMinor:
+        MicroMinor = eeprom_read_byte(&EramMicroMinor);
+        sendProperty(property, MicroMinor);
         break;
     }
 }
@@ -3098,9 +3115,9 @@ void setup()
         return;
     }; // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    firstOn();      // Load defaults to EEPROM if first time on.
-    ReadEramVars(); // Reads user data from EEPROM to RAM.
-    // initMPU();
+    firstOn();           // Load defaults to EEPROM if first time on.
+    ReadEramVars();      // Reads user data from EEPROM to RAM.
+    initMPU();           // 20241231 This was commented out.  It will error if the wrong address for the given board is in EEPROM (and read from preious statement)
     PORTE |= (1 << FAN); // Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++)
     {                        // BatteryVoltage should be populated by this.  20241205 The limit, 10, is also the size of the relevant array. Change to use a constant?
@@ -3128,7 +3145,9 @@ int main()
     {
 
         doPrint = true;
-        if (SetupModeFlag == 1)
+        switch (SetupModeFlag)
+        {
+        case 1:
         {
             if (PrevSetupModeFlag != SetupModeFlag)
             {
@@ -3137,11 +3156,10 @@ int main()
                 PrevSetupModeFlag = SetupModeFlag;
             }
             JogMotors(doPrint);
+            break;
         }
-        if (SetupModeFlag == 0)
+        case 0:
         { // In run mode
-            // if (getReportFlag())
-            //     printZoneStatus(9);
             if (PrevSetupModeFlag != SetupModeFlag)
             {
                 // eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
@@ -3150,8 +3168,6 @@ int main()
                 _delay_ms(2000);
                 PrevSetupModeFlag = SetupModeFlag;
             }
-            // firstRun = false;
-            // }
             if (MapTotalPoints > 0)
             {
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++)
@@ -3161,21 +3177,24 @@ int main()
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
                         if (MapCount[0][Zn - 1] > 0)
-                        {                     // MapCount index is zero base
-                            MapRunning = Zn;  // But map index in app is 1 based.
-                            RunSweep(Zn - 1); //
-                            printToBT(17, 0); // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
-                            // SetLaserVoltage(0);  //Laser needs to be off between zones.
+                        {                       // MapCount index is zero base
+                            MapRunning = Zn;    // But map index in app is 1 based.
+                            RunSweep(Zn - 1);   //
+                            printToBT(17, 0);   // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
+                            SetLaserVoltage(0); // Laser needs to be off between zones.
                         }
                     }
                 }
             }
             else
                 SetLaserVoltage(0); // 20240718: Standby mode
+            break;
         }
-        if (SetupModeFlag == 2)
+        case 2:
         {
             CalibrateLightSensor();
+            break;
+        }
         }
         DoHouseKeeping();
     }

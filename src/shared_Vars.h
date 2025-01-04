@@ -8,9 +8,9 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define GHOST
-#define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
-#define ISOLATED_BOARD
+// #define GHOST
+// #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
+// #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 10
 extern bool isolated_board_flag;
@@ -40,6 +40,7 @@ extern uint16_t EramLaserID;
 extern uint16_t LaserID;
 extern volatile bool SteppingStatus;
 extern bool printPos;
+extern bool audioOn;
 extern uint8_t JogFlag;
 extern uint8_t PanEnableFlag;
 extern uint8_t PanDirection;
@@ -98,7 +99,10 @@ extern uint8_t LightSensorModeFlag;
 extern uint8_t GyroAddress;
 extern bool GyroOnFlag;
 extern uint8_t EramGyroAddress;
-
+extern uint8_t MicroMajor;
+extern uint8_t EEMEM EramMicroMajor;
+extern uint8_t MicroMinor;
+extern uint8_t EEMEM EramMicroMinor;
 extern uint32_t JM_n;
 extern uint32_t MM_n;
 
@@ -183,6 +187,7 @@ void GoToMapIndex();
 void getMapPtCounts(bool doPrint);
 void sendStatusData();
 void handleGetPropertyRequest(FieldDeviceProperty property);
-// void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
-// void eeprom_update_byte(uint16_t *eepromAddress, uint16_t newValue);
+void sendProperty(FieldDeviceProperty property, uint8_t value);
+uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut);
+
 #endif // SHARED_VARS_H

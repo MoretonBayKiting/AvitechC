@@ -10,16 +10,32 @@
 #include <stdlib.h>
 #include <math.h>
 
-// 20241206: Use new ReScale to reinterpret previously used variables (mostly SpeedZone values)
-uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax)
+uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut)
 {
-    // Perform the calculation using floating-point arithmetic
-    if (val < oldMin)
-        val = oldMin;
-    if (val > oldMax)
-        val = oldMax;
-    float ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
-    float r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    float ratio = 0.0;
+    float r = 0.0;
+    sprintf(debugMsg, "val %d, oldMin %d, oldMax %d, newMin %d, newMax %d, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
+    uartPrint(debugMsg);
+    if (inOut)
+    {
+        if (val < oldMin)
+            val = oldMin;
+        if (val > oldMax)
+            val = oldMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+        r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    }
+    else
+    {
+        if (val < newMin)
+            val = newMin;
+        if (val > newMax)
+            val = newMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
+        r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
+    }
+    sprintf(debugMsg, "100ratio %d, 100r %d", 100 * ratio, 100 * r);
+    uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
@@ -155,34 +171,26 @@ void DecodeCommsData()
         uartPrint(debugMsg);
         break; //
 
-    case PROPERTY_GET_CHANNEL:
-        handleGetPropertyRequest(Instruction);
-        break;
-    case PROPERTY_SET_CHANNEL:
-        FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
-        uint8_t value = Instruction & 0x00FF;
-        handleSetPropertyRequest(prop, value);
-        break;
-
+    case 60: // Check zones.
+        GoToMapIndex();
+        break; // Update ActiveMapZones (in EEPROM)
         //     case 59:
         // #ifdef ISOLATED_BOARD
         //         isolated_board_factor = Instruction;
         // #endif
         //         break;
-    case 60: // Check zones.
-        GoToMapIndex();
-        break; // Update ActiveMapZones (in EEPROM)
-    case 61:   // ReportVertices and store MapTotalPoints.
+    case 61: // ReportVertices and store MapTotalPoints.
+        // uartPrint("Enter case 61");
         if (Instruction == 0)
         {
             ReportVertices(); // Report vertices back to app
         }
-        break;
-        if (Instruction == 1)
+        else if (Instruction == 1)
         {
             eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // MapTotalPoints is set whenever a point is stored.  The app sends <61:1> when it has finished sending points.
             CmdStorePts(true);
         }
+        break;
     case 62:
         printToBT(54, ActiveMapZones);
         printToBT(52, ActivePatterns);
@@ -195,6 +203,16 @@ void DecodeCommsData()
     case 64:
         TraceBoundary(Instruction); // Instruction is zone (1 based)
         break;
+    case PROPERTY_GET_CHANNEL:
+        handleGetPropertyRequest(Instruction);
+        break;
+    case PROPERTY_SET_CHANNEL:
+        FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
+        uint8_t value = Instruction & 0x00FF;
+        handleSetPropertyRequest(prop, value);
+        break;
+        // default:
+        //     break;
     }
 
     if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
@@ -361,15 +379,20 @@ void cmd10_running()
     WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 0;
+    printToBT(9, 0);
 }
 void cmd10_programming()
 {
+    uartPrint("c10_prog");
     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 1;
-    printToBT(9, 1); // 20240922
-    // Audio2(2,2,2);//,"AC10:1");
+    // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
+    Audio2(2, 2, 2); //,"AC10:1");
+    // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
+    uartPrint("About to call programmingMode()");
     ProgrammingMode(); // Home machine ready for programming in points
+    // uartPrint("Exiting c10_prog");
 }
 
 void cmd10_restart()
@@ -404,7 +427,8 @@ void cmd10_btConnected()
     // 20241209.  Put back to zero.  Dom has added refresh button to app.
     SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
     Audio2(1, 2, 0);  //,"AC10:32");
-    PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
+    // sendStatusData()
+    PrintAppData(); // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
     TransmitData();
     PrintConfigData(); // Send area data back to the app for user to see
 }
@@ -414,103 +438,104 @@ void cmd10_btDisconnected()
     Audio2(1, 2, 0); //,"AC10:64");
 }
 
-void Cmd10()
-{
-    switch (Instruction)
-    {
-    case 0:
-        cmd10_running();
-        printToBT(9, 0); // 20240922
-        break;
-    case 1:
-        cmd10_programming();
-        break;
-    case 4:
-        cmd10_restart();
-        break;
-    case 8:
-        cmd10_lightSensor();
-        break;
-    case 16:
-        cmd10_lightTrigger();
-        break;
-    case 32:
-        cmd10_btConnected();
-        break;
-    case 64:
-        cmd10_btDisconnected();
-        break;
-    }
-}
-
 // void Cmd10()
-// { // Setup/Run mode selection. Delete all map points. Cold restart
-//     uint8_t A;
-//     A = Instruction;
-
-//     if (A == 0b00000000)
-//     {                                                            // Run mode   <10:0>
-//         eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
-//         WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
-//         PrevSetupModeFlag = SetupModeFlag;
-//         SetupModeFlag = 0;
-//         printToBT(9, 0); // 20240922
-//         // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-//     }
-
-//     if (A == 0b00000001)
-//     {                        // Program Mode  <10:1>
-//         WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
-//         PrevSetupModeFlag = SetupModeFlag;
-//         SetupModeFlag = 1;
-//         printToBT(9, 1); // 20240922
-//         // Audio2(2,2,2);//,"AC10:1");
-//         ProgrammingMode(); // Home machine ready for programming in points
-//     }
-
-//     if (A == 0b00000100)
-//     {                    // Full cold restart of device <10:4>
-//         Audio2(1, 2, 0); //,"AC10:4");
-//         setupWatchdog();
-//         _delay_ms(1000);
-//     }
-
-//     if (A == 0b00001000)
-//     {                    // Setup light sensor mode    <10:8>
-//         Audio2(1, 2, 0); //,"AC10:8");
-//         SetupModeFlag = 2;
-//         _delay_ms(1000);
-//     }
-//     // --Setup light sensor mode---
-//     if (A == 0b00010000)
-//     { // Store current value to default light trigger value    <10:16>
-//         if (SetupModeFlag == 2 && LightLevel < 100)
-//         {
-//             eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
-//             FactoryLightTripLevel = LightLevel;
-//             Audio2(1, 2, 0); //,"AC10:16");
-//             _delay_ms(1);
-//         }
-//     }
-
-//     if (A == 0b00100000)
-//     { // App telling the micro that the bluetooth is connected
-//         BT_ConnectedFlag = 1;
-//         // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
-//         // 20241209.  Put back to zero.  Dom has added refresh button to app.
-//         SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-//         Audio2(1, 2, 0);  //,"AC10:32");
-//         PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-//         TransmitData();
-//         PrintConfigData(); // Send area data back to the app for user to see
-//     }
-
-//     if (A == 0b01000000)
-//     { // App telling the micro that the bluetooth is disconnected
-//         BT_ConnectedFlag = 0;
-//         Audio2(1, 2, 0); //,"AC10:64");
+// {
+//     switch (Instruction)
+//     {
+//     case 0:
+//         cmd10_running();
+//         // 20240922
+//         break;
+//     case 1:
+//         uartPrint("cmd10_p to be called");
+//         cmd10_programming();
+//         break;
+//     case 4:
+//         cmd10_restart();
+//         break;
+//     case 8:
+//         cmd10_lightSensor();
+//         break;
+//     case 16:
+//         cmd10_lightTrigger();
+//         break;
+//     case 32:
+//         cmd10_btConnected();
+//         break;
+//     case 64:
+//         cmd10_btDisconnected();
+//         break;
 //     }
 // }
+
+void Cmd10()
+{ // Setup/Run mode selection. Delete all map points. Cold restart
+    uint8_t A;
+    A = Instruction;
+
+    if (A == 0b00000000)
+    {                                                            // Run mode   <10:0>
+        eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
+        WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
+        PrevSetupModeFlag = SetupModeFlag;
+        SetupModeFlag = 0;
+        printToBT(9, 0); // 20240922
+        // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
+    }
+
+    if (A == 0b00000001)
+    {                        // Program Mode  <10:1>
+        WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
+        PrevSetupModeFlag = SetupModeFlag;
+        SetupModeFlag = 1;
+        printToBT(9, 1); // 20240922
+        // Audio2(2,2,2);//,"AC10:1");
+        ProgrammingMode(); // Home machine ready for programming in points
+    }
+
+    if (A == 0b00000100)
+    {                    // Full cold restart of device <10:4>
+        Audio2(1, 2, 0); //,"AC10:4");
+        setupWatchdog();
+        _delay_ms(1000);
+    }
+
+    if (A == 0b00001000)
+    {                    // Setup light sensor mode    <10:8>
+        Audio2(1, 2, 0); //,"AC10:8");
+        SetupModeFlag = 2;
+        _delay_ms(1000);
+    }
+    // --Setup light sensor mode---
+    if (A == 0b00010000)
+    { // Store current value to default light trigger value    <10:16>
+        if (SetupModeFlag == 2 && LightLevel < 100)
+        {
+            eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
+            FactoryLightTripLevel = LightLevel;
+            Audio2(1, 2, 0); //,"AC10:16");
+            _delay_ms(1);
+        }
+    }
+
+    if (A == 0b00100000)
+    { // App telling the micro that the bluetooth is connected
+        BT_ConnectedFlag = 1;
+        // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
+        // 20241209.  Put back to zero.  Dom has added refresh button to app.
+        SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
+        Audio2(1, 2, 0);  //,"AC10:32");
+        PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
+        TransmitData();
+        PrintConfigData(); // Send area data back to the app for user to see
+    }
+
+    if (A == 0b01000000)
+    { // App telling the micro that the bluetooth is disconnected
+        BT_ConnectedFlag = 0;
+        Audio2(1, 2, 0); //,"AC10:64");
+    }
+}
 
 void Cmd11()
 {
@@ -607,7 +632,7 @@ void Cmd14()
 
 void Cmd16()
 { // 20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
     eeprom_update_byte(&EramSpeedScale, NewInstruction);
     SpeedScale = NewInstruction;
     Audio2(1, 2, 0); //,"AC22");
@@ -615,26 +640,26 @@ void Cmd16()
 
 void Cmd17()
 { // Previously SpeedZone 2 (with 1st numbered 1)
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
     Nbr_Rnd_Pts = NewInstruction;
 }
 void Cmd18()
 {
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
     eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
     Tilt_Sep = NewInstruction;
 }
 
 void Cmd19()
 { // 20241231.  Change this to adjust user laser power.
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, DEF_MAX_LASER_POWER);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, DEF_MAX_LASER_POWER, true);
     UserLaserPower = NewInstruction;
     // nbrWigglyPts not stored to EEPROM.  Just for testing.  Set to 0 when declared .
 }
 void Cmd20()
 {
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, LASER_HT_MIN, LASER_HT_MAX);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, LASER_HT_MIN, LASER_HT_MAX, true);
     eeprom_update_byte(&EramLaserHt, NewInstruction);
     LaserHt = NewInstruction;
 }
@@ -872,6 +897,8 @@ void GoToMapIndex()
 void ReportVertices()
 {
     getMapPtCounts(false);
+    // sprintf(debugMsg, "MTP: %d", MapTotalPoints);
+    // uartPrint(debugMsg);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
         uint8_t n = 0;
@@ -903,7 +930,7 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
 {
     if (value == CANT_SET_PROPERTY)
     {
-        sprintf(debugMsg, "Property not settable", property);
+        sprintf(debugMsg, "Property not settable %d", property);
         uartPrint(debugMsg);
     }
     else
@@ -913,11 +940,13 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
 
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
 {
+    uint8_t newValue = 0;
+    uint8_t currentValue = 0;
 #ifdef TEST_FDP
     sprintf(debugMsg, "Received by hSPR. Prop: %d, val: %d", property, value);
     uartPrint(debugMsg);
 #endif
-    uint8_t currentValue = 0;
+
     switch (property)
     {
     case FieldDeviceProperty::batteryVoltAdc:
@@ -930,6 +959,12 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramLightTriggerOperation, value);
         }
         LightTriggerOperation = value;
+        break;
+    case FieldDeviceProperty::beamMode:
+        // Do nothing
+        break;
+    case FieldDeviceProperty::locationMode:
+        // Do nothing
         break;
     case FieldDeviceProperty::tripodHeight:
         currentValue = eeprom_read_byte(&EramLaserHt);
@@ -955,6 +990,15 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         }
         Nbr_Rnd_Pts = value;
         break;
+    case FieldDeviceProperty::activeMapZones:
+        currentValue = eeprom_read_byte(&EramActiveMapZones);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&EramActiveMapZones, value);
+        }
+        ActiveMapZones = value;
+        break;
+
     case FieldDeviceProperty::activePatterns:
         currentValue = eeprom_read_byte(&EramActivePatterns);
         if (value != currentValue)
@@ -967,6 +1011,13 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         Instruction = value;
         Cmd4();
         break;
+    case FieldDeviceProperty::userLaserPower:
+        Instruction = value;
+        Cmd19();
+        break;
+    case FieldDeviceProperty::currentLaserPower:
+        setProperty(property, CANT_SET_PROPERTY);
+        break;
     case FieldDeviceProperty::laserTemperature:
         setProperty(property, CANT_SET_PROPERTY);
         break;
@@ -974,7 +1025,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::speedScale:
-        uint8_t newValue = ReScale(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX);
+        newValue = ReScale(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
         currentValue = eeprom_read_byte(&EramSpeedScale);
         if (newValue != currentValue)
         {
@@ -993,23 +1044,13 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             break;
         case programming:
             cmd10_programming();
-            break;
-        case restart:
-            cmd10_restart();
+
             break;
         case lightSensor:
             cmd10_lightSensor();
             break;
-        case lightTrigger:
-            cmd10_lightTrigger();
-            break;
-        case btConnected:
-            cmd10_btConnected();
-            break;
-        case btDisconnected:
-            cmd10_btDisconnected();
-            break;
         }
+        sendProperty(deviceMode, SetupModeFlag);
         break;
     case FieldDeviceProperty::currentZoneRunning:
         setProperty(property, CANT_SET_PROPERTY);

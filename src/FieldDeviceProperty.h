@@ -52,11 +52,11 @@ enum FieldDeviceMode
 {
     running,
     programming,
-    restart,
+    // restart,
     lightSensor,
-    lightTrigger,
-    btConnected,
-    btDisconnected
+    // lightTrigger,
+    // btConnected,
+    // btDisconnected
 };
 
 #endif // FIELD_DEVICE_PROPERTY_H

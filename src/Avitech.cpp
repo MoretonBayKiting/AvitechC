@@ -2288,8 +2288,8 @@ void JogMotors(bool prnt)
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
-    static int lastAbsX = 0;
-    static int lastAbsY = 0;
+    static int lastX = 0;
+    static int lastY = 0;
     JogFlag = 0;
     int pos = 0;
     avoidLimits(false);
@@ -2297,7 +2297,8 @@ void JogMotors(bool prnt)
     // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
 #ifdef NEW_APP
 #ifdef LOG_PRINT
-    if (AbsX != lastAbsX || AbsY != lastAbsY)
+    // if (AbsX != lastAbsX || AbsY != lastAbsY)
+    if (X != lastX || Y != lastY)
     {
         // sprintf(debugMsg,"AbsX: %d, AbsY: %d", AbsX, AbsY);
         // uartPrint(debugMsg);
@@ -2306,8 +2307,10 @@ void JogMotors(bool prnt)
     }
 #endif
 #endif
-    lastAbsX = AbsX;
-    lastAbsY = AbsY;
+    // lastAbsX = AbsX;
+    // lastAbsY = AbsY;
+    lastX = X;
+    lastY = Y;
 
     if (PanEnableFlag == 1)
     {
@@ -2778,10 +2781,15 @@ void sendStatusData()
 
 void ProgrammingMode()
 {
-    // uartPrintFlash(F("10:1 Laser0 \n"));
+    uartPrintFlash(F("ProgMode1 \n"));
     SetLaserVoltage(0); // Turn off laser
     // uartPrintFlash(F("10:1 HA \n"));
+    uartPrintFlash(F("ProgMode2 \n"));
     HomeAxis();
+    // #ifdef ISOLATED_BOARD
+    //     _delay_ms(1000);
+    // #endif
+    uartPrintFlash(F("ProgMode3 \n"));
     printToBT(9, 1);
     // _delay_ms(100);
 }
@@ -2832,8 +2840,8 @@ void DoHouseKeeping()
     static uint16_t dhkn = 0;
     dhkn++;
     if (!(TJTick % 200))
-        uartPrintFlash(F("DHK running \n"));
-    CheckBlueTooth();
+        // uartPrintFlash(F("DHK running \n"));
+        CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
 #ifdef ISOLATED_BOARD
@@ -2989,32 +2997,31 @@ uint8_t getUserLaserPower() { return UserLaserPower; }
 uint8_t getCurrentLaserPower() { return LaserPower; }
 uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
 uint8_t getRandomizeSpeed() { return 0; }                  // TJ: I don't know what this is supposed to do.
-uint8_t getSpeedScale() { return SpeedScale; }
+uint8_t getSpeedScale()
+{
+    uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
+    sprintf(debugMsg, "Invert SpeedScale %d,  r %d", SpeedScale, r);
+    uartPrint(debugMsg);
+    return r;
+}
 uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
 
-// Property set functions
+// Property send functions
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    sprintf(debugMsg, "argument received by sendProperty. Property: %d, value: %d", property, value);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "argument received by sendProperty. Property: %d, value: %d", property, value);
+    // uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    sprintf(debugMsg, "argument sent to handleGetPropertyRequest: %d", property);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "argument sent to handleGetPropertyRequest: %d", property);
+    // uartPrint(debugMsg);
     switch (property)
     {
-    // First 2 cases need further investigation by TJ.
-    // case FieldDeviceProperty::microMajorVersion:
-    //     sendProperty(property, MICRO_MAJOR_VERSION);
-    //     break;
-    // case FieldDeviceProperty::microMinorVersion:
-    //     sendProperty(property, MICRO_MINOR_VERSION);
-    //     break;
     case FieldDeviceProperty::batteryVoltAdc:
         sendProperty(property, getBatteryVoltageAdc());
         break;
@@ -3148,9 +3155,10 @@ int main()
 
     while (1)
     {
-
         doPrint = true;
-        if (SetupModeFlag == 1)
+        switch (SetupModeFlag)
+        {
+        case 1:
         {
             if (PrevSetupModeFlag != SetupModeFlag)
             {
@@ -3159,11 +3167,10 @@ int main()
                 PrevSetupModeFlag = SetupModeFlag;
             }
             JogMotors(doPrint);
+            break;
         }
-        if (SetupModeFlag == 0)
+        case 0:
         { // In run mode
-            // if (getReportFlag())
-            //     printZoneStatus(9);
             if (PrevSetupModeFlag != SetupModeFlag)
             {
                 // eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
@@ -3194,10 +3201,13 @@ int main()
             }
             else
                 SetLaserVoltage(0); // 20240718: Standby mode
+            break;
         }
-        if (SetupModeFlag == 2)
+        case 2:
         {
             CalibrateLightSensor();
+            break;
+        }
         }
         DoHouseKeeping();
     }

@@ -10,7 +10,7 @@
 #define SHARED_VARS_H
 // #define GHOST
 // #define TEST_LASER_POWER
-#define ISOLATED_BOARD
+// #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 2
 extern bool isolated_board_flag;
@@ -20,7 +20,7 @@ extern uint16_t isolated_board_factor;
 // #define BASE_PRINT
 #define LOG_PRINT
 #define NEW_APP
-#define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
+// #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
@@ -187,4 +187,5 @@ void getMapPtCounts(bool doPrint);
 void sendStatusData();
 void handleGetPropertyRequest(FieldDeviceProperty property);
 void sendProperty(FieldDeviceProperty property, uint8_t value);
+uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut);
 #endif // SHARED_VARS_H

@@ -174,6 +174,7 @@ void printToBT(uint8_t cmd, uint16_t inst);
 void printToBT(uint8_t cmd, int inst);
 void printToBT(uint8_t cmd, long inst);
 void StopTimer1();
+void StopSystem();
 void StopTimer3();
 void setupTimer1();
 void setupTimer3();

@@ -153,9 +153,9 @@ void DecodeCommsData()
     case 49:
         Cmd49();
         break; // Rho_Max;
-    case 50:
-        Cmd50();
-        break; // Nbr_Rnd_Pts
+        // case 50:
+        //     Cmd50();
+        //     break; // Nbr_Rnd_Pts
 
     case 52:
         Cmd52(); // ActivePatterns
@@ -228,32 +228,30 @@ void Cmd1()
 
 void Cmd2()
 {
+    if (Instruction == 0)
+        StopSystem(); // Attempt to stop kink at direction changes    }
     // Process Pan Stop/Start Register
     TiltEnableFlag = 0; // 20240620: Added by TJ.
     PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-    if (PanEnableFlag == 0)
-        X = AbsX; // Attempt to stop kink at direction changes
+
     // Process Pan Direction Register
     PanDirection = (Instruction & 0b00000010) ? 1 : 0;
     // Process Pan Speed Register
     PanSpeed = (Instruction & 0b00000100) ? 1 : 0;
-    // Reset PanEnableFlag to zero if outside range.
-    setupTimer1(); // 20240729: Start Timer 1 - it may have been stopped by going outside boundary.
 }
 
 void Cmd3()
 {
-    // Process Tilt Stop/Start Register
+    if (Instruction == 0)
+        StopSystem();  // Attempt to stop kink at direction changes    }    // Process Tilt Stop/Start Register
     PanEnableFlag = 0; // 20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-    if (TiltEnableFlag == 0)
-        Y = AbsY;
+
     // Process Tilt Direction Register
     TiltDirection = (Instruction & 0b00000010) ? 0 : 1; // 20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
     // 20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
     //  Process Tilt Speed Register
     TiltSpeed = (Instruction & 0b00000100) ? 1 : 0;
-    setupTimer1();
 }
 
 void Cmd4()
@@ -767,11 +765,11 @@ void Cmd49()
     eeprom_update_byte(&Eram_Rho_Max, Instruction);
     Rho_Max = Instruction;
 }
-void Cmd50()
-{ //
-    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
-    Nbr_Rnd_Pts = Instruction;
-}
+// void Cmd50()
+// { //
+//     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
+//     Nbr_Rnd_Pts = Instruction;
+// }
 
 #ifdef NEW_APP
 void Cmd54()

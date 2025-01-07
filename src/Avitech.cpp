@@ -553,6 +553,8 @@ void ProcessError()
     if (Z_AccelFlag)
     {
         Audio2(2, 1, 1); //,"PEAF");
+        StopSytem();
+        SetLaserVoltage(0);
         // Audio2(2,1,1);
         return;
     }
@@ -593,11 +595,10 @@ void ProcessBuffer(char *buffer)
                 Command = atoi(token + 1);     // Convert the command to an integer
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
 
-#ifdef DEBUG61
-                sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
-                uartPrint(debugMsg);
-#endif
+                // sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
+                // uartPrint(debugMsg);
                 DecodeCommsData(); // Process the command and instruction
+                // uartPrintFlash(F("Finished DecodeCommsData \n"));
             }
             token = strchr(end + 1, '<'); // Find the start of the next command
         }
@@ -2124,8 +2125,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         else
             uartPrintFlash(F("Off \n"));
 #endif
-        printToBT(34, AbsX);
-        printToBT(35, AbsY);
+        sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+        uartPrint(debugMsg);
+        // printToBT(34, AbsX);
+        // printToBT(35, AbsY);
         LastX = X;
         LastY = Y;
     }
@@ -2246,11 +2249,15 @@ void StopSystem()
     SteppingStatus = 0; // Reset stepping status
     X = AbsX;           // Set X and Y to their absolute values
     Y = AbsY;
+    Dx = 0;
+    Dy = 0;
 }
 
 void avoidLimits(bool axis)
 { // Don't allow jogging to take laser outside allowed range.
     // axis = false for pan and true for tilt. Set JogFlag (to one of 1,2,3,4) if limits are exceeded.
+    static int loopCount = 0;
+    loopCount++;
     JogFlag = 0;
     if (!axis)
     { // Pan axis case
@@ -2281,13 +2288,16 @@ void avoidLimits(bool axis)
     }
     if (JogFlag > 0)
     {
-        sprintf(debugMsg, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
-        uartPrint(debugMsg);
+        if (!(loopCount % 2000))
+        {
+            sprintf(debugMsg, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
+            uartPrint(debugMsg);
+        }
     }
 }
 
-void JogMotors(bool prnt)
-{ //
+void JogMotors(bool prnt) // 20250107  Add and explicit stop call
+{                         //
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
@@ -2297,18 +2307,7 @@ void JogMotors(bool prnt)
     int pos = 0;
     avoidLimits(false);
     avoidLimits(true);
-    // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
-#ifdef NEW_APP
-#ifdef LOG_PRINT
-    if (X != lastX || Y != lastY)
-    {
-        // sprintf(debugMsg,"AbsX: %d, AbsY: %d", AbsX, AbsY);
-        // uartPrint(debugMsg);
-        printToBT(34, AbsX);
-        printToBT(35, AbsY);
-    }
-#endif
-#endif
+
     lastX = X;
     lastY = Y;
 
@@ -2320,6 +2319,10 @@ void JogMotors(bool prnt)
         dir = PanDirection;
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
     }
+    else
+        X = AbsX;
+    {
+    }
     if (TiltEnableFlag == 1)
     {
         SteppingStatus = 1;
@@ -2328,6 +2331,8 @@ void JogMotors(bool prnt)
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
     }
+    else
+        Y = AbsY;
 
     pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
 #ifdef ISOLATED_BOARD
@@ -2355,11 +2360,21 @@ void JogMotors(bool prnt)
         {
             Y = pos;
         }
+#ifdef NEW_APP
+#ifdef LOG_PRINT
+        if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
+        {
+            sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+            uartPrint(debugMsg);
+            // printToBT(34, AbsX);
+            // printToBT(35, AbsY);
+        }
+#endif
+#endif
         ProcessCoordinates();
     }
     JogFlag = 0;
 }
-
 uint16_t CalcSpeed(bool fst)
 {
     uint16_t s = 0;
@@ -3176,10 +3191,10 @@ int main()
                         SetLaserVoltage(0);
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
-                        if (MapCount[0][Zn - 1] > 0)
-                        {                       // MapCount index is zero base
-                            MapRunning = Zn;    // But map index in app is 1 based.
-                            RunSweep(Zn - 1);   //
+                        if (MapCount[0][Zn - 1] > 0) // MapCount index is zero base - But map index in app is 1 based.
+                        {
+                            MapRunning = Zn;
+                            RunSweep(Zn - 1);
                             printToBT(17, 0);   // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
                             SetLaserVoltage(0); // Laser needs to be off between zones.
                         }

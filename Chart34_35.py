@@ -68,7 +68,7 @@ def plot_2d_data(df, output_image_path):
     plt.close()
 
 if __name__ == '__main__':
-    filename = 'debug/Debug0108M.txt'  # Replace with your input file name
+    filename = 'debug/Debug0109G_.txt'  # Replace with your input file name
     base_filename = os.path.splitext(filename)[0]
     output_image_path_3d = f'{base_filename}_3d.png'
     output_image_path_2d = f'{base_filename}_2d.png'

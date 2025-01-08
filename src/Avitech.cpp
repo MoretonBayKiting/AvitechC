@@ -3193,13 +3193,9 @@ void setup()
 
 int main()
 {
-    // "If Z_accelflag = 1 Then" //Need to implement something like this (search in BASCOM version) when IMU is working.
-    static bool doPrint = true;
     setup();
-
     while (1)
     {
-        doPrint = true;
         switch (SetupModeFlag)
         {
         case 1:

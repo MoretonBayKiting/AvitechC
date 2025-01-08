@@ -156,7 +156,7 @@ void DecodeCommsData()
 
     case 52:
         Cmd52(); // ActivePatterns
-        break;   // Update ActiveMapZones (in EEPROM)
+        break;
     case 53:
         bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
         bool resetSendDataFlag = true;
@@ -180,24 +180,15 @@ void DecodeCommsData()
         break;
     case 54:
         Cmd54();
-        break; // Update ActivePatterns (in EEPROM)
+        break; // Update ActiveMapZones (in EEPROM)
     case 55:   // Turn audio on or off.
         audioOn = !audioOn;
         sprintf(debugMsg, "audioOn: %d", audioOn);
         uartPrint(debugMsg);
         break; //
-    case 58:   // PROPERTY_GET_CHANNEL:
-        handleGetPropertyRequest(Instruction);
-        break;
-    case 59:                                                                           // PROPERTY_SET_CHANNEL:
-        FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
-        uint8_t value = Instruction & 0x00FF;                                          // Lower 8 bits encode value.
-        handleSetPropertyRequest(prop, value);
-        break;
-
-    case 60: // Check zones.
+    case 60:   // Check zones.
         GoToMapIndex();
-        break; // Update ActiveMapZones (in EEPROM)
+        break; //
 
     case 61: // ReportVertices and store MapTotalPoints.
         if (Instruction == 0)
@@ -447,71 +438,6 @@ void cmd10_btConnected()
     // sendStatusData()
     TransmitData();
     PrintAppData();    // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-    PrintConfigData(); // Send area data back to the app for user to see
-}
-void cmd10_btDisconnected()
-{ // App telling the micro that the bluetooth is disconnected
-    BT_ConnectedFlag = 0;
-    Audio2(1, 2, 0); //,"AC10:64");
-}
-
-void cmd10_running()
-{
-    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
-    WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
-    PrevSetupModeFlag = SetupModeFlag;
-    SetupModeFlag = 0;
-    printToBT(9, 0);
-}
-void cmd10_programming()
-{
-    uartPrint("c10_prog");
-    WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
-    PrevSetupModeFlag = SetupModeFlag;
-    SetupModeFlag = 1;
-    // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
-    Audio2(2, 2, 2); //,"AC10:1");
-    // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
-    uartPrint("About to call programmingMode()");
-    ProgrammingMode(); // Home machine ready for programming in points
-    // uartPrint("Exiting c10_prog");
-}
-
-void cmd10_restart()
-{
-    Audio2(1, 2, 0); //,"AC10:4");
-    setupWatchdog();
-    _delay_ms(1000);
-}
-
-void cmd10_lightSensor() // Setup light sensor mode    <10:8>
-{
-    Audio2(1, 2, 0); //,"AC10:8");
-    SetupModeFlag = 2;
-    _delay_ms(1000);
-}
-
-void cmd10_lightTrigger()
-{ // Store current value to default light trigger value    <10:16>
-    if (SetupModeFlag == 2 && LightLevel < 100)
-    {
-        eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
-        FactoryLightTripLevel = LightLevel;
-        Audio2(1, 2, 0); //,"AC10:16");
-        _delay_ms(1);
-    }
-}
-
-void cmd10_btConnected()
-{ // App telling the micro that the bluetooth is connected
-    BT_ConnectedFlag = 1;
-    // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
-    // 20241209.  Put back to zero.  Dom has added refresh button to app.
-    SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-    Audio2(1, 2, 0);  //,"AC10:32");
-    // sendStatusData()
-    PrintAppData(); // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-    TransmitData();
     PrintConfigData(); // Send area data back to the app for user to see
 }
 void cmd10_btDisconnected()

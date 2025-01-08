@@ -238,8 +238,8 @@ union
     };
 } Accel_Z;
 
-uint8_t Z_AccelFlag = 0;
-uint8_t Z_AccelFlagPrevious = 0;
+bool Z_AccelFlag = false;
+bool Z_AccelFlagPrevious = false;
 
 union
 {
@@ -1091,39 +1091,39 @@ void ReadAccelerometer()
 }
 void DecodeAccelerometer()
 {
+    static uint16_t DA_cnt = 0;
+    static uint16_t DA_cnt2 = 0;
+    bool printFlag = false;
     if (GyroOnFlag)
     {
-        if (OperationMode == 0)
-        { // Field-1
-            // sprintf(debugMsg,"Z_accel: %d", Accel_Z.Z_accel);
-            // uartPrint(debugMsg);
+        if (OperationMode == 0) // OperationMode == 0 is field i.
+        {                       // Field-1
+            DA_cnt++;
             if (Accel_Z.Z_accel < AccelTripPoint)
             {
-                Z_AccelFlag = 1;
+                DA_cnt2++;
+                Z_AccelFlag = true;
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
-                uartPrintFlash(F("AccelTripPoint error. \n"));
-#endif
-#ifdef BASE_PRINT
-#ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
+                // uartPrintFlash(F("AccelTripPoint error. \n"));
+                sprintf(debugMsg, "AccelTripPoint error. DA_cnt: %u, DA_cnt2: %u", DA_cnt, DA_cnt2);
                 uartPrint(debugMsg);
-#endif
 #endif
             }
             else
             {
-                Z_AccelFlag = 0;
+                Z_AccelFlag = false;
                 SystemFaultFlag = false;
             }
         }
         // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then
-        if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10)
+        if (Z_AccelFlagPrevious && !Z_AccelFlag && AccelTick < 10)
         {
-            Z_AccelFlag = 1;
+            Z_AccelFlag = true;
             SystemFaultFlag = true;
-            return;
+            return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.
         }
+
         Z_AccelFlagPrevious = Z_AccelFlag;
         AccelTick = 0;
     }
@@ -1959,13 +1959,31 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         endRung = true;
     }
     else
-        CmdLaserOnFlag = true;
-    SetLaserVoltage(LaserPower);
+    {
+        if (!SystemFaultFlag)
+        {
+            CmdLaserOnFlag = true;
+            SetLaserVoltage(LaserPower);
+        }
+    }
 // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
 #ifdef TEST_PATH_MODE
     sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
     uartPrint(debugMsg);
 #endif
+    if (seg == 0 && segPt == 0)
+    { // 20250108.  Turn laser off if going to first vertex of a zone.
+        SetLaserVoltage(0);
+        CmdLaserOnFlag = false;
+    }
+    else
+    {
+        if (!SystemFaultFlag)
+        {
+            SetLaserVoltage(LaserPower);
+            CmdLaserOnFlag = true;
+        }
+    }
     if (seg < MapCount[0][zn])
     { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
         if (segPt == 0)
@@ -1973,7 +1991,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             pt1[0] = Vertices[0][seg];
             pt1[1] = Vertices[1][seg];
             if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
-            // 2nd conditional deals with path mode where first point should not be repeated.
+            // 2nd conditional deals with path mode (Nbr_Rnd_Pts == 0) where first point should not be repeated.
             {
                 pt2[0] = Vertices[0][0];
                 pt2[1] = Vertices[1][0];
@@ -1990,7 +2008,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 #endif
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
-            // 20241221: These having aberrant values seemed to cause ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
+            // 20241221: These having aberrant values caused ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
             // are (or should be) used on the boundary.  Keep it as it fixed the problem.
             thisRes[0] = X;
             thisRes[1] = Y;
@@ -2352,8 +2370,6 @@ void JogMotors() // 20250107  Add and explicit stop call
     }
     else
     {
-        // sprintf(debugMsg, "Before SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
-        // uartPrint(debugMsg);
         setupTimer1(); // 20240620.  Could be only if necessary?
 
         if (axis == 0)
@@ -2594,8 +2610,9 @@ void RunSweep(uint8_t zn)
                 doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
                 newPatt = false;
-                if (cnt == 0 && PatType == 1)
-                { // 20240727:Laser off as it moves towards 0th point of cycle.
+                // if (cnt == 0 && PatType == 1)
+                if (cnt == 0)
+                { // 20240727:Laser off as it moves towards 0th point of pattern.
                     CmdLaserOnFlag = false;
                     SetLaserVoltage(0);
                     DSS_preload = Step_Rate_Max;
@@ -2610,8 +2627,11 @@ void RunSweep(uint8_t zn)
                     }
                     else
                     {
-                        CmdLaserOnFlag = true;
-                        SetLaserVoltage(LaserPower);
+                        if (!SystemFaultFlag)
+                        {
+                            CmdLaserOnFlag = true;
+                            SetLaserVoltage(LaserPower);
+                        }
                         DSS_preload = CalcSpeed(false); // Passing false makes the speed depend on tilt angle.
                     }
                 }
@@ -2620,7 +2640,8 @@ void RunSweep(uint8_t zn)
                 // }
                 ProcessCoordinates();
                 SteppingStatus = 1;
-                setupTimer1();
+                if (!SystemFaultFlag)
+                    setupTimer1();
 
                 while (SteppingStatus == 1)
                 {
@@ -2645,6 +2666,8 @@ void RunSweep(uint8_t zn)
         }
         printToBT(18, 0); // Set current pattern to zero
         newPatt = true;
+        SetLaserVoltage(0); // 20250108
+        CmdLaserOnFlag = false;
     }
     ResetTiming();
 }
@@ -2837,11 +2860,23 @@ void OperationModeSetup(int OperationMode)
 
 void DoHouseKeeping()
 {
-    static uint16_t dhkn = 0;
-    dhkn++;
+    // static uint16_t dhkn = 0;
+    // static bool lastSflag = false;
+    // dhkn++;
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
+    // if (SystemFaultFlag != lastSflag)
+    // {
+    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, lastSflag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, lastSflag, SystemFaultFlag);
+    //     uartPrint(debugMsg);
+    // }
+    // lastSflag = SystemFaultFlag;
+    // if (!(TJTick % 40))
+    // {
+    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, SystemFaultFlag);
+    //     uartPrint(debugMsg);
+    // }
 #ifdef ISOLATED_BOARD
     static uint16_t lastTick;
     isolated_board_flag = false;
@@ -2869,7 +2904,7 @@ void DoHouseKeeping()
 #ifdef THROTTLE
         ThrottleLaser();
 #endif
-        if (Z_AccelFlag == 0)
+        if (Z_AccelFlag == false)
         {
             ThrottleLaser();
         }
@@ -2895,10 +2930,11 @@ void DoHouseKeeping()
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;
-        if (!(dhkn % 30000))
-            sprintf(debugMsg, "DHKerr. IMU: %d, LaserTemp: %d, IMU: %d", Z_AccelFlag, LaserTemperature);
-        uartPrint(debugMsg);
-        // uartPrintFlash(F("DHKErr"));
+        // if (!(dhkn % 3000))
+        // {
+        //     sprintf(debugMsg, "DHKerr. ZFlag: %d, ZVal: %d, LaserTemp: %d", Z_AccelFlag, Accel_Z.Z_accel, LaserTemperature);
+        //     uartPrint(debugMsg);
+        // }
         ProcessError();
         return;
     }
@@ -2922,20 +2958,24 @@ void DoHouseKeeping()
         // if (MapTotalPoints >= 2)
         {
             WarnLaserOn();
-            SetLaserVoltage(LaserPower);
+            if (!SystemFaultFlag)
+            {
+                SetLaserVoltage(LaserPower);
+                CmdLaserOnFlag = true;
+            }
+            else
+            {
+                SetLaserVoltage(0);
+                GetLightLevel();
+            }
         }
-        else
-        {
-            SetLaserVoltage(0);
-            GetLightLevel();
-        }
-    }
 
-    if (Tod_tick > NIGHT_TRIP_TIME_FROM_STARTUP)
-    {
-        if (BT_ConnectedFlag == 0 && LightSensorModeFlag == 1)
+        if (Tod_tick > NIGHT_TRIP_TIME_FROM_STARTUP)
         {
-            MrSleepyTime();
+            if (BT_ConnectedFlag == 0 && LightSensorModeFlag == 1)
+            {
+                MrSleepyTime();
+            }
         }
     }
 }

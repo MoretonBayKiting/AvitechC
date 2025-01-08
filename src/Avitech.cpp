@@ -306,6 +306,8 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo); //
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
+void StopSystem();
+
 void setupPeripherals()
 {
     // Set relevant pins as output
@@ -553,7 +555,7 @@ void ProcessError()
     if (Z_AccelFlag)
     {
         Audio2(2, 1, 1); //,"PEAF");
-        StopSytem();
+        StopSystem();
         SetLaserVoltage(0);
         // Audio2(2,1,1);
         return;
@@ -2125,10 +2127,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         else
             uartPrintFlash(F("Off \n"));
 #endif
-        sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
-        uartPrint(debugMsg);
-        // printToBT(34, AbsX);
-        // printToBT(35, AbsY);
+        // sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+        // uartPrint(debugMsg);
+        printToBT(34, AbsX);
+        printToBT(35, AbsY);
         LastX = X;
         LastY = Y;
     }
@@ -2296,8 +2298,8 @@ void avoidLimits(bool axis)
     }
 }
 
-void JogMotors(bool prnt) // 20250107  Add and explicit stop call
-{                         //
+void JogMotors() // 20250107  Add and explicit stop call
+{                //
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
@@ -2350,6 +2352,8 @@ void JogMotors(bool prnt) // 20250107  Add and explicit stop call
     }
     else
     {
+        // sprintf(debugMsg, "Before SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+        // uartPrint(debugMsg);
         setupTimer1(); // 20240620.  Could be only if necessary?
 
         if (axis == 0)
@@ -2364,10 +2368,12 @@ void JogMotors(bool prnt) // 20250107  Add and explicit stop call
 #ifdef LOG_PRINT
         if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
         {
-            sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
-            uartPrint(debugMsg);
-            // printToBT(34, AbsX);
-            // printToBT(35, AbsY);
+#ifdef JOG_PRINT
+            // sprintf(debugMsg, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+            // uartPrint(debugMsg);
+            printToBT(34, AbsX);
+            printToBT(35, AbsY);
+#endif
         }
 #endif
 #endif
@@ -2699,33 +2705,17 @@ void TransmitData()
                 // printToBT((i+29),Result);// Target commands in app start, apart from MaxLaserPower, dealt with above, at 30
                 // uartPrint(Result);
                 printToBT(i + 29, Variables[i]);
+                // sprintf(debugMsg, "i: %d, val: %d", i, Variables[i]);
+                // uartPrint(debugMsg);
             }
             // _delay_ms(50); //20241209. printToBT() includes _delay_ms(20).
         }
     }
 }
-// void PrintZoneData()
-// {
-//     uint8_t res;
-//     uint8_t i;
 
-//     for (i = 0; i < 5; i++)
-//     { // Print both count of map points (MapCount[0][i]) for maps and 5 speed zones
-//         if (i == 0)
-//         {
-//             res = MapTotalPoints; // This needs to be assigned.
-//         }
-//         else
-//         {
-//             res = MapCount[0][i];
-//         }
-//         printToBT(i + 4, res); // Print count of map points.
-
-//     }
-// }
 void PrintAppData()
 {
-    if (BT_ConnectedFlag == 1)
+    if (BT_ConnectedFlag == 1) // 20250108 Test with this removed.
     {
         printToBT(17, MapRunning);
         printToBT(18, PatternRunning);
@@ -2742,6 +2732,7 @@ void PrintAppData()
 }
 void PrintConfigData()
 {
+
     uint8_t i;
     uint16_t ConfigData[12];
     uint8_t ConfigCode[12];
@@ -2784,6 +2775,8 @@ void PrintConfigData()
     for (i = 1; i <= 11; i++)
     {
         printToBT(ConfigCode[i], ConfigData[i]);
+        // sprintf(debugMsg, "i: %d, val: %d", i, ConfigData[i]);
+        // uartPrint(debugMsg);
     }
 }
 
@@ -3170,7 +3163,7 @@ int main()
                 _delay_ms(2000);
                 PrevSetupModeFlag = SetupModeFlag;
             }
-            JogMotors(doPrint);
+            JogMotors();
             break;
         }
         case 0:

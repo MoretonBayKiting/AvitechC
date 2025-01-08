@@ -161,15 +161,33 @@ void DecodeCommsData()
         Cmd52(); // ActivePatterns
         break;   // Update ActiveMapZones (in EEPROM)
     case 53:
-        printPos = Instruction; // printPos is bool so True for any positive value, false if zero.
+        bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
+        bool resetSendDataFlag = true;
+        if (printPos)
+            resetPrintPos = false;
+        if (SendDataFlag)
+            resetSendDataFlag = false;
+        printPos = true; // printPos is bool so True for any positive value, false if zero.
+        SendDataFlag = 1;
         // printPos  determines if some regular run time data is printed - not needed for normal app use.
+        sprintf("printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
+        // sprintf("SendDataFlag: %d, BT_ConnectedFlag: %d", SendDataFlag, BT_ConnectedFlag);
+        uartPrint(debugMsg);
+        sendStatusData();
+
+        if (resetPrintPos)
+            printPos = false;
+        if (resetSendDataFlag)
+            SendDataFlag = 0;
+
+        break;
     case 54:
         Cmd54();
         break; // Update ActiveMapZones (in EEPROM)
-    case PROPERTY_GET_CHANNEL:
+    case 58:   // PROPERTY_GET_CHANNEL:
         handleGetPropertyRequest(Instruction);
         break;
-    case PROPERTY_SET_CHANNEL:
+    case 59:                                                                           // PROPERTY_SET_CHANNEL:
         FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
         uint8_t value = Instruction & 0x00FF;                                          // Lower 8 bits encode value.
         handleSetPropertyRequest(prop, value);
@@ -228,6 +246,7 @@ void Cmd1()
 
 void Cmd2()
 {
+    PORTD &= ~(1 << Y_STEP);
     if (Instruction == 0)
         StopSystem(); // Attempt to stop kink at direction changes    }
     // Process Pan Stop/Start Register
@@ -242,6 +261,7 @@ void Cmd2()
 
 void Cmd3()
 {
+    PORTD &= ~(1 << X_STEP);
     if (Instruction == 0)
         StopSystem();  // Attempt to stop kink at direction changes    }    // Process Tilt Stop/Start Register
     PanEnableFlag = 0; // 20240620: Added by TJ.
@@ -369,14 +389,12 @@ void cmd10_running()
 }
 void cmd10_programming()
 {
-    uartPrint("c10_prog");
     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 1;
     // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
     Audio2(2, 2, 2); //,"AC10:1");
     // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
-    uartPrint("About to call programmingMode()");
     ProgrammingMode(); // Home machine ready for programming in points
     // uartPrint("Exiting c10_prog");
 }
@@ -411,11 +429,11 @@ void cmd10_btConnected()
     BT_ConnectedFlag = 1;
     // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
     // 20241209.  Put back to zero.  Dom has added refresh button to app.
-    SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
+    SendDataFlag = 1; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
     Audio2(1, 2, 0);  //,"AC10:32");
     // sendStatusData()
-    PrintAppData(); // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
     TransmitData();
+    PrintAppData();    // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
     PrintConfigData(); // Send area data back to the app for user to see
 }
 void cmd10_btDisconnected()
@@ -429,12 +447,12 @@ void Cmd10()
     switch (Instruction)
     {
     case 0:
-        uartPrint("cmd10_r TBC");
+        // uartPrint("cmd10_r TBC");
         cmd10_running();
         // 20240922
         break;
     case 1:
-        uartPrint("cmd10_p TBC");
+        // uartPrint("cmd10_p TBC");
         cmd10_programming();
         break;
     case 4:
@@ -529,9 +547,13 @@ void Cmd11()
     // Process the Send Diagnostic Data register
     if (Instruction == 0b00000001)
     {
+        sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
+        uartPrint(debugMsg);
         SendDataFlag ^= 1; // Toggle value of SendDataFlag
         SendSetupDataFlag = 0;
         Audio2(1, 2, 0); //,"AC11:1");
+        sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
+        uartPrint(debugMsg);
     }
 
     // Process the full reset flag on next restart
@@ -651,10 +673,9 @@ void Cmd20()
 }
 
 void Cmd21()
-{ // Need to listen for this from app.  Was previously something to do with map zones.
-  // eeprom_update_word(&EramResetSeconds, Instruction);
-  // ResetSeconds = Instruction;
-  // Audio2(1,2,0);//,"AC30");
+{
+    ActiveMapZones = Instruction; // 20250108
+    eeprom_update_byte(&EramActiveMapZones, Instruction);
 }
 
 void Cmd24()
@@ -794,10 +815,6 @@ void Cmd52()
     // printToBT(52, 255);
     // else
     //     printToBT(52, ActivePatterns);
-}
-void Cmd53()
-{
-    sendStatusData();
 }
 
 void CmdStorePts(bool test)

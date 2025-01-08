@@ -34,7 +34,7 @@
 
 MCP4725 DAC(0x60); // (MCP4725ADD>>1);
 uint8_t printCnter = 0;
-// uint16_t eeprom_address = 0;
+uint16_t eeprom_address = 0;
 
 // volatile uint16_t n = 0;  //Counter used in debugging.
 uint16_t Boardrevision; // Board that program will be deployed to
@@ -239,8 +239,8 @@ union
     };
 } Accel_Z;
 
-uint8_t Z_AccelFlag = 0;
-uint8_t Z_AccelFlagPrevious = 0;
+bool Z_AccelFlag = false;
+bool Z_AccelFlagPrevious = false;
 
 union
 {
@@ -307,6 +307,8 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo); //
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
+void StopSystem();
+
 void setupPeripherals()
 {
     // Set relevant pins as output
@@ -546,6 +548,8 @@ void ProcessError()
     if (Z_AccelFlag)
     {
         Audio2(2, 1, 1); //,"PEAF");
+        StopSystem();
+        SetLaserVoltage(0);
         // Audio2(2,1,1);
         return;
     }
@@ -586,11 +590,10 @@ void ProcessBuffer(char *buffer)
                 Command = atoi(token + 1);     // Convert the command to an integer
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
 
-#ifdef DEBUG61
-                sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
-                uartPrint(debugMsg);
-#endif
+                // sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
+                // uartPrint(debugMsg);
                 DecodeCommsData(); // Process the command and instruction
+                // uartPrintFlash(F("Finished DecodeCommsData \n"));
             }
             token = strchr(end + 1, '<'); // Find the start of the next command
         }
@@ -1093,39 +1096,39 @@ void ReadAccelerometer()
 }
 void DecodeAccelerometer()
 {
+    static uint16_t DA_cnt = 0;
+    static uint16_t DA_cnt2 = 0;
+    bool printFlag = false;
     if (GyroOnFlag)
     {
-        if (OperationMode == 0)
-        { // Field-1
-            // sprintf(debugMsg,"Z_accel: %d", Accel_Z.Z_accel);
-            // uartPrint(debugMsg);
+        if (OperationMode == 0) // OperationMode == 0 is field i.
+        {                       // Field-1
+            DA_cnt++;
             if (Accel_Z.Z_accel < AccelTripPoint)
             {
-                Z_AccelFlag = 1;
+                DA_cnt2++;
+                Z_AccelFlag = true;
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
-                uartPrintFlash(F("AccelTripPoint error. \n"));
-#endif
-#ifdef BASE_PRINT
-#ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
+                // uartPrintFlash(F("AccelTripPoint error. \n"));
+                sprintf(debugMsg, "AccelTripPoint error. DA_cnt: %u, DA_cnt2: %u", DA_cnt, DA_cnt2);
                 uartPrint(debugMsg);
-#endif
 #endif
             }
             else
             {
-                Z_AccelFlag = 0;
+                Z_AccelFlag = false;
                 SystemFaultFlag = false;
             }
         }
         // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then
-        if (Z_AccelFlagPrevious == 1 && Z_AccelFlag == 0 && AccelTick < 10)
+        if (Z_AccelFlagPrevious && !Z_AccelFlag && AccelTick < 10)
         {
-            Z_AccelFlag = 1;
+            Z_AccelFlag = true;
             SystemFaultFlag = true;
-            return;
+            return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.
         }
+
         Z_AccelFlagPrevious = Z_AccelFlag;
         AccelTick = 0;
     }
@@ -1953,13 +1956,31 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         endRung = true;
     }
     else
-        CmdLaserOnFlag = true;
-    SetLaserVoltage(LaserPower);
+    {
+        if (!SystemFaultFlag)
+        {
+            CmdLaserOnFlag = true;
+            SetLaserVoltage(LaserPower);
+        }
+    }
 // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
 #ifdef TEST_PATH_MODE
     sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
     uartPrint(debugMsg);
 #endif
+    if (seg == 0 && segPt == 0)
+    { // 20250108.  Turn laser off if going to first vertex of a zone.
+        SetLaserVoltage(0);
+        CmdLaserOnFlag = false;
+    }
+    else
+    {
+        if (!SystemFaultFlag)
+        {
+            SetLaserVoltage(LaserPower);
+            CmdLaserOnFlag = true;
+        }
+    }
     if (seg < MapCount[0][zn])
     { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
         if (segPt == 0)
@@ -1967,7 +1988,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             pt1[0] = Vertices[0][seg];
             pt1[1] = Vertices[1][seg];
             if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
-            // 2nd conditional deals with path mode where first point should not be repeated.
+            // 2nd conditional deals with path mode (Nbr_Rnd_Pts == 0) where first point should not be repeated.
             {
                 pt2[0] = Vertices[0][0];
                 pt2[1] = Vertices[1][0];
@@ -1984,7 +2005,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 #endif
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
-            // 20241221: These having aberrant values seemed to cause ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
+            // 20241221: These having aberrant values caused ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
             // are (or should be) used on the boundary.  Keep it as it fixed the problem.
             thisRes[0] = X;
             thisRes[1] = Y;
@@ -2121,6 +2142,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         else
             uartPrintFlash(F("Off \n"));
 #endif
+        // sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+        // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
         LastX = X;
@@ -2243,11 +2266,15 @@ void StopSystem()
     SteppingStatus = 0; // Reset stepping status
     X = AbsX;           // Set X and Y to their absolute values
     Y = AbsY;
+    Dx = 0;
+    Dy = 0;
 }
 
 void avoidLimits(bool axis)
 { // Don't allow jogging to take laser outside allowed range.
     // axis = false for pan and true for tilt. Set JogFlag (to one of 1,2,3,4) if limits are exceeded.
+    static int loopCount = 0;
+    loopCount++;
     JogFlag = 0;
     if (!axis)
     { // Pan axis case
@@ -2278,13 +2305,16 @@ void avoidLimits(bool axis)
     }
     if (JogFlag > 0)
     {
-        sprintf(debugMsg, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
-        uartPrint(debugMsg);
+        if (!(loopCount % 2000))
+        {
+            sprintf(debugMsg, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
+            uartPrint(debugMsg);
+        }
     }
 }
 
-void JogMotors(bool prnt)
-{ //
+void JogMotors() // 20250107  Add and explicit stop call
+{                //
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
@@ -2294,21 +2324,15 @@ void JogMotors(bool prnt)
     int pos = 0;
     avoidLimits(false);
     avoidLimits(true);
-    // BASCOM version dealt with X<=X_mincount and X>=X_maxcount....(X_MINCOUNT here).  Are those necessary?  Not for development/debugging.
 #ifdef NEW_APP
 #ifdef LOG_PRINT
-    // if (AbsX != lastAbsX || AbsY != lastAbsY)
     if (X != lastX || Y != lastY)
     {
-        // sprintf(debugMsg,"AbsX: %d, AbsY: %d", AbsX, AbsY);
-        // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
     }
 #endif
 #endif
-    // lastAbsX = AbsX;
-    // lastAbsY = AbsY;
     lastX = X;
     lastY = Y;
 
@@ -2320,6 +2344,10 @@ void JogMotors(bool prnt)
         dir = PanDirection;
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
     }
+    else
+        X = AbsX;
+    {
+    }
     if (TiltEnableFlag == 1)
     {
         SteppingStatus = 1;
@@ -2328,6 +2356,8 @@ void JogMotors(bool prnt)
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
     }
+    else
+        Y = AbsY;
 
     pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
 #ifdef ISOLATED_BOARD
@@ -2355,11 +2385,23 @@ void JogMotors(bool prnt)
         {
             Y = pos;
         }
+#ifdef NEW_APP
+#ifdef LOG_PRINT
+        if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
+        {
+#ifdef JOG_PRINT
+            // sprintf(debugMsg, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+            // uartPrint(debugMsg);
+            printToBT(34, AbsX);
+            printToBT(35, AbsY);
+#endif
+        }
+#endif
+#endif
         ProcessCoordinates();
     }
     JogFlag = 0;
 }
-
 uint16_t CalcSpeed(bool fst)
 {
     uint16_t s = 0;
@@ -2573,8 +2615,9 @@ void RunSweep(uint8_t zn)
                 doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
                 newPatt = false;
-                if (cnt == 0 && PatType == 1)
-                { // 20240727:Laser off as it moves towards 0th point of cycle.
+                // if (cnt == 0 && PatType == 1)
+                if (cnt == 0)
+                { // 20240727:Laser off as it moves towards 0th point of pattern.
                     CmdLaserOnFlag = false;
                     SetLaserVoltage(0);
                     DSS_preload = Step_Rate_Max;
@@ -2589,8 +2632,11 @@ void RunSweep(uint8_t zn)
                     }
                     else
                     {
-                        CmdLaserOnFlag = true;
-                        SetLaserVoltage(LaserPower);
+                        if (!SystemFaultFlag)
+                        {
+                            CmdLaserOnFlag = true;
+                            SetLaserVoltage(LaserPower);
+                        }
                         DSS_preload = CalcSpeed(false); // Passing false makes the speed depend on tilt angle.
                     }
                 }
@@ -2599,7 +2645,8 @@ void RunSweep(uint8_t zn)
                 // }
                 ProcessCoordinates();
                 SteppingStatus = 1;
-                setupTimer1();
+                if (!SystemFaultFlag)
+                    setupTimer1();
 
                 while (SteppingStatus == 1)
                 {
@@ -2624,6 +2671,8 @@ void RunSweep(uint8_t zn)
         }
         printToBT(18, 0); // Set current pattern to zero
         newPatt = true;
+        SetLaserVoltage(0); // 20250108
+        CmdLaserOnFlag = false;
     }
     ResetTiming();
 }
@@ -2684,33 +2733,17 @@ void TransmitData()
                 // printToBT((i+29),Result);// Target commands in app start, apart from MaxLaserPower, dealt with above, at 30
                 // uartPrint(Result);
                 printToBT(i + 29, Variables[i]);
+                // sprintf(debugMsg, "i: %d, val: %d", i, Variables[i]);
+                // uartPrint(debugMsg);
             }
             // _delay_ms(50); //20241209. printToBT() includes _delay_ms(20).
         }
     }
 }
-// void PrintZoneData()
-// {
-//     uint8_t res;
-//     uint8_t i;
 
-//     for (i = 0; i < 5; i++)
-//     { // Print both count of map points (MapCount[0][i]) for maps and 5 speed zones
-//         if (i == 0)
-//         {
-//             res = MapTotalPoints; // This needs to be assigned.
-//         }
-//         else
-//         {
-//             res = MapCount[0][i];
-//         }
-//         printToBT(i + 4, res); // Print count of map points.
-
-//     }
-// }
 void PrintAppData()
 {
-    if (BT_ConnectedFlag == 1)
+    if (BT_ConnectedFlag == 1) // 20250108 Test with this removed.
     {
         printToBT(17, MapRunning);
         printToBT(18, PatternRunning);
@@ -2727,6 +2760,7 @@ void PrintAppData()
 }
 void PrintConfigData()
 {
+
     uint8_t i;
     uint16_t ConfigData[12];
     uint8_t ConfigCode[12];
@@ -2742,7 +2776,7 @@ void PrintConfigData()
     ConfigData[3] = eeprom_read_byte(&EramMicroMajor); //_version_major;
     ConfigCode[3] = 23;
 
-    ConfigData[3] = eeprom_read_byte(&EramMicroMinor); //_version_minor;
+    ConfigData[4] = eeprom_read_byte(&EramMicroMinor); //_version_minor;
     ConfigCode[4] = 24;
 
     ConfigData[5] = UserLightTripLevel;
@@ -2769,6 +2803,8 @@ void PrintConfigData()
     for (i = 1; i <= 11; i++)
     {
         printToBT(ConfigCode[i], ConfigData[i]);
+        // sprintf(debugMsg, "i: %d, val: %d", i, ConfigData[i]);
+        // uartPrint(debugMsg);
     }
 }
 
@@ -2781,17 +2817,13 @@ void sendStatusData()
 
 void ProgrammingMode()
 {
-    uartPrintFlash(F("ProgMode1 \n"));
     SetLaserVoltage(0); // Turn off laser
-    // uartPrintFlash(F("10:1 HA \n"));
-    uartPrintFlash(F("ProgMode2 \n"));
     HomeAxis();
     // #ifdef ISOLATED_BOARD
     //     _delay_ms(1000);
     // #endif
     uartPrintFlash(F("ProgMode3 \n"));
     printToBT(9, 1);
-    // _delay_ms(100);
 }
 
 void OperationModeSetup(int OperationMode)
@@ -2837,13 +2869,20 @@ void OperationModeSetup(int OperationMode)
 
 void DoHouseKeeping()
 {
-    static uint16_t dhkn = 0;
-    dhkn++;
-    if (!(TJTick % 200))
-        // uartPrintFlash(F("DHK running \n"));
-        CheckBlueTooth();
+    CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
+    // if (SystemFaultFlag != lastSflag)
+    // {
+    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, lastSflag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, lastSflag, SystemFaultFlag);
+    //     uartPrint(debugMsg);
+    // }
+    // lastSflag = SystemFaultFlag;
+    // if (!(TJTick % 40))
+    // {
+    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, SystemFaultFlag);
+    //     uartPrint(debugMsg);
+    // }
 #ifdef ISOLATED_BOARD
     static uint16_t lastTick;
     isolated_board_flag = false;
@@ -2871,7 +2910,7 @@ void DoHouseKeeping()
 #ifdef THROTTLE
         ThrottleLaser();
 #endif
-        if (Z_AccelFlag == 0)
+        if (Z_AccelFlag == false)
         {
             ThrottleLaser();
         }
@@ -2899,10 +2938,11 @@ void DoHouseKeeping()
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;
-        if (!(dhkn % 30000))
-            sprintf(debugMsg, "DHKerr. IMU: %d, LaserTemp: %d, IMU: %d", Z_AccelFlag, LaserTemperature);
-        uartPrint(debugMsg);
-        // uartPrintFlash(F("DHKErr"));
+        // if (!(dhkn % 3000))
+        // {
+        //     sprintf(debugMsg, "DHKerr. ZFlag: %d, ZVal: %d, LaserTemp: %d", Z_AccelFlag, Accel_Z.Z_accel, LaserTemperature);
+        //     uartPrint(debugMsg);
+        // }
         ProcessError();
         return;
     }
@@ -2926,20 +2966,24 @@ void DoHouseKeeping()
         // if (MapTotalPoints >= 2)
         {
             WarnLaserOn();
-            SetLaserVoltage(LaserPower);
+            if (!SystemFaultFlag)
+            {
+                SetLaserVoltage(LaserPower);
+                CmdLaserOnFlag = true;
+            }
+            else
+            {
+                SetLaserVoltage(0);
+                GetLightLevel();
+            }
         }
-        else
-        {
-            SetLaserVoltage(0);
-            GetLightLevel();
-        }
-    }
 
-    if (Tod_tick > NIGHT_TRIP_TIME_FROM_STARTUP)
-    {
-        if (BT_ConnectedFlag == 0 && LightSensorModeFlag == 1)
+        if (Tod_tick > NIGHT_TRIP_TIME_FROM_STARTUP)
         {
-            MrSleepyTime();
+            if (BT_ConnectedFlag == 0 && LightSensorModeFlag == 1)
+            {
+                MrSleepyTime();
+            }
         }
     }
 }
@@ -3166,7 +3210,7 @@ int main()
                 _delay_ms(2000);
                 PrevSetupModeFlag = SetupModeFlag;
             }
-            JogMotors(doPrint);
+            JogMotors();
             break;
         }
         case 0:
@@ -3179,8 +3223,6 @@ int main()
                 _delay_ms(2000);
                 PrevSetupModeFlag = SetupModeFlag;
             }
-            // firstRun = false;
-            // }
             if (MapTotalPoints > 0)
             {
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++)
@@ -3189,12 +3231,12 @@ int main()
                         SetLaserVoltage(0);
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
-                        if (MapCount[0][Zn - 1] > 0)
-                        {                     // MapCount index is zero base
-                            MapRunning = Zn;  // But map index in app is 1 based.
-                            RunSweep(Zn - 1); //
-                            printToBT(17, 0); // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
-                            // SetLaserVoltage(0);  //Laser needs to be off between zones.
+                        if (MapCount[0][Zn - 1] > 0) // MapCount index is zero base - But map index in app is 1 based.
+                        {
+                            MapRunning = Zn;
+                            RunSweep(Zn - 1);
+                            printToBT(17, 0);   // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
+                            SetLaserVoltage(0); // Laser needs to be off between zones.
                         }
                     }
                 }

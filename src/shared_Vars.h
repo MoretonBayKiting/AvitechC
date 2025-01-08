@@ -9,7 +9,7 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
-// #define TEST_LASER_POWER
+// #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
 // #define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 2
@@ -19,6 +19,7 @@ extern uint16_t isolated_board_factor;
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
 // #define BASE_PRINT
 #define LOG_PRINT
+#define JOG_PRINT
 #define NEW_APP
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
@@ -173,6 +174,7 @@ void printToBT(uint8_t cmd, uint16_t inst);
 void printToBT(uint8_t cmd, int inst);
 void printToBT(uint8_t cmd, long inst);
 void StopTimer1();
+void StopSystem();
 void StopTimer3();
 void setupTimer1();
 void setupTimer3();

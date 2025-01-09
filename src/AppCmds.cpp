@@ -160,12 +160,17 @@ void DecodeCommsData()
     case 53:
         bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
         bool resetSendDataFlag = true;
+        bool resetBTFlag = true;
         if (printPos)
             resetPrintPos = false;
         if (SendDataFlag)
             resetSendDataFlag = false;
+        if (BT_ConnectedFlag)
+            resetBTFlag = false;
+
         printPos = true; // printPos is bool so True for any positive value, false if zero.
         SendDataFlag = 1;
+        BT_ConnectedFlag = true;
         // printPos  determines if some regular run time data is printed - not needed for normal app use.
         sprintf("printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
         // sprintf("SendDataFlag: %d, BT_ConnectedFlag: %d", SendDataFlag, BT_ConnectedFlag);
@@ -176,6 +181,8 @@ void DecodeCommsData()
             printPos = false;
         if (resetSendDataFlag)
             SendDataFlag = 0;
+        if (resetBTFlag)
+            BT_ConnectedFlag = false;
 
         break;
     case 54:

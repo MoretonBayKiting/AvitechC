@@ -186,7 +186,7 @@ uint8_t FactoryLightTripLevel;
 uint8_t EramLightTriggerOperation; // 0=24hr. 1= Day Mode 2= Night Mode
 uint8_t LightTriggerOperation;
 
-long LightLevel; // Holds the value of the ADC light sensor
+int LightLevel; // Holds the value of the ADC light sensor.  20250109.  This was long, changed to int.
 uint8_t LightSensorModeFlag;
 //---------Other Variables-------------------------
 uint8_t BT_ConnectedFlag;
@@ -298,6 +298,10 @@ uint8_t SpeedScale = 30; // Low value sets higher interrupt rate so higher speed
 uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50; // Units are decimetres.  50 => 5metres
 
+// Debugging flags
+// volatile bool timer3_isr_triggered = false;
+// volatile bool watchdog_isr_triggered = false;
+
 // uint8_t Max_Nbr_Perimeter_Pts = 100;
 void HomeAxis();
 void DoHouseKeeping();
@@ -308,6 +312,7 @@ void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
 void StopSystem();
+// void testWatchDog(uint8_t indicator);
 
 void setupPeripherals()
 {
@@ -319,15 +324,23 @@ void setupPeripherals()
     // Configure the ADC
     ADMUX = (1 << REFS0);                                              // Use AVCC as the reference voltage
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Enable the ADC and set the prescaler to 128 (auto)
+    uartPrintFlash(F("ADC configured"));
+    // Print the initial state of the registers for verification
+    sprintf(debugMsg, "DDRD: %02X, DDRE: %02X, DDRB: %02X", DDRD, DDRE, DDRB);
+    uartPrint(debugMsg);
+    sprintf(debugMsg, "ADMUX: %02X, ADCSRA: %02X", ADMUX, ADCSRA);
+    uartPrint(debugMsg);
 }
 
 void setupWatchdog()
 {
-    wdt_enable(WDTO_2S);   // Set the watchdog timeout to approximately 2 second
-    WDTCSR |= (1 << WDIE); // Enable the watchdog interrupt
-    // wdt_disable();
+    cli();       // Disable global interrupts
+    wdt_reset(); // Reset the watchdog timer
+    // Set up the watchdog timer for a 2-second timeout
+    WDTCSR = (1 << WDCE) | (1 << WDE);                             // Enable configuration changes
+    WDTCSR = (1 << WDE) | (1 << WDIE) | (1 << WDP2) | (1 << WDP1); // Set timeout to 2 seconds and enable interrupt
+    sei();                                                         // Enable global interrupts
 }
-
 uint8_t IsCharWaiting()
 {
     // Check if the Receive Complete (RXC0) bit is set in the UART Status Register (UCSR0A)
@@ -396,7 +409,7 @@ void TickCounter_50ms_isr()
         Secondsfromreset++;
         Counter50ms = 0;
     }
-    wdt_reset(); // Reset the watchdog timer.
+    // wdt_reset(); // Reset the watchdog timer.  Not needed. This is called in ISR(TIMER3_COMPA_vect)
 }
 
 uint16_t readADC(uint8_t channel)
@@ -549,6 +562,7 @@ void ProcessError()
     {
         Audio2(2, 1, 1); //,"PEAF");
         StopSystem();
+        PORTE &= ~(1 << FAN);
         SetLaserVoltage(0);
         // Audio2(2,1,1);
         return;
@@ -846,21 +860,25 @@ ISR(TIMER3_COMPA_vect)
 {
     wdt_reset(); // Reset the watchdog timer
     TickCounter_50ms_isr();
-    // #ifdef THROTTLE
-    //     sprintf(debugMsg,"TJTick: %d, Tick: %d", TJTick, Tick);
-    //     uartPrint(debugMsg);
-    // #endif
+    // timer3_isr_triggered = true; // Set flag to indicate Timer3 ISR was triggered
+    // uartPrintFlash(F("T3 i\n"));
 }
 
 ISR(WDT_vect)
 {
+    // watchdog_isr_triggered = true; // Set flag to indicate watchdog ISR was triggered
+    // The system will reset after this ISR completes
     // This ISR will be called when the watchdog timer times out. Without any code, the system will reset.
 }
 void GetBatteryVoltage()
 {
     unsigned int SensorReading = 0;
     BattTotal = BattTotal - BattReadings[BattReadIndex];
+    // uartPrintFlash(F("Read ADC 1"));
     SensorReading = readADC(1);
+    // sprintf(debugMsg, "SR1: %d", SensorReading);
+    // uartPrint(debugMsg);
+
     BattReadings[BattReadIndex] = SensorReading;
     BattTotal = BattTotal + SensorReading;
     BattReadIndex++;
@@ -1046,7 +1064,10 @@ void GetLaserTemperature()
 
     for (LoopCount = 1; LoopCount <= NUM_TEMP_READINGS; LoopCount++)
     {
+        // uartPrintFlash(F("Read ADC 0 "));
         SensorReading = readADC(0);
+        // sprintf(debugMsg, "SR0: %d", SensorReading);
+        // uartPrint(debugMsg);
         Result += SensorReading;
     }
 
@@ -1111,8 +1132,8 @@ void DecodeAccelerometer()
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
                 // uartPrintFlash(F("AccelTripPoint error. \n"));
-                sprintf(debugMsg, "AccelTripPoint error. DA_cnt: %u, DA_cnt2: %u", DA_cnt, DA_cnt2);
-                uartPrint(debugMsg);
+                // sprintf(debugMsg, "AccelTripPoint error. DA_cnt: %u, DA_cnt2: %u, Zflag: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel);
+                // uartPrint(debugMsg);
 #endif
             }
             else
@@ -1122,13 +1143,23 @@ void DecodeAccelerometer()
             }
         }
         // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then
-        if (Z_AccelFlagPrevious && !Z_AccelFlag && AccelTick < 10)
+        if (Z_AccelFlagPrevious && !Z_AccelFlag)
         {
-            Z_AccelFlag = true;
-            SystemFaultFlag = true;
-            return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.
+            if (AccelTick < 10)
+            {
+                Z_AccelFlag = true;
+                SystemFaultFlag = true;
+                return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.
+            }
+            else
+            {
+                uartPrintFlash(F("ST3 DA \n"));
+                StopTimer3();
+                // testWatchDog(3);           // Stop Timer3 to prevent the watchdog timer from being reset
+                _delay_ms(WATCHDOG_DELAY); //' Wait for watchdog to overflow and system will reboot
+                // testWatchDog(4);
+            }
         }
-
         Z_AccelFlagPrevious = Z_AccelFlag;
         AccelTick = 0;
     }
@@ -1145,10 +1176,13 @@ void GetLightLevel()
 {
     // long X;
     long Ylocal;
-
-    LightLevel = readADC(2); // Light sensor ADC and remove jitter
+    // uartPrintFlash(F("Read ADC 2 "));
+    LightLevel = readADC(2);
+    // sprintf(debugMsg, "SR2: %d", LightLevel);
+    // uartPrint(debugMsg);
     LightLevel >>= 2;
-
+    // sprintf(debugMsg, "LightLev after bit shift: %d", LightLevel);
+    // uartPrint(debugMsg);
     if (LightTriggerOperation == 0)
     { // Run 24hr
         LightSensorModeFlag = 0;
@@ -1210,7 +1244,7 @@ void MrSleepyTime()
         GetLightLevel();
         if (LightSensorModeFlag == 0) // If 0 then light level has been triggered check again in 5 seconds to comfirm
         {
-            _delay_ms(5000);
+            _delay_ms(5000); // 20250109 What's this for?
             GetLightLevel(); // This will reset LightSensorModeFlag to 1 if it had been set to 0 as a result of transient rather than persistent light.
         }
 
@@ -1221,9 +1255,8 @@ void MrSleepyTime()
     }
 
     uartPrintFlash(F("ST3 MrST \n"));
-    StopTimer3(); // Watchdog reset
-    // TCCR3B &= ~((1 << CS32) | (1 << CS30));
-    _delay_ms(5000); //' Wait for watchdog to overflow and system will reboot
+    StopTimer3();              // Watchdog reset
+    _delay_ms(WATCHDOG_DELAY); //' Wait for watchdog to overflow and system will reboot
 }
 
 void ResetTiming()
@@ -1247,6 +1280,8 @@ void CalibrateLightSensor()
 {
     SetLaserVoltage(0);
     GetLightLevel();
+    sprintf(debugMsg, "LL in CalibrateLightSensor: %d", LightLevel);
+    uartPrint(debugMsg);
     printToBT(25, LightLevel); // Send current light level reading
 }
 void ThrottleLaser()
@@ -1429,37 +1464,24 @@ void initMPU()
         uartPrintFlash(F("Full scale set \n"));
     }
 }
-// void StartTimer1()
-// {
-//     // Set prescaler to 256 and start Timer1
-//     TCCR1B |= (1 << CS12); //(1 << CS12)|(1 << CS10) for 1024 prescalar (4 times slower)
-//     TCCR1B &= ~(1 << CS11);
-//     TCCR1B &= ~(1 << CS10);
-//     OCR1A = DSS_preload; // 20240614.
-// }
 
 void setupTimer3()
 {
-    TCCR3B |= (1 << WGM32);              // Configure timer for CTC mode
-    TCCR3B |= (1 << CS32) | (1 << CS30); // Bits 0 and 2 set.  TCCR: Timer/Counter Control Register.  Prescaler:1024
-    OCR3A = 780;                         // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
-    TIMSK3 |= (1 << OCIE3A);             // Enable the compare match interrupt
+    cli();      // Disable global interrupts
+    TCCR3A = 0; // Clear Timer/Counter Control Registers
+    TCCR3B = 0;
+    TCNT3 = 0;                           // Initialize counter value to 0
+    OCR3A = 780;                         // Set the compare value to 780 for ~50ms interval with 1024 prescaler
+    TCCR3B |= (1 << WGM32);              // CTC mode
+    TCCR3B |= (1 << CS32) | (1 << CS30); // 1024 prescaler
+    TIMSK3 |= (1 << OCIE3A);             // Enable Timer3 compare interrupt
+    sei();                               // Enable global interrupts
 }
 
-// void StartTimer3() {
-//     // Set prescaler to 256 and start Timer1
-//     TCCR3B |= (1 << CS32);
-//     TCCR3B &= ~(1 << CS31);
-//     TCCR3B |= (1 << CS30);
-//     OCR3A=  780;  // Set the compare value to 781 - 1.  16MHz/1024 => 15.6kHz => 64us period.  *780=> ~50ms.
-// }
 void StopTimer3()
 {
-    // Clear all CS1 bits to stop Timer3
-    // uartPrintFlash(F("StopTimer3 \n"));
-    TCCR3B &= ~(1 << CS32);
-    TCCR3B &= ~(1 << CS31);
-    TCCR3B &= ~(1 << CS30);
+    uartPrintFlash(F("In ST3\n"));
+    TCCR3B &= ~((1 << CS32) | (1 << CS31) | (1 << CS30)); // Clear all clock select bits to stop the timer
 }
 void StopTimer1()
 {
@@ -1939,6 +1961,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     static bool startRung = true;
     static bool endRung = false;
     static uint8_t rung = 0;
+    static uint8_t lastZn = 0;
 
     static uint8_t nbrSegPts = 0;
     static uint8_t seg = 0, fstSeg = 0, sndSeg = 0;
@@ -1948,7 +1971,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
     static uint8_t rungMidPtCnt = 0; // 20241219.  Count of mid points passed while traversing a rung.
 
-    if (newPatt)
+    if (newPatt || (zn != lastZn))
     { // Test for a new pattern and, if so, reset seg.
         seg = 0;
         CmdLaserOnFlag = false; // 20241229.  Laser off if moving to first point of pattern (and hence also zone)
@@ -1963,167 +1986,208 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             SetLaserVoltage(LaserPower);
         }
     }
-// This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
 #ifdef TEST_PATH_MODE
-    sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
+    // uartPrint(debugMsg);
 #endif
-    if (seg == 0 && segPt == 0)
-    { // 20250108.  Turn laser off if going to first vertex of a zone.
-        SetLaserVoltage(0);
-        CmdLaserOnFlag = false;
-    }
-    else
+
+    // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
+    if (zn == PATH_ZONE)
     {
-        if (!SystemFaultFlag)
+        if (seg < MapCount[0][zn])
         {
-            SetLaserVoltage(LaserPower);
-            CmdLaserOnFlag = true;
-        }
-    }
-    if (seg < MapCount[0][zn])
-    { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
-        if (segPt == 0)
-        { // First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
-            pt1[0] = Vertices[0][seg];
-            pt1[1] = Vertices[1][seg];
-            if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
-            // 2nd conditional deals with path mode (Nbr_Rnd_Pts == 0) where first point should not be repeated.
-            {
-                pt2[0] = Vertices[0][0];
-                pt2[1] = Vertices[1][0];
-            }
-            else
-            {
-                pt2[0] = Vertices[0][seg + 1];
-                pt2[1] = Vertices[1][seg + 1];
-            }
-            nbrSegPts = static_cast<uint8_t>(distance(pt1, pt2) / SEG_LENGTH); // This is the number of dense points to be placed along the segment, excluding wiggly points.
-#ifdef DEBUG
-            sprintf(debugMsg, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
+#ifdef TEST_PATH_MODE
+            sprintf(debugMsg, "Loading V0i: %d, V1i: %d, for seg: %d", Vertices[0][seg], Vertices[1][seg], seg);
             uartPrint(debugMsg);
 #endif
             X = Vertices[0][seg];
             Y = Vertices[1][seg];
-            // 20241221: These having aberrant values caused ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
-            // are (or should be) used on the boundary.  Keep it as it fixed the problem.
-            thisRes[0] = X;
-            thisRes[1] = Y;
-            nextRes[0] = X;
-            nextRes[1] = Y;
 
-            segPt++; // 20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
+            seg++;
         }
         else
         {
-            // 20241119: WigglyBorder_
-            if (wigglyPt == 0)
-            { // Move to the next dense segment point.
-                CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
-                X = res[0];
-                Y = res[1];
-                // if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
-            }
-            else
-            { // For wiggly points get a few randomly positioned around the start of the (dense) segment.
-                X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
-                Y = res[1] + (rand() % (2 * Y_WIGGLY_BORDER_RANGE + 1)) - Y_WIGGLY_BORDER_RANGE;
-            }
-            wigglyPt++; // 20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
-        }
-        if (wigglyPt > nbrWigglyPts)
-        { // Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
-            wigglyPt = 0;
-            segPt++;
-        }
-        if (segPt >= nbrSegPts)
-        { // Having traversed the interpolated segment points, move to the next segment
-            seg++;
-            segPt = 0;
-        }
-        // if (seg >= MapCount[0][zn] - 1)
-        if (seg > MapCount[0][zn] - 1)
-            ind++; // Quick and dirty fix for path mode.
-    }
-    else if (Nbr_Rnd_Pts > 0)
-    { // Now deal with the rungs - above is just boundary.
-#ifdef GHOST
-        sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
-        uartPrint(debugMsg);
-#endif
-        // If ind  is zero and this else clause is entered, then this is the first required rung.
-        // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
-        if ((ind == 0) || (endRung))
-        {
-            if (startRung)
-            {
-                RndNbr = rand() % nbrRungs; //
-                if (pat == 4)
-                { // Sequentially cross the zone with rungs, not randomly
-                    RndNbr = rung++;
-                    if (RndNbr == nbrRungs)
-                        rung = 0;
-                }
-                if (RndNbr == 0)
-                    RndNbr = 1;
-                tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);                  // Argument is Cartesian offset from laser.  Get tilt angle for this.
-                fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
-                sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
-                // For each boundary segment get the interpolated point in the segment needed for the new rung.
-                midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
-                midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
-                if (pat == 3)
-                {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
-                    int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
-                    fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
-                    sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
-                    midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
-                }
-            } // When starting a new pass, whether with startRung ture or false, set beginning and end points of rung.
-            ind++;
-            rungMidPtCnt = 0;
-            if (startRung)
-            { // First call in  1st direction.  End points as calculated above
-                endRes[0] = nextRes[0];
-                endRes[1] = nextRes[1];
-                beginRes[0] = thisRes[0];
-                beginRes[1] = thisRes[1];
-            }
-            else
-            { // First call in  reverse direction.  Beginning point is end point of previous rung, end point is beginning point of new rung.
-                endRes[0] = thisRes[0];
-                endRes[1] = thisRes[1];
-                beginRes[0] = res[0]; // res[] is last point targeted.  If this is the start of a new rung in reverse direction, last point of old rung is starting point (possibly?).
-                beginRes[1] = res[1];
-            }
-#ifdef BASE_PRINT
-            sprintf(debugMsg, "ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+#ifdef TEST_PATH_MODE
+            sprintf(debugMsg, "Seg >=MC[0] so put X: %d, and Y: %d to AbsX: %d, and AbsY: %d. MC: %d, seg: %d", X, Y, AbsX, AbsY, MapCount[0][zn], seg);
             uartPrint(debugMsg);
 #endif
+            seg = 0;
+            X = AbsX;
+            Y = AbsY;
         }
-
-        uint16_t num = abs(rungMidPtCnt * PAN_SEP);
-        uint16_t den = abs(beginRes[0] - endRes[0]);
-        rungMidPtCnt++;
-
-        if (num < den)
-        {
-            CartesianInterpolate(beginRes, endRes, num, den, res);
-            endRung = false;
+        ind++;
+    }
+    else
+    {
+        if (seg == 0 && segPt == 0)
+        { // 20250108.  Turn laser off if going to first vertex of a zone.
+            SetLaserVoltage(0);
+            CmdLaserOnFlag = false;
         }
         else
         {
-            // uartPrintFlash(F("Set end point"));
-            res[0] = endRes[0];
-            res[1] = endRes[1];
-            rungMidPtCnt = 0;
-            startRung = !startRung;
-            endRung = true;
+            if (!SystemFaultFlag)
+            {
+                SetLaserVoltage(LaserPower);
+                CmdLaserOnFlag = true;
+            }
         }
-        X = res[0];
-        Y = res[1];
-        // sprintf(debugMsg, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
-        // uartPrint(debugMsg);
+        if (seg < MapCount[0][zn])
+        { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
+            if (segPt == 0)
+            { // First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
+                pt1[0] = Vertices[0][seg];
+                pt1[1] = Vertices[1][seg];
+                // if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
+                // 2nd condition deals with path mode where first point should not be repeated.
+                if (seg == MapCount[0][zn] - 1)
+                {
+                    pt2[0] = Vertices[0][0];
+                    pt2[1] = Vertices[1][0];
+                    if (zn == PATH_ZONE) // Turn off laser between last and repeated first vertex if in path mode.
+                    {
+                        SetLaserVoltage(0);
+                        CmdLaserOnFlag = false;
+                    }
+                }
+                else
+                {
+                    pt2[0] = Vertices[0][seg + 1];
+                    pt2[1] = Vertices[1][seg + 1];
+                }
+                nbrSegPts = static_cast<uint8_t>(distance(pt1, pt2) / SEG_LENGTH); // This is the number of dense points to be placed along the segment, excluding wiggly points.
+#ifdef DEBUG
+                sprintf(debugMsg, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
+                uartPrint(debugMsg);
+#endif
+                X = Vertices[0][seg];
+                Y = Vertices[1][seg];
+                // 20241221: These having aberrant values caused ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
+                // are (or should be) used on the boundary.  Keep it as it fixed the problem.
+                thisRes[0] = X;
+                thisRes[1] = Y;
+                nextRes[0] = X;
+                nextRes[1] = Y;
+
+                segPt++; // 20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
+            }
+            else
+            {
+                // 20241119: WigglyBorder_
+                if (wigglyPt == 0)
+                { // Move to the next dense segment point.
+                    if (nbrSegPts > 0)
+                    {
+                        CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
+                        X = res[0];
+                        Y = res[1];
+                        // if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
+                    }
+                    else
+                    { // 20250109 May need to do something but not sure yet.
+                    }
+                }
+                else
+                { // For wiggly points get a few randomly positioned around the start of the (dense) segment.
+                    X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
+                    Y = res[1] + (rand() % (2 * Y_WIGGLY_BORDER_RANGE + 1)) - Y_WIGGLY_BORDER_RANGE;
+                }
+                wigglyPt++; // 20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
+            }
+            if (wigglyPt > nbrWigglyPts)
+            { // Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
+                wigglyPt = 0;
+                segPt++;
+            }
+            if (segPt >= nbrSegPts)
+            { // Having traversed the interpolated segment points, move to the next segment
+                seg++;
+                segPt = 0;
+            }
+            // if (seg >= MapCount[0][zn] - 1)
+            // if (seg > MapCount[0][zn] - 1)
+            //     ind++; // Quick and dirty fix for path mode.
+        }
+        else if (Nbr_Rnd_Pts > 0)
+        { // Now deal with the rungs - above is just boundary.
+#ifdef GHOST
+            sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
+            uartPrint(debugMsg);
+#endif
+            // If ind  is zero and this else clause is entered, then this is the first required rung.
+            // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
+            if ((ind == 0) || (endRung))
+            {
+                if (startRung)
+                {
+                    RndNbr = rand() % nbrRungs; //
+                    if (pat == 4)
+                    { // Sequentially cross the zone with rungs, not randomly
+                        RndNbr = rung++;
+                        if (RndNbr == nbrRungs)
+                            rung = 0;
+                    }
+                    if (RndNbr == 0)
+                        RndNbr = 1;
+                    tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);                  // Argument is Cartesian offset from laser.  Get tilt angle for this.
+                    fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
+                    sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
+                    // For each boundary segment get the interpolated point in the segment needed for the new rung.
+                    midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
+                    midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
+                    if (pat == 3)
+                    {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
+                        int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
+                        fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
+                        sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
+                        midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
+                    }
+                } // When starting a new pass, whether with startRung ture or false, set beginning and end points of rung.
+                ind++;
+                rungMidPtCnt = 0;
+                if (startRung)
+                { // First call in  1st direction.  End points as calculated above
+                    endRes[0] = nextRes[0];
+                    endRes[1] = nextRes[1];
+                    beginRes[0] = thisRes[0];
+                    beginRes[1] = thisRes[1];
+                }
+                else
+                { // First call in  reverse direction.  Beginning point is end point of previous rung, end point is beginning point of new rung.
+                    endRes[0] = thisRes[0];
+                    endRes[1] = thisRes[1];
+                    beginRes[0] = res[0]; // res[] is last point targeted.  If this is the start of a new rung in reverse direction, last point of old rung is starting point (possibly?).
+                    beginRes[1] = res[1];
+                }
+#ifdef BASE_PRINT
+                sprintf(debugMsg, "ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+                uartPrint(debugMsg);
+#endif
+            }
+
+            uint16_t num = abs(rungMidPtCnt * PAN_SEP);
+            uint16_t den = abs(beginRes[0] - endRes[0]);
+            rungMidPtCnt++;
+
+            if (num < den)
+            {
+                CartesianInterpolate(beginRes, endRes, num, den, res);
+                endRung = false;
+            }
+            else
+            {
+                // uartPrintFlash(F("Set end point"));
+                res[0] = endRes[0];
+                res[1] = endRes[1];
+                rungMidPtCnt = 0;
+                startRung = !startRung;
+                endRung = true;
+            }
+            X = res[0];
+            Y = res[1];
+            // sprintf(debugMsg, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
+            // uartPrint(debugMsg);
+        }
     }
 
 #ifdef LOG_PRINT
@@ -2155,7 +2219,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     {
         uartPrintFlash(F("fail convex \n"));
     }
-    return startRung; // Use this to set speed and (possibly) laser on.
+    lastZn = zn;
+    if (zn == PATH_ZONE)
+        return false;
+    else
+        return startRung; // Use this to set speed and (possibly) laser on.
 }
 
 void ProcessCoordinates()
@@ -2608,6 +2676,7 @@ void RunSweep(uint8_t zn)
             bool doWhile = true;
             while (doWhile)
             { // ind is incremented in getXY(), but not for the boundary, only for rungs.
+              // testWatchDog(1);
 #ifdef TEST_PATH_MODE
                 sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
                 uartPrint(debugMsg);
@@ -2743,6 +2812,7 @@ void TransmitData()
 
 void PrintAppData()
 {
+
     if (BT_ConnectedFlag == 1) // 20250108 Test with this removed.
     {
         printToBT(17, MapRunning);
@@ -2907,6 +2977,7 @@ void DoHouseKeeping()
         // TransmitData();
         // PrintAppData(); //20241209.  Too much data in log.  Send on refresh.
         GetLaserTemperature();
+        GetLightLevel(); // 20250109.  Add this here for testing.
 #ifdef THROTTLE
         ThrottleLaser();
 #endif
@@ -2925,13 +2996,14 @@ void DoHouseKeeping()
             if (!(TJTick % 40))
                 uartPrintFlash(F("Tilt limit switch \n"));
             StopTimer3(); // 20241205: This will cause the watchdog to trigger.
+            _delay_ms(WATCHDOG_DELAY);
 #endif
             // uartPrintFlash(F("StopTimer3 would have been called.\r"));
         }
     }
-#ifdef ISOLATED_BOARD
-    wdt_reset();
-#endif
+    // #ifdef ISOLATED_BOARD
+    //     wdt_reset();
+    // #endif
     // if (SystemFaultFlag == 1) {
     if (SystemFaultFlag)
     { // 20241129
@@ -2974,6 +3046,7 @@ void DoHouseKeeping()
             else
             {
                 SetLaserVoltage(0);
+                CmdLaserOnFlag = false;
                 GetLightLevel();
             }
         }
@@ -3134,6 +3207,39 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     }
 }
 
+// void testWatchDog(uint8_t indicator)
+// {
+//     static uint8_t n = 0;
+//     sprintf(debugMsg, "testWD, no trigger %d", indicator);
+//     uartPrint(debugMsg);
+//     // Check if Timer3 ISR was triggered
+//     if (TJTick % 40 > 10)
+//     {
+//         n++;
+//         if (n > 4)
+//         {
+
+//             sprintf(debugMsg, "In main. TJTick %d", TJTick);
+//             uartPrint(debugMsg);
+//             n = 0;
+//         }
+//     }
+//     if (timer3_isr_triggered)
+//     {
+//         sprintf(debugMsg, "T3 %d", indicator);
+//         uartPrint(debugMsg);
+//         timer3_isr_triggered = false; // Reset the flag
+//     }
+
+//     // Check if Watchdog ISR was triggered
+//     if (watchdog_isr_triggered)
+//     {
+//         sprintf(debugMsg, "WD %d", indicator);
+//         uartPrint(debugMsg);
+//         watchdog_isr_triggered = false; // Reset the flag
+//     }
+// }
+
 void setup()
 {
     sei();             // Enable global interrupts.
@@ -3189,6 +3295,7 @@ void setup()
     sprintf(debugMsg, "Setup: Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
     uartPrint(debugMsg);
 #endif
+    sendStatusData();
 }
 
 int main()
@@ -3249,5 +3356,6 @@ int main()
         }
         DoHouseKeeping();
     }
+    // testWatchDog(2);
     return 0;
 }

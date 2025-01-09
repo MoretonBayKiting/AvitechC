@@ -67,7 +67,7 @@ extern uint8_t SendDataFlag;
 extern uint8_t SendSetupDataFlag;
 extern uint8_t EramFirstTimeOn;
 extern uint8_t SetupModeFlag;
-extern long LightLevel;
+extern int LightLevel;
 extern uint8_t SendSetupDataFlag;
 extern int EramAccelTripPoint;
 extern int AccelTripPoint;

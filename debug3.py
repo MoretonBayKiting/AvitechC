@@ -79,5 +79,5 @@ def main(file_path):
     print(f"Processed file saved to {base_name}_2d_Z<zone>.png and {base_name}_3d_Z<zone>.png")
 
 if __name__ == '__main__':
-    file_path = 'debug\Debug0108M_.txt'  # Replace with your input file name
+    file_path = 'debug\Debug0109AE.txt'  # Replace with your input file name
     main(file_path)

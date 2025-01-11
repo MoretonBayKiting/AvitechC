@@ -192,9 +192,9 @@ void DecodeCommsData()
         sendStatusData();
         break;
 
-    case 64:
-        TraceBoundary(Instruction); // Instruction is zone (1 based)
-        break;
+    // case 64:
+    //     TraceBoundary(Instruction); // Instruction is zone (1 based)
+    //     break;
 #endif
         // default:
         //     break;
@@ -523,13 +523,13 @@ void Cmd11()
     // Process the Send Diagnostic Data register
     if (Instruction == 0b00000001)
     {
-        sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
+        // uartPrint(debugMsg);
         SendDataFlag ^= 1; // Toggle value of SendDataFlag
         SendSetupDataFlag = 0;
         Audio2(1, 2, 0); //,"AC11:1");
-        sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
+        // uartPrint(debugMsg);
     }
 
     // Process the full reset flag on next restart
@@ -783,12 +783,12 @@ void Cmd53()
     if (BT_ConnectedFlag)
         resetBTFlag = false;
 
+    sprintf(debugMsg, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
+    uartPrint(debugMsg);
     printPos = true; // printPos is bool so True for any positive value, false if zero.
     SendDataFlag = 1;
     BT_ConnectedFlag = true;
     // printPos  determines if some regular run time data is printed - not needed for normal app use.
-    sprintf(debugMsg, "printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
-    uartPrint(debugMsg);
     sendStatusData();
 
     if (resetPrintPos)

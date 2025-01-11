@@ -100,5 +100,5 @@ def main(file_path):
     print(f"Processed file saved to {base_name}_2d_Z<zone>.png, {base_name}_3d_Z<zone>.png, and {csv_output_path}")
 
 if __name__ == '__main__':
-    file_path = 'debug/Debug0111B.txt'  # Replace with your input file name
+    file_path = 'debug/Debug0111L_1run.txt'  # Replace with your input file name
     main(file_path)

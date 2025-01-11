@@ -20,7 +20,7 @@ extern uint16_t isolated_board_factor;
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT
-// #define NEW_APP
+#define NEW_APP
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
@@ -183,7 +183,7 @@ void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue);
 void PrintEramVars();
 void LoadZoneMap(uint8_t zn);
 uint8_t GetZone(uint8_t i);
-void TraceBoundary(uint8_t zone);
+// void TraceBoundary(uint8_t zone);
 void GoToMapIndex();
 void getMapPtCounts();
 void sendStatusData();

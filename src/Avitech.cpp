@@ -1,5 +1,6 @@
 
 #include <Arduino.h>
+// #include <map>
 // #include <type_traits>
 #include <stdio.h>
 #include <stdint.h>
@@ -135,7 +136,7 @@ float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro
 // Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
 
 uint8_t LaserOverTempFlag; // Laser over temp error flag
-uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
+// uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
 bool CmdLaserOnFlag = false;
 
 uint8_t SetupModeFlag = 0;      // Should this be set to 1 (setup mode - 0 is run mode) as default? 0 in BASCOM version.
@@ -267,7 +268,7 @@ union
 // uint16_t Sw_stack;
 // Hw_stack = 1;
 // Sw_stack = 1;
-uint16_t Frame_size;
+// uint16_t Frame_size;
 uint16_t ResetSeconds;
 bool received39;
 int Vertices[3][MAX_NBR_VERTICES]; // Columns: X, Y, Slope?
@@ -408,7 +409,7 @@ void TickCounter_50ms_isr()
         Tod_tick++;
         Tick++;
         AccelTick++;
-        FlashTheLaserFlag ^= 1;
+        // FlashTheLaserFlag ^= 1;
         Secondsfromreset++;
         Counter50ms = 0;
     }
@@ -1134,7 +1135,7 @@ void DecodeAccelerometer()
                 Z_AccelFlag = true;
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "ATP err DA_cnt: %u, DA_cnt2: %u, Zflag: %d, ATP: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel, AccelTripPoint);
+                sprintf(debugMsg, "ATP err DA_cnt: %u, DA_cnt2: %u, Z: %d, ATP: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel, AccelTripPoint);
                 uartPrint(debugMsg);
 #endif
             }
@@ -1424,7 +1425,7 @@ void initMPU()
     }
     else
     {
-        // uartPrintFlash(F("MPU awake \n"));
+        uartPrintFlash(F("MPU awake \n"));
     }
     _delay_ms(300);
     // Reset signal paths
@@ -2333,8 +2334,8 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
                 uartPrint(debugMsg);
             }
             cnt++;
-            DoHouseKeeping();
 #endif
+            DoHouseKeeping();
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
         }
     }
@@ -2469,12 +2470,10 @@ void JogMotors() // 20250107  Add and explicit stop call
 #ifdef LOG_PRINT
         if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
         {
-#ifdef JOG_PRINT
             // sprintf(debugMsg, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
             // uartPrint(debugMsg);
             printToBT(34, AbsX);
             printToBT(35, AbsY);
-#endif
         }
 #endif
 #endif
@@ -2526,12 +2525,14 @@ void HomeMotor(uint8_t axis, int steps)
     {
         while (!(PINB & (1 << PAN_STOP)))
         { // While pan_stop pin is low do nothing while motor moves.
+            DoHouseKeeping();
         }
     }
     else
     {
         while (!(PINB & (1 << TILT_STOP)))
         { // While tilt_stop pin is low do nothing while motor moves.
+            DoHouseKeeping();
         }
     }
 #endif
@@ -2561,8 +2562,8 @@ void MoveLaserMotor()
     setupTimer1();
     while (SteppingStatus == 1)
     { // do nothing while motor moves
-      // uartPrintFlash(F("In MLM"));
-      // DoHouseKeeping(); //20240731 Add this. Perhaps to turn laser off.
+        // uartPrintFlash(F("In MLM"));
+        DoHouseKeeping(); // 20240731 Add this. Perhaps to turn laser off.
     }
     StopTimer1();  // Stop the motor from stepping as sensor has been triggered.  20240615: The sensor has not been triggered. This is called when the target position is reached.
     StepCount = 0; // Clear the step count
@@ -2761,66 +2762,108 @@ void RunSweep(uint8_t zn)
     ResetTiming();
 }
 #ifdef NEW_APP
-void TraceBoundary(uint8_t zone)
-{
-    static uint8_t Current_Nbr_Rnd_Pts = 0;
-    Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
-    Nbr_Rnd_Pts = 0;                   // Set to zero so that RunSweep() only does the boundary.
-    getMapPtCounts();                  // Load zone data (count of vertices by zone) from eeprom to MapCount array
-    LoadZoneMap(zone);
-    RunSweep(zone);
-    Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
-}
+// void TraceBoundary(uint8_t zone)
+// {
+//     static uint8_t Current_Nbr_Rnd_Pts = 0;
+//     Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
+//     Nbr_Rnd_Pts = 0;                   // Set to zero so that RunSweep() only does the boundary.
+//     getMapPtCounts();                  // Load zone data (count of vertices by zone) from eeprom to MapCount array
+//     LoadZoneMap(zone);
+//     RunSweep(zone);
+//     Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
+// }
 #endif
+// Define the command to variable map, initially only for TransmitData
+// std::map<uint8_t, int32_t> commandToVariable = {
+//     // map<uint8_t, int32_t> commandToVariable = {
+//     {20, MaxLaserPower},
+//     {30, Accel.Acceltemp},
+//     {31, Index},
+//     {32, X},
+//     {33, Y},
+//     {34, AbsX},
+//     {35, AbsY},
+//     {36, Accel_Z.Z_accel},
+//     {37, Tod_tick / 2}, // Tod_tick increments every 500ms. Should this be *2 rather than /2 to get seconds?
+//     {38, BattVoltAvg},
+//     {39, Frame_size},
+//     {42, Wd_flag},
+//     {43, Boardrevision},
+//     {44, LaserID},
+//     {46, DSS_preload},
+//     {47, AccelTripPoint},
+//     {48, ResetSeconds / 2},
+//     {49, OperationMode}};
+// void TransmitData()
+// {
+//     for (const auto &entry : commandToVariable)
+//     {
+//         uint8_t command = entry.first;
+//         int variable = entry.second;
+//         printToBT(command, variable);
+//     }
+// }
+// void TransmitData()
+// { //Would prefer to use map - std not available to ATmega328PB compiler.
+//     const uint8_t commands[] = {
+//         20, 30, 31, 32, 33, 34, 35, 36, 37, 38, 42, 43, 44, 46, 47, 48, 49
+//     };
+
+//     const int32_t variables[] = {
+//         MaxLaserPower, Accel.Acceltemp, Index, X, Y, AbsX, AbsY, Accel_Z.Z_accel,
+//         Tod_tick / 2, BattVoltAvg, Wd_flag, Boardrevision, LaserID,
+//         DSS_preload, AccelTripPoint, ResetSeconds / 2, OperationMode
+//     };
+
+//     for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i)
+//     {
+//         uint8_t command = commands[i];
+//         int32_t variable = variables[i];
+//         if (command == 37) {
+//             variable /= 2; // Adjust Tod_tick as needed
+//         }
+//         printToBT(command, variable);
+//     }
+// }
+
 void TransmitData()
 {
-    int Hexresult;
-    char Result[5];
-    int Variables[19]; // Declaring this as local causes a compile problem in BASCOM.
+    int Variables[17];
     uint8_t i;
 
-    Variables[0] = MaxLaserPower;
-    Variables[1] = Accel.Acceltemp; // BASCOM: AccelTemp
-    Variables[2] = Index;
-    Variables[3] = X;
-    Variables[4] = Y;
-    Variables[5] = AbsX;
-    Variables[6] = AbsY;
-    Variables[7] = Accel_Z.Z_accel;
-    Variables[8] = Tod_tick / 2; // Tod_tick increments every 500ms.  Should this by *2 rather than /2 to get seconds?
-    Variables[9] = BattVoltAvg;
+    Variables[0] = MaxLaserPower;   // 20
+    Variables[1] = Accel.Acceltemp; // 30
+    Variables[2] = Index;           // 31
+    Variables[3] = X;               // 32
+    Variables[4] = Y;               // 33
+    Variables[5] = AbsX;            // 34
+    Variables[6] = AbsY;            // 35
+    Variables[7] = Accel_Z.Z_accel; // 36
+    Variables[8] = Tod_tick / 2;    // 37 Tod_tick increments every 500ms.  Should this be *2 rather than /2 to get seconds?
+    Variables[9] = BattVoltAvg;     // 38
     // Variables[10] = Hw_stack;
     // Variables[11] = Sw_stack;
-    Variables[10] = Frame_size;
-    Variables[11] = Wd_flag;
-    Variables[12] = Boardrevision;
-    Variables[13] = DSS_preload;
-    Variables[15] = LaserID;
-    Variables[16] = AccelTripPoint;
-    Variables[17] = ResetSeconds / 2;
-    Variables[18] = OperationMode;
+    // Variables[10] = Frame_size;
+    Variables[10] = Wd_flag;          // 42
+    Variables[11] = Boardrevision;    // 43
+    Variables[12] = LaserID;          // 44
+    Variables[13] = DSS_preload;      // 46
+    Variables[14] = AccelTripPoint;   // 47
+    Variables[15] = ResetSeconds / 2; // 48
+    Variables[16] = OperationMode;    // 49
 
     if (SendDataFlag == 1)
     {
-        for (i = 0; i <= 18; i++)
+        for (i = 0; i <= 16; i++)
         {
-            // Hexresult = Variables[i];
-            // sprintf(Result, "%X", Hexresult);
             if (i == 0)
-            {
-                // printToBT(20,Result);// In original MaxLaserPower has code 20, not 30. Write over 29 and sort out later.
-                // uartPrint(Result);
                 printToBT(20, Variables[i]);
-            }
-            else
-            {
-                // printToBT((i+29),Result);// Target commands in app start, apart from MaxLaserPower, dealt with above, at 30
-                // uartPrint(Result);
+            else if (i <= 9)
                 printToBT(i + 29, Variables[i]);
-                // sprintf(debugMsg, "i: %d, val: %d", i, Variables[i]);
-                // uartPrint(debugMsg);
-            }
-            // _delay_ms(50); //20241209. printToBT() includes _delay_ms(20).
+            else if (i <= 12)
+                printToBT(i + 32, Variables[i]);
+            else
+                printToBT(i + 33, Variables[i]);
         }
     }
 }
@@ -2957,17 +3000,7 @@ void DoHouseKeeping()
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
-    // if (SystemFaultFlag != lastSflag)
-    // {
-    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, lastSflag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, lastSflag, SystemFaultFlag);
-    //     uartPrint(debugMsg);
-    // }
-    // lastSflag = SystemFaultFlag;
-    // if (!(TJTick % 40))
-    // {
-    //     sprintf(debugMsg, "Z_accel: %d, ZFlag: %d, SFlag: %d", Accel_Z.Z_accel, Z_AccelFlag, SystemFaultFlag);
-    //     uartPrint(debugMsg);
-    // }
+
 #ifdef ISOLATED_BOARD
     // static uint16_t lastTick;
     // isolated_board_flag = false;
@@ -2983,14 +3016,13 @@ void DoHouseKeeping()
     // Z_AccelFlag = false;
     // LaserTemperature = 50;
     // SystemFaultFlag = false;
-
 #endif
     // avoidLimits(true); //20240731
     // avoidLimits(false);
     if (Tick > 4)
     {
-        // TransmitData();
-        // PrintAppData(); //20241209.  Too much data in log.  Send on refresh.
+        TransmitData();
+        PrintAppData(); // 20241209.  Too much data in log.  Send on refresh.
         GetLaserTemperature();
         GetLightLevel(); // 20250109.  Add this here for testing.
 #ifdef THROTTLE
@@ -3306,17 +3338,16 @@ void setup()
     SetLaserVoltage(0);           // Lasers switched off
     PORTD &= ~(1 << X_ENABLEPIN); // Enable pan motor (active low ).
     PORTD &= ~(1 << Y_ENABLEPIN); // Enable tilt motor.
-    // Audio2(5,1,1);//,"Setup");
-    _delay_ms(AUDIO_DELAY);
-    HomeAxis();
-#ifdef BASE_PRINT
-    sprintf(debugMsg, "Setup: Accel_Z.Z_accel %d, AccelTripPoint %d", Accel_Z.Z_accel, AccelTripPoint);
-    uartPrint(debugMsg);
-#endif
-    sendStatusData();
+// Audio2(5,1,1);//,"Setup");
 #ifndef ISOLATED_BOARD
     setupWatchdog(); // 20250111: Move from earlier in setup().  Ref USBASP_Q in Avitech.rtf, this date.
 #endif
+    // _delay_ms(2000); // 20250112 Without this delay, DecodeAccelerometer() trips as
+    ReadAccelerometer();
+    DecodeAccelerometer(); // 20250112: Test before any movement.
+    DoHouseKeeping();
+    HomeAxis();
+    sendStatusData();
 }
 
 int main()

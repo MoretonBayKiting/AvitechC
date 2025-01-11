@@ -17,20 +17,16 @@ def parse_debug_file(file_path):
                 current_pattern = int(pattern_match.group(2))
             
             # Match the line with X and Y values
-            xy_match = re.match(r'\d+:\d+:\d+\.\d+\s+<34:[0-9a-fA-F]+>\s*\(34:\s*(-?\d+)\)', line)
+            xy_match = re.match(r'\d+:\d+:\d+\.\d+\s+ind:\s*\d+,\s*X:\s*(-?\d+),\s*Y:\s*(-?\d+)', line)
             if xy_match and current_pattern is not None and current_zone is not None:
                 x_value = int(xy_match.group(1))
-                data.append({'time': len(data), 'X': x_value, 'pattern': current_pattern, 'zone': current_zone})
-            
-            y_match = re.match(r'\d+:\d+:\d+\.\d+\s+<35:[0-9a-fA-F]+>\s*\(35:\s*(-?\d+)\)', line)
-            if y_match and current_pattern is not None and current_zone is not None:
-                y_value = int(y_match.group(1))
-                data[-1]['Y'] = y_value
+                y_value = int(xy_match.group(2))
+                data.append({'time': len(data), 'X': x_value, 'Y': y_value, 'pattern': current_pattern, 'zone': current_zone})
     return pd.DataFrame(data)
 
 def plot_2d_render_of_3d(df, output_image_path):
     zones = df['zone'].unique()
-    colors = ['blue', 'green', 'red', 'orange']
+    colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
     for zone in zones:
         zone_df = df[df['zone'] == zone]
         fig = plt.figure(figsize=(10, 6))
@@ -58,7 +54,8 @@ def plot_2d_data(df, output_image_path):
     colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
     for zone in zones:
         zone_df = df[df['zone'] == zone]
-        for pattern in zone_df['pattern'].unique():
+        patterns = zone_df['pattern'].unique()
+        for pattern in patterns:
             pattern_df = zone_df[zone_df['pattern'] == pattern]
             plt.plot(pattern_df['X'], pattern_df['Y'], linestyle='-', marker='o', color=colors[pattern % len(colors)], label=f'Pattern {pattern}')
         plt.xlabel('X')
@@ -84,5 +81,5 @@ def main(file_path):
     print(f"Processed file saved to {base_name}_2d_Z<zone>.png, {base_name}_3d_Z<zone>.png, and {csv_output_path}")
 
 if __name__ == '__main__':
-    file_path = 'debug/Debug0110P.txt'  # Replace with your input file name
+    file_path = 'debug/Debug0110N.txt'  # Replace with your input file name
     main(file_path)

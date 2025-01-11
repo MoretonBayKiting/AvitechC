@@ -55,7 +55,12 @@ void Cmd49(void);
 void Cmd50(void);
 void Cmd51(void);
 void Cmd52(void);
+void Cmd53(void);
 void Cmd54(void);
+void Cmd55(void);
+void Cmd58(void);
+void Cmd59(void);
+void Cmd61(void);
 #ifdef NEW_APP
 void CmdStorePts(bool test);
 void GoToMapIndex();

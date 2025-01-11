@@ -14,7 +14,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
-    sprintf(debugMsg, "val %d, oldMin %d, oldMax %d, newMin %d, newMax %d, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
+    sprintf(debugMsg, "val %ld, oldMin %ld, oldMax %ld, newMin %ld, newMax %ld, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
     uartPrint(debugMsg);
     if (inOut)
     {
@@ -34,12 +34,13 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
+    sprintf(debugMsg, "r:  %d,", r);
+    uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
 void DecodeCommsData()
 {
-
     switch (Command)
     {
     case 1:
@@ -150,64 +151,38 @@ void DecodeCommsData()
     case 49:
         Cmd49();
         break; // Rho_Max;
-        // case 50:
-        //     Cmd50();
-        //     break; // Nbr_Rnd_Pts
-
     case 52:
-        Cmd52(); // ActivePatterns
-        break;
+        Cmd52();
+        break; // Update ActivePatterns (in EEPROM)
     case 53:
-        bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
-        bool resetSendDataFlag = true;
-        bool resetBTFlag = true;
-        if (printPos)
-            resetPrintPos = false;
-        if (SendDataFlag)
-            resetSendDataFlag = false;
-        if (BT_ConnectedFlag)
-            resetBTFlag = false;
-
-        printPos = true; // printPos is bool so True for any positive value, false if zero.
-        SendDataFlag = 1;
-        BT_ConnectedFlag = true;
-        // printPos  determines if some regular run time data is printed - not needed for normal app use.
-        sprintf("printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
-        // sprintf("SendDataFlag: %d, BT_ConnectedFlag: %d", SendDataFlag, BT_ConnectedFlag);
-        uartPrint(debugMsg);
-        sendStatusData();
-
-        if (resetPrintPos)
-            printPos = false;
-        if (resetSendDataFlag)
-            SendDataFlag = 0;
-        if (resetBTFlag)
-            BT_ConnectedFlag = false;
-
+        Cmd53();
         break;
+
     case 54:
         Cmd54();
         break; // Update ActiveMapZones (in EEPROM)
     case 55:   // Turn audio on or off.
-        audioOn = !audioOn;
-        sprintf(debugMsg, "audioOn: %d", audioOn);
-        uartPrint(debugMsg);
-        break; //
-    case 60:   // Check zones.
+        Cmd55();
+        break;
+    case 56: // Toggle printPos
+        printPos ^= 1;
+        break;
+#ifdef NEW_APP
+    case 58: // PROPERTY_GET_CHANNEL:
+        Cmd58();
+        break;
+    case 59: // PROPERTY_SET_CHANNEL:
+        Cmd59();
+        break;
+
+    case 60: // Check zones.
         GoToMapIndex();
         break; //
 
     case 61: // ReportVertices and store MapTotalPoints.
-        if (Instruction == 0)
-        {
-            ReportVertices(); // Report vertices back to app
-        }
-        else if (Instruction == 1)
-        {
-            eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // MapTotalPoints is set whenever a point is stored.  The app sends <61:1> when it has finished sending points.
-            CmdStorePts(true);
-        }
+        Cmd61();
         break;
+
     case 62:
         printToBT(54, ActiveMapZones);
         printToBT(52, ActivePatterns);
@@ -220,22 +195,17 @@ void DecodeCommsData()
     case 64:
         TraceBoundary(Instruction); // Instruction is zone (1 based)
         break;
-    case PROPERTY_GET_CHANNEL:
-        handleGetPropertyRequest(Instruction);
-        break;
-    case PROPERTY_SET_CHANNEL:
-        FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
-        uint8_t value = Instruction & 0x00FF;
-        handleSetPropertyRequest(prop, value);
-        break;
+#endif
         // default:
         //     break;
     }
-
+    // Handle storing vertices (1 at a time when specified by the app) outside the switch statement.
+#ifdef NEW_APP
     if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
     {
         CmdStorePts(false);
     }
+#endif
 }
 
 void Cmd1()
@@ -249,11 +219,6 @@ void Cmd1()
     Audio2(1, 2, 0); //,"AC1");
     _delay_ms(100);
 }
-
-// void resetDebugCounters(){ //Reset counters to zero so that there is a print after every message (cmd2 & cmd3) is received.
-//     MM_n = 0;
-//     JM_n = 0;
-// }
 
 void Cmd2()
 {
@@ -452,36 +417,6 @@ void cmd10_btDisconnected()
     BT_ConnectedFlag = 0;
     Audio2(1, 2, 0); //,"AC10:64");
 }
-
-// void Cmd10()
-// {
-//     switch (Instruction)
-//     {
-//     case 0:
-//         cmd10_running();
-//         // 20240922
-//         break;
-//     case 1:
-//         uartPrint("cmd10_p to be called");
-//         cmd10_programming();
-//         break;
-//     case 4:
-//         cmd10_restart();
-//         break;
-//     case 8:
-//         cmd10_lightSensor();
-//         break;
-//     case 16:
-//         cmd10_lightTrigger();
-//         break;
-//     case 32:
-//         cmd10_btConnected();
-//         break;
-//     case 64:
-//         cmd10_btDisconnected();
-//         break;
-//     }
-// }
 
 void Cmd10()
 {
@@ -724,7 +659,7 @@ void Cmd24()
 { // 20241212 Report vertices to app
     for (uint8_t zn = 1; zn <= NBR_ZONES; zn++)
     {
-        LoadZoneMap(zn, true);
+        LoadZoneMap(zn);
     }
 }
 
@@ -828,25 +763,6 @@ void Cmd49()
     eeprom_update_byte(&Eram_Rho_Max, Instruction);
     Rho_Max = Instruction;
 }
-// void Cmd50()
-// { //
-//     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, Instruction);
-//     Nbr_Rnd_Pts = Instruction;
-// }
-
-#ifdef NEW_APP
-void Cmd54()
-{
-    if ((Instruction < 0x10) && (Instruction >= 0))
-    {
-        eeprom_update_byte(&EramActiveMapZones, Instruction);
-        ActiveMapZones = Instruction;
-    }
-    // printToBT(54, 255);
-    // else
-    //     printToBT(51, ActiveMapZones);
-}
-
 void Cmd52()
 {
     if ((Instruction < 0x10) && (Instruction >= 0))
@@ -854,9 +770,76 @@ void Cmd52()
         eeprom_update_byte(&EramActivePatterns, Instruction);
         ActivePatterns = Instruction;
     }
-    // printToBT(52, 255);
-    // else
-    //     printToBT(52, ActivePatterns);
+}
+void Cmd53()
+{
+    bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
+    bool resetSendDataFlag = true;
+    bool resetBTFlag = true;
+    if (printPos)
+        resetPrintPos = false;
+    if (SendDataFlag)
+        resetSendDataFlag = false;
+    if (BT_ConnectedFlag)
+        resetBTFlag = false;
+
+    printPos = true; // printPos is bool so True for any positive value, false if zero.
+    SendDataFlag = 1;
+    BT_ConnectedFlag = true;
+    // printPos  determines if some regular run time data is printed - not needed for normal app use.
+    sprintf(debugMsg, "printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
+    uartPrint(debugMsg);
+    sendStatusData();
+
+    if (resetPrintPos)
+        printPos = false;
+    if (resetSendDataFlag)
+        SendDataFlag = 0;
+    if (resetBTFlag)
+        BT_ConnectedFlag = false;
+}
+
+void Cmd54()
+{
+    if ((Instruction < 0x10) && (Instruction >= 0))
+    {
+        ActiveMapZones = Instruction;
+        eeprom_update_byte(&EramActiveMapZones, Instruction);
+    }
+}
+
+void Cmd55()
+{
+    audioOn = !audioOn;
+    sprintf(debugMsg, "audioOn: %d", audioOn);
+    uartPrint(debugMsg);
+}
+#ifdef NEW_APP
+void Cmd58()
+{
+    sprintf(debugMsg, "Cmd58. Inst: %d", Instruction);
+    uartPrint(debugMsg);
+    handleGetPropertyRequest(static_cast<FieldDeviceProperty>(Instruction));
+}
+void Cmd59()
+{
+    FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
+    uint8_t value = Instruction & 0x00FF;
+    handleSetPropertyRequest(prop, value);
+}
+
+void Cmd61()
+{
+    // uartPrint("Entered case 61");
+    if (Instruction == 0)
+    {
+        ReportVertices(); // Report vertices back to app
+    }
+    else if (Instruction == 1)
+    {
+        eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // MapTotalPoints is set whenever a point is stored.  The app sends <61:1> when it has finished sending points.
+        CmdStorePts(true);
+    }
 }
 
 void CmdStorePts(bool test)
@@ -941,7 +924,8 @@ void GoToMapIndex()
 
 void ReportVertices()
 {
-    getMapPtCounts(false);
+    // uartPrint("Enter RV");
+    getMapPtCounts();
     // sprintf(debugMsg, "MTP: %d", MapTotalPoints);
     // uartPrint(debugMsg);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
@@ -1121,5 +1105,4 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         break;
     }
 }
-
-#endif
+#endif // NEW_APP

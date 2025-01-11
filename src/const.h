@@ -26,7 +26,7 @@
 // #define BT_TICKMAX 3600
 #define ONE_SECOND 20
 #define NBR_ZONES 4
-#define MAX_NBR_VERTICES 20 // This is the maximum number of vertices per zone/map
+#define MAX_NBR_VERTICES 15 // This is the maximum number of vertices per zone/map
 #define MAX_NBR_MAP_PTS 32  // This is the maximum overall number of vertices
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
@@ -103,9 +103,9 @@
 
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
-#define OLD_SPEED_ZONE_MAX 255
+#define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
 #define SPEED_SCALE_MIN 130
-#define SPEED_SCALE_MAX 20 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MAX 5 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
@@ -126,3 +126,4 @@
 #define CANT_SET_PROPERTY 255
 #define PATH_ZONE 3 //
 #define WATCHDOG_DELAY 5000
+#define ISOLATED_BOARD_DELAY 500

@@ -19,8 +19,8 @@ extern uint16_t isolated_board_factor;
 // #define THROTTLE //20241205: Use to debug laser temperature and power.
 // #define BASE_PRINT
 #define LOG_PRINT
-#define JOG_PRINT
-#define NEW_APP
+// #define JOG_PRINT
+// #define NEW_APP
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
@@ -181,13 +181,17 @@ void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue);
 void PrintEramVars();
-void LoadZoneMap(uint8_t zn, bool print_flag);
+void LoadZoneMap(uint8_t zn);
 uint8_t GetZone(uint8_t i);
 void TraceBoundary(uint8_t zone);
 void GoToMapIndex();
-void getMapPtCounts(bool doPrint);
+void getMapPtCounts();
 void sendStatusData();
 void handleGetPropertyRequest(FieldDeviceProperty property);
 void sendProperty(FieldDeviceProperty property, uint8_t value);
 uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut);
+
+uint8_t GetZVal(uint8_t i);
+int GetXVal(uint8_t i);
+int GetYVal(uint8_t i);
 #endif // SHARED_VARS_H

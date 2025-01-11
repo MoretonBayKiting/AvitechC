@@ -32,6 +32,13 @@
 #undef TW_STATUS
 #define TW_STATUS (TWSR0 & TW_STATUS_MASK)
 
+// Function to get and clear the MCUSR register and disable the watchdog timer.  Ref https://www.avrfreaks.net/s/topic/a5C3l000000Ua0BEAS/t152185
+void __attribute__((section(".init3"), used, naked)) disable_watchdog()
+{
+    MCUSR = 0;     // Clear the reset flags
+    wdt_disable(); // Disable the watchdog timer
+}
+
 MCP4725 DAC(0x60); // (MCP4725ADD>>1);
 uint8_t printCnter = 0;
 uint16_t eeprom_address = 0;
@@ -299,8 +306,8 @@ uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50; // Units are decimetres.  50 => 5metres
 
 // Debugging flags
-// volatile bool timer3_isr_triggered = false;
-// volatile bool watchdog_isr_triggered = false;
+volatile bool timer3_isr_triggered = false;
+volatile bool watchdog_isr_triggered = false;
 
 // uint8_t Max_Nbr_Perimeter_Pts = 100;
 void HomeAxis();
@@ -312,7 +319,7 @@ void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
 void StopSystem();
-// void testWatchDog(uint8_t indicator);
+void testWatchDog(uint8_t indicator);
 
 void setupPeripherals()
 {
@@ -324,12 +331,6 @@ void setupPeripherals()
     // Configure the ADC
     ADMUX = (1 << REFS0);                                              // Use AVCC as the reference voltage
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Enable the ADC and set the prescaler to 128 (auto)
-    uartPrintFlash(F("ADC configured"));
-    // Print the initial state of the registers for verification
-    sprintf(debugMsg, "DDRD: %02X, DDRE: %02X, DDRB: %02X", DDRD, DDRE, DDRB);
-    uartPrint(debugMsg);
-    sprintf(debugMsg, "ADMUX: %02X, ADCSRA: %02X", ADMUX, ADCSRA);
-    uartPrint(debugMsg);
 }
 
 void setupWatchdog()
@@ -339,7 +340,9 @@ void setupWatchdog()
     // Set up the watchdog timer for a 2-second timeout
     WDTCSR = (1 << WDCE) | (1 << WDE);                             // Enable configuration changes
     WDTCSR = (1 << WDE) | (1 << WDIE) | (1 << WDP2) | (1 << WDP1); // Set timeout to 2 seconds and enable interrupt
-    sei();                                                         // Enable global interrupts
+    // WDTCSR = (1 << WDE) | (1 << WDP2) | (1 << WDP1); // WDIE bit enables interrupt.  Try without it.
+    sei(); // Enable global interrupts
+    // uartPrint("Watchdog timer configured for 2-second timeout\n");
 }
 uint8_t IsCharWaiting()
 {
@@ -860,13 +863,13 @@ ISR(TIMER3_COMPA_vect)
 {
     wdt_reset(); // Reset the watchdog timer
     TickCounter_50ms_isr();
-    // timer3_isr_triggered = true; // Set flag to indicate Timer3 ISR was triggered
+    timer3_isr_triggered = true; // Set flag to indicate Timer3 ISR was triggered
     // uartPrintFlash(F("T3 i\n"));
 }
 
 ISR(WDT_vect)
 {
-    // watchdog_isr_triggered = true; // Set flag to indicate watchdog ISR was triggered
+    watchdog_isr_triggered = true; // Set flag to indicate watchdog ISR was triggered
     // The system will reset after this ISR completes
     // This ISR will be called when the watchdog timer times out. Without any code, the system will reset.
 }
@@ -1131,9 +1134,8 @@ void DecodeAccelerometer()
                 Z_AccelFlag = true;
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
-                // uartPrintFlash(F("AccelTripPoint error. \n"));
-                // sprintf(debugMsg, "AccelTripPoint error. DA_cnt: %u, DA_cnt2: %u, Zflag: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel);
-                // uartPrint(debugMsg);
+                sprintf(debugMsg, "ATP err DA_cnt: %u, DA_cnt2: %u, Zflag: %d, ATP: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel, AccelTripPoint);
+                uartPrint(debugMsg);
 #endif
             }
             else
@@ -1142,22 +1144,29 @@ void DecodeAccelerometer()
                 SystemFaultFlag = false;
             }
         }
-        // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.  For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then
+        // Similar if conditions for OperationMode 1, 2, 3, 4.  But they need to be reviewed.
+        // For example most (BASCOM) have If Z_accel < Acceltrippoint Then  but OpMode = 3 has If Z_accel > Acceltrippoint Then
+        // Hold accelrometer in fault state to allow head to settle from vibration
+        // If the flag is not set (ie laser OK) but was previously set, set it to true.  Only if it remains unset (by the above) after a period (AccellTick >= 10), reboot the system using the wd timer.
         if (Z_AccelFlagPrevious && !Z_AccelFlag)
         {
             if (AccelTick < 10)
             {
                 Z_AccelFlag = true;
                 SystemFaultFlag = true;
-                return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.
+                return; // Exit the function before AccelTick and Z_AccelFlagPrevious are reset.  Allows for transient errors not to trigger a reset.
             }
             else
             {
                 uartPrintFlash(F("ST3 DA \n"));
                 StopTimer3();
-                // testWatchDog(3);           // Stop Timer3 to prevent the watchdog timer from being reset
-                _delay_ms(WATCHDOG_DELAY); //' Wait for watchdog to overflow and system will reboot
-                // testWatchDog(4);
+                testWatchDog(3); // Stop Timer3 to prevent the watchdog timer from being reset
+                // _delay_ms(WATCHDOG_DELAY); //' Wait for watchdog to overflow and system will reboot
+                for (uint8_t a; a < 250; a++)
+                {
+                    testWatchDog(4 + a);
+                    _delay_ms(500);
+                }
             }
         }
         Z_AccelFlagPrevious = Z_AccelFlag;
@@ -1218,6 +1227,7 @@ void GetLightLevel()
         }
     }
 }
+
 void MrSleepyTime()
 {
     uint8_t Xlocal; //, Ylocal;
@@ -1393,9 +1403,9 @@ void initMPU()
         if (Wire.available())
         {
             uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
-            uartPrintFlash(F("Accel Chip & Gyro address: "));
-            sprintf(debugMsg, "%d, %02x", whoAmI, GyroAddress);
-            uartPrint(debugMsg);
+            // uartPrintFlash(F("Accel Chip & Gyro address: "));
+            // sprintf(debugMsg, "%d, %02x", whoAmI, GyroAddress);
+            // uartPrint(debugMsg);
         }
         else
         {
@@ -1414,7 +1424,7 @@ void initMPU()
     }
     else
     {
-        uartPrintFlash(F("MPU awake \n"));
+        // uartPrintFlash(F("MPU awake \n"));
     }
     _delay_ms(300);
     // Reset signal paths
@@ -1429,7 +1439,7 @@ void initMPU()
     }
     else
     {
-        uartPrintFlash(F("Signal paths reset  \n"));
+        // uartPrintFlash(F("Signal paths reset  \n"));
     }
     _delay_ms(300);
     // Set the slowest sampling rate
@@ -1446,7 +1456,7 @@ void initMPU()
     }
     else
     {
-        uartPrintFlash(F("Sample rate set \n"));
+        // uartPrintFlash(F("Sample rate set \n"));
     }
 
     // Set full scale reading to ±16g
@@ -1461,7 +1471,7 @@ void initMPU()
     }
     else
     {
-        uartPrintFlash(F("Full scale set \n"));
+        // uartPrintFlash(F("Full scale set \n"));
     }
 }
 
@@ -1546,53 +1556,62 @@ uint8_t GetZone(uint8_t i)
     }
 }
 
-void getMapPtCounts(bool doPrint)
+void getMapPtCounts()
 { // Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
     uint8_t MapIndex;
-    uint8_t i, Prev_i; // Prev_i_1;
-    i = 0;
-    Prev_i = 0;
+    uint8_t z = 0, Prev_z = 0; // Prev_i_1;
+    Prev_z = 0;
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++)
     {                                  // 20240628: Start at MapIndex = 1.  Pass (MapIndex -1) to GetZone as that looks up EramMapPositions[] which is zero based.
-        i = GetZone(MapIndex - 1) - 1; // Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
-        if (i > 0)
+        z = GetZone(MapIndex - 1) - 1; // Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
+        if (z > 0)
         { // If i == 0 (ie 1st zone), don't do anything. Assignments for that zone either when Prev_i = 0 or at total when there is only one zone.
-            if (i != Prev_i)
+            if (z != Prev_z)
             { // Do something when you have the first point of a new zone.
-                if (Prev_i == 0)
+                if (Prev_z == 0)
                 {
-                    MapCount[0][Prev_i] = MapIndex; // Incremental is 1 greater than cumulative as incremental adds the first point of the zone as an additional last point.
-                    MapCount[1][Prev_i] = MapIndex - 1;
+                    MapCount[0][Prev_z] = MapIndex; // Incremental is 1 greater than cumulative as incremental adds the first point of the zone as an additional last point.
+                    MapCount[1][Prev_z] = MapIndex - 1;
                 }
                 else
-                {                                                                 // The case where prev_i > 1
-                    MapCount[1][Prev_i] = MapIndex - 1;                           // This is the same as the Prev_i = 1 case.
-                    MapCount[0][Prev_i] = MapIndex - MapCount[1][Prev_i - 1] + 1; // Incremental for this zone is counter less cumulative for previous plus repeated 1st point.
+                {                                                             // The case where prev_i > 1
+                    MapCount[1][Prev_z] = MapIndex - 1;                       // This is the same as the Prev_i = 1 case.
+                    MapCount[0][Prev_z] = MapIndex - MapCount[1][Prev_z - 1]; // Incremental for this zone is counter less cumulative for previous plus repeated 1st point.
+                    // 20250110.  No, MapIndex is that for the first point of the next zone.  So MapIndex less cumulative to last zone is correct.
                 }
             }
         }
         if (MapIndex == MapTotalPoints)
         {                              // This is the case i == Prev_i or i == 1. Only do something if it's the last stored point (so index is MapTotalPoints - 1).
-            MapCount[1][i] = MapIndex; // Consider 4 stored points in a single zone.  This would be entered when MapIndex == 4.  4 is the correct number of cumulative specified points.
-            if (i == 0)
+            MapCount[1][z] = MapIndex; // Consider 4 stored points in a single zone.  This would be entered when MapIndex == 4.  4 is the correct number of cumulative specified points.
+            if (z == 0)
             {
-                MapCount[0][i] = MapIndex + 1; // This would be 5 which is the number of specified points (4) plus 1 for the first one being repeated.
+                MapCount[0][z] = MapIndex + 1; // This would be 5 which is the number of specified points (4) plus 1 for the first one being repeated.
             }
             else
             {
-                MapCount[0][i] = MapIndex - MapCount[1][i - 1] + 1;
+                MapCount[0][z] = MapIndex - MapCount[1][z - 1] + 1;
             }
         }
-        if (doPrint)
-        {
-            sprintf(debugMsg, "MI: %d zn: %d MC0: %d MC1: %d", MapIndex, i, MapCount[0][i], MapCount[1][i]);
-            uartPrint(debugMsg);
-            _delay_ms(50);
-        }
-        Prev_i = i;
+
+#ifdef TEST_MAPCOUNT // Could you ReportVertices() to get these data.
+        sprintf(debugMsg, "MI: %d, zn: %d,  PrevZn: %d, MC0: %d MC1: %d, PrevMC0 %d", MapIndex, z, Prev_z, MapCount[0][z], MapCount[1][z], MapCount[0][Prev_z]);
+        uartPrint(debugMsg);
+        _delay_ms(50);
+#endif
+        Prev_z = z;
     }
+    // if (doPrint)
+#ifdef TEST_MAPCOUNT
+    for (uint8_t z = 0; z < NBR_ZONES; z++)
+    {
+        sprintf(debugMsg, "MC0z: %d, MC1z: %d", MapCount[0][z], MapCount[1][z]);
+        uartPrint(debugMsg);
+    }
+#endif
 }
-void LoadZoneMap(uint8_t zn, bool print_flag)
+
+void LoadZoneMap(uint8_t zn)
 {
     //---------Gets vertices for given zone from EEPROM.
     // The Y dat MSB 4 bits are the operation zone and the 16 bits LSB is the map point number
@@ -1601,76 +1620,68 @@ void LoadZoneMap(uint8_t zn, bool print_flag)
     //  ^--------------------- Operation Zone     eg Zone 0 to 4
     uint8_t MapIndex, MI, zn_1;
     float res = 0.0;
-    zn_1 = zn; // 20240701: Had used zn-1.  But (zn-1) now passed as argument to this function.
+    zn_1 = zn; // 20240701: Had used zn-1.  But (zn-1) now passed as argument to this function from .
     // int temp;
 
+#ifdef BASE_PRINT
     if (MapTotalPoints == 0)
     {
-#ifdef BASE_PRINT
         uartPrint("LZM: Zero points");
-#endif
         return;
     }
     else
     {
-#ifdef BASE_PRINT
         sprintf(debugMsg, "LZM: MapTotalPoints: %d \r\n", MapTotalPoints);
         uartPrint(debugMsg);
-#endif
     }
+#endif
     for (MapIndex = 0; MapIndex < MapCount[0][zn_1] - 1; MapIndex++)
     { // Upper limit.  See notes below in next loop. With n-1 distinct points, there are n points in total
         // and they are indexed from 0 to n-2 - hence 0 to < n -1.
+        // Consider 2 zones, each with 4 distinct vertices.  MC[0][0] = MC[0][1] = 5 (ie allowing for duplicating the first vertex).  MC[1][0] = 4; MC[1][1] = 8
+        // In each case, the for loop is: for (MapIndex = 0; MapIndex < 4; MapIndex++)
         if (zn_1 == 0)
-        { //
-            MI = MapIndex;
+        {                  //
+            MI = MapIndex; // MI values: 0, 1, 2, 3
         }
         else
         {
             MI = MapIndex + MapCount[1][zn_1 - 1]; // The index in EramPositions is across all zones whereas the loop index here is for a single zone
+            // MI values: 0, 1, 2, 3 each + 4 => 4, 5, 6, 7
         }
-        if (!print_flag)
-        {
-            Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
-            Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
+        Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
+        Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
 #ifdef LOG_PRINT // GHOST
-            printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
+        printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
 #endif
-        }
-        else
-        {
-            // sprintf(debugMsg, "<24: Zn: %d, X: %d, Y: %d>", zn, eeprom_read_word(&EramPositions[MI].EramX), Vertices[1][MapIndex], eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF);
-            // uartPrint(debugMsg);
-        }
     }
-    // snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
-    //  Add a repeated vertex equal to the first vertex.  MapIndex has incremented by the "next MapIndex" statement - I think?
-    if (!print_flag)
-    {
-        Vertices[0][MapIndex] = Vertices[0][0];
-        Vertices[1][MapIndex] = Vertices[1][0];
-        // Get the slope of each segment & store in Vertices[2][i]
-        for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++)
-        { // MapCount[0][zn] is a count of the number of specified vertices, including the last repeated one, in zone 1.
-            // If there are 4 distinct points, then MapCount[0][zn] would be 5. Segments are 0:1, 1:2, 2:3, 3:4  So start from 1 and consider MapIndex and (MapIndex - 1) as the segment endpoints.
-            if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]) > MIN_PERIMETER_TILT)
-            { // If the difference in Ys is big enough, get slope.
-                float num = static_cast<float>(Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10;
-                float den = static_cast<float>(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
-                if (abs(den) >= 1)
-                {
-                    res = static_cast<float>(num) / den;
-                }
-                else
-                {
-                    // uartPrint("Abs(den)<1");
-                }
-                Vertices[2][MapIndex - 1] = res;
+    // Above loads distinct vertices.  MapIndex is now equal to MapCount[0][zn-1] as that is why the for loop has exited.  So set that vertex equal to the first one (index 0).
+    Vertices[0][MapIndex] = Vertices[0][0];
+    Vertices[1][MapIndex] = Vertices[1][0];
+#ifdef LOG_PRINT // GHOST
+    printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
+#endif
+    // Get the slope of each segment & store in Vertices[2][i]
+    for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++)
+    { // MapCount[0][zn] is a count of the number of specified vertices, including the last repeated one, in zone 1.
+        // If there are 4 distinct points, then MapCount[0][zn] would be 5. Segments are 0:1, 1:2, 2:3, 3:4  So start from 1 and consider MapIndex and (MapIndex - 1) as the segment endpoints.
+        if (abs(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]) > MIN_PERIMETER_TILT)
+        { // If the difference in Ys is big enough, get slope.
+            float num = static_cast<float>(Vertices[0][MapIndex] - Vertices[0][MapIndex - 1]) * 10;
+            float den = static_cast<float>(Vertices[1][MapIndex] - Vertices[1][MapIndex - 1]);
+            if (abs(den) >= 1)
+            {
+                res = static_cast<float>(num) / den;
             }
             else
             {
-                Vertices[2][MapIndex - 1] = DEF_SLOPE; // Set an extreme value where delta(x) is potentially large and delta(y) is small.
+                // uartPrint("Abs(den)<1");
             }
+            Vertices[2][MapIndex - 1] = res;
+        }
+        else
+        {
+            Vertices[2][MapIndex - 1] = DEF_SLOPE; // Set an extreme value where delta(x) is potentially large and delta(y) is small.
         }
     }
 }
@@ -1692,7 +1703,7 @@ int getTiltFromCart(int rho)
     // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
     // float b = atan2(LaserHt,rho*10);
     float b = atan2(static_cast<float>(LaserHt), static_cast<float>(rho) * 10.0f); // 20241205 Arguments were reverse ordered.  Arguments also now cast to float.
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "rho %d, 100*b %d, LaserHt %d", rho, static_cast<int>(100 * b), LaserHt);
     uartPrint(debugMsg);
 #endif
@@ -1773,7 +1784,7 @@ uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
     rhoMin = getCartFromTilt(maxTilt);
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint16_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "Ints: rhoMax: %d rhoMin: %d tilt_sep: %d nbrRungs: %d ", static_cast<int>(rhoMax), static_cast<int>(rhoMin), static_cast<int>(Tilt_Sep));
     uartPrint(debugMsg);
 
@@ -1836,12 +1847,12 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[1] - c1[1]));
     res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
 // Use the cartesian values stored in res and write the corresponding polar values to the same variable.
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "CI: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
     getPolars(res[0], res[1], res);
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
@@ -1868,7 +1879,7 @@ void midPt(int tilt, uint8_t seg, int (&res)[2])
         res[1] = Vertices[1][seg];
     }
 // sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
-#ifdef GHOST
+#ifdef xGHOST
     sprintf(debugMsg, "midPt: S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d", Vertices[1][seg], Vertices[1][seg + 1], tilt, num, den, seg, res[0], res[1]);
     uartPrint(debugMsg);
 #endif
@@ -1965,7 +1976,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
     static uint8_t nbrSegPts = 0;
     static uint8_t seg = 0, fstSeg = 0, sndSeg = 0;
-    static uint16_t segPt = 0;
+    static uint16_t segPt = 0; // Counter for dense filler points within a segment.
     static int pt1[2];
     static int pt2[2];
 
@@ -2110,7 +2121,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         }
         else if (Nbr_Rnd_Pts > 0)
         { // Now deal with the rungs - above is just boundary.
-#ifdef GHOST
+#ifdef xGHOST
             sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
             uartPrint(debugMsg);
 #endif
@@ -2197,7 +2208,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     {
 #ifdef GHOST
         // sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
-        sprintf(debugMsg, "ind: %d, X: %d, Y: %d, MC[zn] %d>", ind, X, Y, MapCount[0][zn]);
+        sprintf(debugMsg, "ind: %d, SegPt: %d, X: %d, Y: %d, MC[zn] %d", ind, segPt, X, Y, MapCount[0][zn]);
         uartPrint(debugMsg);
 #endif
 #ifdef TEST_LASER_POWER
@@ -2214,8 +2225,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         LastY = Y;
     }
 #endif
-    int pt[2] = {X, Y};      // Create an array with X and Y values
-    if (!testConvex(zn, pt)) // Test that autofill point is internal to zone.  Not necessary for boundary?
+    int pt[2] = {X, Y};                         // Create an array with X and Y values to pass to testConvex()
+    if (!testConvex(zn, pt) && zn != PATH_ZONE) // Test that autofill point is internal to zone.  Not necessary for boundary?
     {
         uartPrintFlash(F("fail convex \n"));
     }
@@ -2236,6 +2247,7 @@ void ProcessCoordinates()
     }
     StepCount = 0; // Put StepCount and SteppingStatus to zero #ifdef ISOLATED_BOARD so that motors never run.
     SteppingStatus = 0;
+    return;
 #endif
     StepOverRatio = 0;
 
@@ -2653,7 +2665,7 @@ void RunSweep(uint8_t zn)
     bool newPatt = true;
 
     SetLaserVoltage(0); // 20240727.  Off while GetPerimeter() is being calculated.
-    LoadZoneMap(zn, false);
+    LoadZoneMap(zn);
     printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
@@ -2682,6 +2694,9 @@ void RunSweep(uint8_t zn)
                 uartPrint(debugMsg);
 #endif
                 doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
+#ifdef ISOLATED_BOARD
+                _delay_ms(ISOLATED_BOARD_DELAY);
+#endif
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
                 newPatt = false;
                 // if (cnt == 0 && PatType == 1)
@@ -2751,8 +2766,8 @@ void TraceBoundary(uint8_t zone)
     static uint8_t Current_Nbr_Rnd_Pts = 0;
     Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
     Nbr_Rnd_Pts = 0;                   // Set to zero so that RunSweep() only does the boundary.
-    getMapPtCounts(false);             // Load zone data (count of vertices by zone) from eeprom to MapCount array
-    LoadZoneMap(zone, false);
+    getMapPtCounts();                  // Load zone data (count of vertices by zone) from eeprom to MapCount array
+    LoadZoneMap(zone);
     RunSweep(zone);
     Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
 }
@@ -2772,7 +2787,7 @@ void TransmitData()
     Variables[5] = AbsX;
     Variables[6] = AbsY;
     Variables[7] = Accel_Z.Z_accel;
-    Variables[8] = Tod_tick / 2;
+    Variables[8] = Tod_tick / 2; // Tod_tick increments every 500ms.  Should this by *2 rather than /2 to get seconds?
     Variables[9] = BattVoltAvg;
     // Variables[10] = Hw_stack;
     // Variables[11] = Sw_stack;
@@ -2954,20 +2969,20 @@ void DoHouseKeeping()
     //     uartPrint(debugMsg);
     // }
 #ifdef ISOLATED_BOARD
-    static uint16_t lastTick;
-    isolated_board_flag = false;
-    // if (TJTick >= lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor)) // TJTick increments every 50ms.
-    {
-        lastTick = TJTick;
-        X = AbsX;
-        Y = AbsY;
-        StepCount = 0;
-        SteppingStatus = 0;
-        isolated_board_flag = true; // Reset to true, so that notional movement occurs, if there has been an interval as defined above
-    }
-    Z_AccelFlag = false;
-    LaserTemperature = 50;
-    SystemFaultFlag = false;
+    // static uint16_t lastTick;
+    // isolated_board_flag = false;
+    // // if (TJTick >= lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor)) // TJTick increments every 50ms.
+    // {
+    //     lastTick = TJTick;
+    //     X = AbsX;
+    //     Y = AbsY;
+    //     StepCount = 0;
+    //     SteppingStatus = 0;
+    //     isolated_board_flag = true; // Reset to true, so that notional movement occurs, if there has been an interval as defined above
+    // }
+    // Z_AccelFlag = false;
+    // LaserTemperature = 50;
+    // SystemFaultFlag = false;
 
 #endif
     // avoidLimits(true); //20240731
@@ -2992,7 +3007,7 @@ void DoHouseKeeping()
     {
         if ((PINB & (1 << TILT_STOP)))
         { // if Tilt_stop pin is on
-#ifndef THROTTLE
+#ifndef ISOLATED_BOARD
             if (!(TJTick % 40))
                 uartPrintFlash(F("Tilt limit switch \n"));
             StopTimer3(); // 20241205: This will cause the watchdog to trigger.
@@ -3001,9 +3016,9 @@ void DoHouseKeeping()
             // uartPrintFlash(F("StopTimer3 would have been called.\r"));
         }
     }
-    // #ifdef ISOLATED_BOARD
-    //     wdt_reset();
-    // #endif
+#ifdef ISOLATED_BOARD
+    wdt_reset();
+#endif
     // if (SystemFaultFlag == 1) {
     if (SystemFaultFlag)
     { // 20241129
@@ -3062,10 +3077,10 @@ void DoHouseKeeping()
 }
 
 // Property get functions:
-uint8_t getBatteryVoltageAdc()
-{
-    return static_cast<uint8_t>(BatteryVoltage);
-}
+// uint8_t getBatteryVoltageAdc()
+// {
+//     return static_cast<uint8_t>(BatteryVoltage);
+// }
 
 uint8_t getTimeMode()
 {
@@ -3104,16 +3119,16 @@ uint8_t getLocationMode()
     // }
 }
 
-uint8_t getTripodHeight() { return LaserHt; }    // LaserHt is stored in decimetres.  Eg LaserHt = 50 is 5.0m.
-uint8_t getLineSeparation() { return Tilt_Sep; } // Tilt_Sep is metres (in Cartesian space)
-uint8_t getLinesPerPattern() { return Nbr_Rnd_Pts; }
-uint8_t getActiveMapZones() { return ActiveMapZones; }
-uint8_t getActivePatterns() { return ActivePatterns; }
-uint8_t getMaxLaserPower() { return MaxLaserPower; }
-uint8_t getUserLaserPower() { return UserLaserPower; }
-uint8_t getCurrentLaserPower() { return LaserPower; }
-uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
-uint8_t getRandomizeSpeed() { return 0; }                  // TJ: I don't know what this is supposed to do.
+// uint8_t getTripodHeight() { return LaserHt; }    // LaserHt is stored in decimetres.  Eg LaserHt = 50 is 5.0m.
+// uint8_t getLineSeparation() { return Tilt_Sep; } // Tilt_Sep is metres (in Cartesian space)
+// uint8_t getLinesPerPattern() { return Nbr_Rnd_Pts; }
+// uint8_t getActiveMapZones() { return ActiveMapZones; }
+// uint8_t getActivePatterns() { return ActivePatterns; }
+// uint8_t getMaxLaserPower() { return MaxLaserPower; }
+// uint8_t getUserLaserPower() { return UserLaserPower; }
+// uint8_t getCurrentLaserPower() { return LaserPower; }
+// uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
+uint8_t getRandomizeSpeed() { return 0; } // TJ: I don't know what this is supposed to do.
 uint8_t getSpeedScale()
 {
     uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
@@ -3127,20 +3142,21 @@ uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long. 
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    // sprintf(debugMsg, "argument received by sendProperty. Property: %d, value: %d", property, value);
-    // uartPrint(debugMsg);
+    sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
+    uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    // sprintf(debugMsg, "argument sent to handleGetPropertyRequest: %d", property);
-    // uartPrint(debugMsg);
+    sprintf(debugMsg, "arg to hGPR %d", property);
+    uartPrint(debugMsg);
+
     switch (property)
     {
     case FieldDeviceProperty::batteryVoltAdc:
-        sendProperty(property, getBatteryVoltageAdc());
+        sendProperty(property, BatteryVoltage);
         break;
     case FieldDeviceProperty::timeMode:
         sendProperty(property, getTimeMode());
@@ -3152,31 +3168,35 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, getLocationMode());
         break;
     case FieldDeviceProperty::tripodHeight:
-        sendProperty(property, getTripodHeight());
+        sendProperty(property, LaserHt);
         break;
     case FieldDeviceProperty::lineSeparation:
-        sendProperty(property, getLineSeparation());
+        sendProperty(property, Tilt_Sep);
         break;
     case FieldDeviceProperty::linesPerPattern:
-        sendProperty(property, getLinesPerPattern());
+        sendProperty(property, Nbr_Rnd_Pts);
         break;
     case FieldDeviceProperty::activeMapZones:
-        sendProperty(property, getActiveMapZones());
+        sprintf(debugMsg, "ActZones: %d", ActiveMapZones);
+        uartPrint(debugMsg);
+        sendProperty(property, ActiveMapZones);
         break;
     case FieldDeviceProperty::activePatterns:
-        sendProperty(property, getActivePatterns());
+        sprintf(debugMsg, "ActPats: %d", ActivePatterns);
+        uartPrint(debugMsg);
+        sendProperty(property, ActivePatterns);
         break;
     case FieldDeviceProperty::maxLaserPower:
-        sendProperty(property, getMaxLaserPower());
+        sendProperty(property, MaxLaserPower);
         break;
     case FieldDeviceProperty::userLaserPower:
-        sendProperty(property, getUserLaserPower());
+        sendProperty(property, UserLaserPower);
         break;
     case FieldDeviceProperty::currentLaserPower:
-        sendProperty(property, getCurrentLaserPower());
+        sendProperty(property, LaserPower);
         break;
     case FieldDeviceProperty::laserTemperature:
-        sendProperty(property, getLaserTemperature());
+        sendProperty(property, LaserTemperature);
         break;
     case FieldDeviceProperty::randomizeSpeed:
         sendProperty(property, getRandomizeSpeed());
@@ -3207,42 +3227,43 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     }
 }
 
-// void testWatchDog(uint8_t indicator)
-// {
-//     static uint8_t n = 0;
-//     sprintf(debugMsg, "testWD, no trigger %d", indicator);
-//     uartPrint(debugMsg);
-//     // Check if Timer3 ISR was triggered
-//     if (TJTick % 40 > 10)
-//     {
-//         n++;
-//         if (n > 4)
-//         {
+void testWatchDog(uint8_t indicator)
+{
+    static uint8_t n = 0;
+    sprintf(debugMsg, "testWD, no trigger %d", indicator);
+    uartPrint(debugMsg);
+    // Check if Timer3 ISR was triggered
+    // if (TJTick % 40 > 10)
+    // {
+    //     n++;
+    //     if (n > 4)
+    //     {
+    //         sprintf(debugMsg, "In main. TJTick %d", TJTick);
+    //         uartPrint(debugMsg);
+    //         n = 0;
+    //     }
+    // }
+    if (timer3_isr_triggered)
+    {
+        sprintf(debugMsg, "T3 %d", indicator);
+        uartPrint(debugMsg);
+        timer3_isr_triggered = false; // Reset the flag
+    }
 
-//             sprintf(debugMsg, "In main. TJTick %d", TJTick);
-//             uartPrint(debugMsg);
-//             n = 0;
-//         }
-//     }
-//     if (timer3_isr_triggered)
-//     {
-//         sprintf(debugMsg, "T3 %d", indicator);
-//         uartPrint(debugMsg);
-//         timer3_isr_triggered = false; // Reset the flag
-//     }
-
-//     // Check if Watchdog ISR was triggered
-//     if (watchdog_isr_triggered)
-//     {
-//         sprintf(debugMsg, "WD %d", indicator);
-//         uartPrint(debugMsg);
-//         watchdog_isr_triggered = false; // Reset the flag
-//     }
-// }
+    // Check if Watchdog ISR was triggered
+    if (watchdog_isr_triggered)
+    {
+        sprintf(debugMsg, "WD %d", indicator);
+        uartPrint(debugMsg);
+        watchdog_isr_triggered = false; // Reset the flag
+    }
+}
 
 void setup()
 {
-    sei();             // Enable global interrupts.
+    // wdt_disable();  //Moved to main().
+    sei(); // Enable global interrupts.
+    // wdt_reset(); //ref https://forum.arduino.cc/t/atmega328-locks-up-on-watchdog-reset/921269/5
     uart_init(MYUBRR); // Initialize UART with baud rate specified by macro constant
     _delay_ms(2000);   // More time to connect and not, therefore, miss serial statements.
 
@@ -3260,9 +3281,6 @@ void setup()
     TurnOnGyro();
 #endif
     setupPeripherals();
-#ifndef ISOLATED_BOARD
-    setupWatchdog();
-#endif
 
     OperationModeSetup(OperationMode); // Select the operation mode the device will work under before loading data presets
     Wd_byte = MCUSR;                   // Read the Watchdog flag
@@ -3296,10 +3314,14 @@ void setup()
     uartPrint(debugMsg);
 #endif
     sendStatusData();
+#ifndef ISOLATED_BOARD
+    setupWatchdog(); // 20250111: Move from earlier in setup().  Ref USBASP_Q in Avitech.rtf, this date.
+#endif
 }
 
 int main()
 {
+    wdt_disable();
     setup();
     while (1)
     {
@@ -3321,8 +3343,8 @@ int main()
             if (PrevSetupModeFlag != SetupModeFlag)
             {
                 // eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
-                getMapPtCounts(false); // Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
-                Audio2(3, 10, 5);      //,"ToMode0");
+                getMapPtCounts(); // Any need to call getMapPtCounts?  Doesn't need to be called every time.  Once at end of setup and at first time after setup.
+                Audio2(3, 10, 5); //,"ToMode0");
                 _delay_ms(2000);
                 PrevSetupModeFlag = SetupModeFlag;
             }
@@ -3356,6 +3378,6 @@ int main()
         }
         DoHouseKeeping();
     }
-    // testWatchDog(2);
+    testWatchDog(2);
     return 0;
 }

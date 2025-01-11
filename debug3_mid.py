@@ -4,27 +4,43 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import re
 
+def decode_twos_complement(hex_value):
+    """Decode a 4-digit hexadecimal string as a 2's complement integer."""
+    value = int(hex_value, 16)
+    if value >= 0x8000:
+        value -= 0x10000
+    return value
+
 def parse_debug_file(file_path):
     data = []
     current_pattern = None
     current_zone = None
     with open(file_path, 'r') as file:
         for line in file:
-            # Match the pattern and zone line
-            pattern_match = re.match(r'\d+:\d+:\d+\.\d+\s+RS\. Zone: (\d+) Pattern: (\d+)', line)
-            if pattern_match:
-                current_zone = int(pattern_match.group(1))
-                current_pattern = int(pattern_match.group(2))
+            # Check if the line contains "RS. Zone"
+            if "RS. Zone" in line:
+                # Extract the zone value
+                zone_start = line.find("Zone:") + len("Zone: ")
+                zone_end = line.find(" ", zone_start)
+                current_zone = int(line[zone_start:zone_end])
+
+                # Extract the pattern value
+                pattern_start = line.find("Pattern:") + len("Pattern: ")
+                pattern_end = line.find(" ", pattern_start)
+                current_pattern = int(line[pattern_start:pattern_end])
             
-            # Match the line with X and Y values
-            xy_match = re.match(r'\d+:\d+:\d+\.\d+\s+<34:[0-9a-fA-F]+>\s*\(34:\s*(-?\d+)\)', line)
-            if xy_match and current_pattern is not None and current_zone is not None:
-                x_value = int(xy_match.group(1))
+            # Check if the line contains X value
+            match_34 = re.search(r'<34:([0-9a-fA-F]{4})>', line)
+            if match_34 and current_pattern is not None and current_zone is not None:
+                hex_value = match_34.group(1)
+                x_value = decode_twos_complement(hex_value)
                 data.append({'time': len(data), 'X': x_value, 'pattern': current_pattern, 'zone': current_zone})
             
-            y_match = re.match(r'\d+:\d+:\d+\.\d+\s+<35:[0-9a-fA-F]+>\s*\(35:\s*(-?\d+)\)', line)
-            if y_match and current_pattern is not None and current_zone is not None:
-                y_value = int(y_match.group(1))
+            # Check if the line contains Y value
+            match_35 = re.search(r'<35:([0-9a-fA-F]{4})>', line)
+            if match_35 and current_pattern is not None and current_zone is not None:
+                hex_value = match_35.group(1)
+                y_value = decode_twos_complement(hex_value)
                 data[-1]['Y'] = y_value
     return pd.DataFrame(data)
 
@@ -84,5 +100,5 @@ def main(file_path):
     print(f"Processed file saved to {base_name}_2d_Z<zone>.png, {base_name}_3d_Z<zone>.png, and {csv_output_path}")
 
 if __name__ == '__main__':
-    file_path = 'debug/Debug0110P.txt'  # Replace with your input file name
+    file_path = 'debug/Debug0111B.txt'  # Replace with your input file name
     main(file_path)

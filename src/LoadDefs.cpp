@@ -10,6 +10,9 @@ uint8_t EEMEM EramFirstTimeOn;   // NOLINT
 uint8_t NoMapsRunningFlag;
 uint8_t FirstTimeOn;
 // uint8_t Tick;
+uint8_t GetZVal(uint8_t i);
+int GetXVal(uint8_t i);
+int GetYVal(uint8_t i);
 
 void LoadEramDefaults(void)
 { // Load default values to EEPROM (only run if there is not already user data stored in EEPROM)
@@ -83,26 +86,26 @@ void PrintEramVars()
     uartPrint(debugMsg);
     sprintf(debugMsg, "MaxLaserPower:  %p, %d", (void *)&EramMaxLaserPower, eeprom_read_byte(&EramMaxLaserPower));
     uartPrint(debugMsg);
-    // Laser2TempTrip = eeprom_read_byte(&EramLaser2TempTrip);
+    sprintf(debugMsg, "Laser2TempTrip:  %p, %d", (void *)&EramLaser2TempTrip, eeprom_read_byte(&EramLaser2TempTrip));
+    uartPrint(debugMsg);
     // Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
     // Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
     sprintf(debugMsg, "MapTotalPoints:  %p, %d", (void *)&EramMapTotalPoints, eeprom_read_byte(&EramMapTotalPoints));
     uartPrint(debugMsg);
-    sprintf(debugMsg, "Gyro address:  %02x", (void *)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));
+    sprintf(debugMsg, "Gyro address: %p, %02x", (void *)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));
     uartPrint(debugMsg);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
-        sprintf(debugMsg, "WPi: %u x: %u y: %u", i, (int)eeprom_read_word(&EramPositions[i].EramX), (int)(eeprom_read_word(&EramPositions[i].EramY) & 0x0FFF));
+        sprintf(debugMsg, "WPi: %u Zone: %d X: %d, Y: %d", i, GetZVal(i), GetXVal(i), GetYVal(i));
         uartPrint(debugMsg);
     }
-    // for(int i = 0; i < 5; i++) {
-    //     SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
-    // }
     sprintf(debugMsg, "ActiveMapZones:  %p, : %d", (void *)&EramActiveMapZones, eeprom_read_byte(&EramActiveMapZones));
     uartPrint(debugMsg);
-
-    // LaserID = eeprom_read_word(&EramLaserID);
+    sprintf(debugMsg, "ActivePatterns:  %p, : %d", (void *)&EramActivePatterns, eeprom_read_byte(&EramActivePatterns));
+    uartPrint(debugMsg);
+    sprintf(debugMsg, "LaserID:  %p, : %d", (void *)&EramLaserID, eeprom_read_word(&EramLaserID));
+    uartPrint(debugMsg);
     sprintf(debugMsg, "AccelTrip: %p, %d", (void *)&EramAccelTripPoint, eeprom_read_word(&EramAccelTripPoint));
     uartPrint(debugMsg);
 
@@ -111,7 +114,36 @@ void PrintEramVars()
     uartPrint(debugMsg);
     sprintf(debugMsg, "FirstTimeOn: %p, %d", (void *)&EramFirstTimeOn, eeprom_read_byte(&EramFirstTimeOn));
     uartPrint(debugMsg);
-    // UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
-    // FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
-    // LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
+    sprintf(debugMsg, "UserLightTripLevel: %p, %d", (void *)&EramUserLightTripLevel, eeprom_read_byte(&EramUserLightTripLevel));
+    uartPrint(debugMsg);
+    sprintf(debugMsg, "FactoryLightTripLevel: %p, %d", (void *)&EramFactoryLightTripLevel, eeprom_read_byte(&EramFactoryLightTripLevel));
+    uartPrint(debugMsg);
+    sprintf(debugMsg, "LightTriggerOperation: %p, %d", (void *)&EramLightTriggerOperation, eeprom_read_byte(&EramLightTriggerOperation));
+    uartPrint(debugMsg);
+}
+
+// Function to get the X value
+int16_t GetXVal(uint8_t i)
+{
+    return (int)eeprom_read_word(&EramPositions[i].EramX);
+}
+
+// Function to get the Y value
+int16_t GetYVal(uint8_t i)
+{
+    uint16_t rawY = eeprom_read_word(&EramPositions[i].EramY);
+    int yValue = rawY & 0x0FFF; // Extract the lower 12 bits
+    // Convert from 2's complement if necessary
+    if (yValue & 0x0800) // Check if the sign bit (bit 11) is set
+    {
+        yValue |= 0xF000; // Set the upper 4 bits to maintain the sign
+    }
+    return yValue;
+}
+
+// Function to get the Z value
+uint8_t GetZVal(uint8_t i)
+{
+    uint16_t rawY = eeprom_read_word(&EramPositions[i].EramY);
+    return (rawY >> 12) & 0x0F; // Extract the upper 4 bits
 }

@@ -439,7 +439,7 @@ void uart_init(uint16_t ubrr)
     UCSR0B = (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);
     // Set frame format: 8 data bits, 1 stop bit
     UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
-    // Add a small delay before sending AT commands
+    // Add a delay before sending AT commands
     _delay_ms(2000);
     // Put HC-05 into AT command mode
     uartPrintFlash(F("AT\r"));
@@ -576,8 +576,9 @@ void ProcessError()
         Audio2(3, 1, 2); //,"PELas");
         return;
     }
-    if (X_TravelLimitFlag || Y_TravelLimitFlag)
+    if (X_TravelLimitFlag || Y_TravelLimitFlag) // 20250114 These are never set (except initialised to false)
     {
+        uartPrintFlash(F("TravelLimit breached \n"));
         Audio2(4, 1, 1); //,"PETravel");
         return;
     }
@@ -855,8 +856,27 @@ void StepperDriverISR()
     }
 }
 // Setup ISRs
+volatile uint16_t timer1Counter = 0;
+volatile bool TC1ind = false;
+void CheckTimer1(uint8_t n, uint16_t cntThreshold)
+{
+    if (TC1ind)
+    {
+        timer1Counter++;
+        TC1ind = false;
+        if (timer1Counter > cntThreshold)
+        {
+            timer1Counter = 0;
+            sprintf(debugMsg, "CT1 n: %d", n);
+            uartPrint(debugMsg);
+        }
+    }
+}
+
 ISR(TIMER1_COMPA_vect)
 {
+    TC1ind = true;
+    timer1Counter++;
     StepperDriverISR();
 }
 // ISR for Timer3 Compare A vector
@@ -2308,7 +2328,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
         Y = steps;
     }
     ProcessCoordinates();
-    // CheckTimer1(11);
+    CheckTimer1(0, 100);
     DSS_preload = HOMING_SPEED;
     SteppingStatus = 1;
     setupTimer1();
@@ -2519,12 +2539,20 @@ uint16_t CalcSpeed(bool fst)
 void HomeMotor(uint8_t axis, int steps)
 { // Move specified motor until it reaches the relevant limit switch.
     MoveMotor(axis, steps, 0);
+    sprintf(debugMsg, "HM. axis:  %d,steps:  %d", axis, steps);
+    uartPrint(debugMsg);
+
     setupTimer1(); // 20240614 This added.  Shouldn't be necessary.
+
+    sprintf(debugMsg, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    uartPrint(debugMsg);
 #ifndef ISOLATED_BOARD
     if (axis == 0)
     {
         while (!(PINB & (1 << PAN_STOP)))
         { // While pan_stop pin is low do nothing while motor moves.
+            CheckTimer1(1, 10);
+            uartPrintFlash(F("HM3\n"));
             DoHouseKeeping();
         }
     }
@@ -2532,6 +2560,8 @@ void HomeMotor(uint8_t axis, int steps)
     {
         while (!(PINB & (1 << TILT_STOP)))
         { // While tilt_stop pin is low do nothing while motor moves.
+            CheckTimer1(2, 20);
+            uartPrintFlash(F("HM4\n"));
             DoHouseKeeping();
         }
     }
@@ -2550,6 +2580,9 @@ void HomeMotor(uint8_t axis, int steps)
         Y = 0;
         AbsY = 0;
     }
+    uartPrintFlash(F("HM5\n"));
+    sprintf(debugMsg, "LS end HM: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    uartPrint(debugMsg);
 }
 void MoveLaserMotor()
 {
@@ -2574,25 +2607,18 @@ void NeutralAxis()
     // Neutral Position: (-4000,1000)
     // Pan motor to neutral position
     X = -4000; // Clockwise 90 deg pan
-    // sprintf(debugMsg,"AbsX %d, X %d",AbsX, X);
-    // uartPrint(debugMsg);
     MoveLaserMotor();
     // TILT AXIS HOME
     // Tilt motor to neutral position
     Y = 500; // Half way down
-    // sprintf(debugMsg,"AbsY %d, Y %d",AbsX, X);
-    // uartPrint(debugMsg);
     MoveLaserMotor();
 #ifdef ISOLATED_BOARD
     X = -4000;
     AbsX = X;
     Y = 500;
     AbsY = Y;
-    // uartPrintFlash(F("HomeAxis \n"));
 #endif
-
     Audio2(1, 2, 0, "Neut");
-    // _delay_ms(AUDIO_DELAY);
 }
 
 void HomeAxis()
@@ -2600,19 +2626,19 @@ void HomeAxis()
     int Correctionstepping;
     setupTimer1();      // Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
-// *********PAN AXIS HOME****************
+                        // *********PAN AXIS HOME****************
 #ifndef ISOLATED_BOARD
     if ((PINB & (1 << PAN_STOP)))
     { // If pan_stop pin is high... "Move blade out of stop sensor at power up"
-        // uartPrintFlash(F("Move from pan stop \n"));
-        MoveMotor(0, -300, 1); // 20241206 This seems to have been lost at some stage.
+        uartPrintFlash(F("Move from pan stop \n"));
+        MoveMotor(0, -300, 1);
     }
 
     HomeMotor(0, 17000); // Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP)))
     { // If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-        // uartPrintFlash(F("Move from tilt stop \n"));
+        uartPrintFlash(F("Move from tilt stop \n"));
         MoveMotor(1, 300, 1);
     }
 
@@ -2946,7 +2972,14 @@ void sendStatusData()
 void ProgrammingMode()
 {
     SetLaserVoltage(0); // Turn off laser
+#ifndef HOME_AXIS
     HomeAxis();
+#endif
+#ifdef HOME_AXIS
+    uartPrintFlash(F("HomeAxis removed from ProgMode \n"));
+    _delay_ms(1000);
+    IsHome = 1;
+#endif
     // #ifdef ISOLATED_BOARD
     //     _delay_ms(1000);
     // #endif
@@ -3038,10 +3071,9 @@ void DoHouseKeeping()
     if (AbsY >= TILT_SENSOR_IGNORE)
     {
         if ((PINB & (1 << TILT_STOP)))
-        { // if Tilt_stop pin is on
+        { // if Tilt_stop pin is high
 #ifndef ISOLATED_BOARD
-            if (!(TJTick % 40))
-                uartPrintFlash(F("Tilt limit switch \n"));
+            uartPrintFlash(F("ST3 TL \n"));
             StopTimer3(); // 20241205: This will cause the watchdog to trigger.
             _delay_ms(WATCHDOG_DELAY);
 #endif
@@ -3069,6 +3101,7 @@ void DoHouseKeeping()
     if (SetupModeFlag == 1)
     {
         WarnLaserOn();
+        uartPrintFlash(F("Calling laser flicker \n"));
         StartLaserFlickerInProgMode();
         // 20240725 Although this stop criterion is implemented in JogMotors(), timing indicates that it is also needed here.
         if (PanEnableFlag == 0 && TiltEnableFlag == 0)
@@ -3164,8 +3197,8 @@ uint8_t getRandomizeSpeed() { return 0; } // TJ: I don't know what this is suppo
 uint8_t getSpeedScale()
 {
     uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
-    sprintf(debugMsg, "Invert SpeedScale %d,  r %d", SpeedScale, r);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Invert SpeedScale %d,  r %d", SpeedScale, r);
+    // uartPrint(debugMsg);
     return r;
 }
 uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
@@ -3174,16 +3207,16 @@ uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long. 
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
+    // uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    sprintf(debugMsg, "arg to hGPR %d", property);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "arg to hGPR %d", property);
+    // uartPrint(debugMsg);
 
     switch (property)
     {
@@ -3346,7 +3379,11 @@ void setup()
     ReadAccelerometer();
     DecodeAccelerometer(); // 20250112: Test before any movement.
     DoHouseKeeping();
+    sprintf(debugMsg, "LS: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    uartPrint(debugMsg);
+
     HomeAxis();
+    // uartPrintFlash(F("Would normally HomeAxis here.\n"));
     sendStatusData();
 }
 

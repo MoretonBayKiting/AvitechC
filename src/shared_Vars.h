@@ -21,7 +21,7 @@ extern uint16_t isolated_board_factor;
 #define LOG_PRINT
 // #define JOG_PRINT
 // #define NEW_APP
-#define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
+// #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100

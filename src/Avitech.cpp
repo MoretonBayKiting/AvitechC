@@ -858,6 +858,7 @@ void StepperDriverISR()
 // Setup ISRs
 volatile uint16_t timer1Counter = 0;
 volatile bool TC1ind = false;
+#ifdef HOME_AXIS
 void CheckTimer1(uint8_t n, uint16_t cntThreshold)
 {
     if (TC1ind)
@@ -872,7 +873,7 @@ void CheckTimer1(uint8_t n, uint16_t cntThreshold)
         }
     }
 }
-
+#endif
 ISR(TIMER1_COMPA_vect)
 {
     TC1ind = true;
@@ -1516,6 +1517,7 @@ void StopTimer3()
 }
 void StopTimer1()
 {
+    // uartPrintFlash(F("ST1 \n"));
     // Clear all CS1 bits to stop Timer1
     TCCR1B &= ~(1 << CS12);
     TCCR1B &= ~(1 << CS11);
@@ -2328,7 +2330,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
         Y = steps;
     }
     ProcessCoordinates();
-    CheckTimer1(0, 100);
+    // CheckTimer1(0, 100);
     DSS_preload = HOMING_SPEED;
     SteppingStatus = 1;
     setupTimer1();
@@ -2539,20 +2541,20 @@ uint16_t CalcSpeed(bool fst)
 void HomeMotor(uint8_t axis, int steps)
 { // Move specified motor until it reaches the relevant limit switch.
     MoveMotor(axis, steps, 0);
-    sprintf(debugMsg, "HM. axis:  %d,steps:  %d", axis, steps);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "HM. axis:  %d,steps:  %d", axis, steps);
+    // uartPrint(debugMsg);
 
     setupTimer1(); // 20240614 This added.  Shouldn't be necessary.
 
-    sprintf(debugMsg, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // uartPrint(debugMsg);
 #ifndef ISOLATED_BOARD
     if (axis == 0)
     {
         while (!(PINB & (1 << PAN_STOP)))
         { // While pan_stop pin is low do nothing while motor moves.
-            CheckTimer1(1, 10);
-            uartPrintFlash(F("HM3\n"));
+            // CheckTimer1(1, 10);
+            // uartPrintFlash(F("HM3\n"));
             DoHouseKeeping();
         }
     }
@@ -2560,8 +2562,8 @@ void HomeMotor(uint8_t axis, int steps)
     {
         while (!(PINB & (1 << TILT_STOP)))
         { // While tilt_stop pin is low do nothing while motor moves.
-            CheckTimer1(2, 20);
-            uartPrintFlash(F("HM4\n"));
+            // CheckTimer1(2, 20);
+            // uartPrintFlash(F("HM4\n"));
             DoHouseKeeping();
         }
     }
@@ -2580,9 +2582,9 @@ void HomeMotor(uint8_t axis, int steps)
         Y = 0;
         AbsY = 0;
     }
-    uartPrintFlash(F("HM5\n"));
-    sprintf(debugMsg, "LS end HM: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
-    uartPrint(debugMsg);
+    // uartPrintFlash(F("HM5\n"));
+    // sprintf(debugMsg, "LS end HM: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // uartPrint(debugMsg);
 }
 void MoveLaserMotor()
 {
@@ -2983,7 +2985,7 @@ void ProgrammingMode()
     // #ifdef ISOLATED_BOARD
     //     _delay_ms(1000);
     // #endif
-    uartPrintFlash(F("ProgMode3 \n"));
+    // uartPrintFlash(F("ProgMode3 \n")); //This overwhelms <9:1> 
     printToBT(9, 1);
 }
 
@@ -3101,12 +3103,13 @@ void DoHouseKeeping()
     if (SetupModeFlag == 1)
     {
         WarnLaserOn();
-        uartPrintFlash(F("Calling laser flicker \n"));
         StartLaserFlickerInProgMode();
         // 20240725 Although this stop criterion is implemented in JogMotors(), timing indicates that it is also needed here.
-        if (PanEnableFlag == 0 && TiltEnableFlag == 0)
+        // 20250115: This was taken out after HomeAxis() no longer worked and hence would not allow switching to prog mode.
+        // if (PanEnableFlag == 0 && TiltEnableFlag == 0)
         { // If both pan and tilt are disabled, stop the motors.
-            StopSystem();
+          // uartPrintFlash(F("Stop. No enable flags \n"));
+          // StopSystem();
         }
     }
 

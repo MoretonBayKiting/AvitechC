@@ -300,7 +300,9 @@ uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 uint8_t Nbr_Rnd_Pts = 20;
 uint8_t EEMEM Eram_Tilt_Sep;
 uint8_t Tilt_Sep = 5; // 20241209 Previously 1.  Needs testing.
+#ifdef WIGGLY_PTS
 uint8_t nbrWigglyPts = 0;
+#endif
 uint8_t EEMEM EramSpeedScale;
 uint8_t SpeedScale = 30; // Low value sets higher interrupt rate so higher speed.  30 seems to be a good fast value. Tune with <16:percentage> message.
 uint8_t EEMEM EramLaserHt;
@@ -1258,9 +1260,9 @@ void MrSleepyTime()
     Xlocal = 0;
     LoopCount = 0;
     Audio2(4, 1, 20);
-    _delay_ms(4200); // Wait while the buzzer sounds
-    Audio2(1, 20, 1);
-    _delay_ms(1100); // Wait while the buzzer sounds
+    // _delay_ms(4200); // Wait while the buzzer sounds
+    // Audio2(1, 20, 1);
+    // _delay_ms(1100); // Wait while the buzzer sounds
 
     SetLaserVoltage(0);
     PORTE &= ~(1 << FAN); // Fan = Off;
@@ -1276,11 +1278,12 @@ void MrSleepyTime()
         GetLightLevel();
         if (LightSensorModeFlag == 0) // If 0 then light level has been triggered check again in 5 seconds to comfirm
         {
-            _delay_ms(5000); // 20250109 What's this for?
+            _delay_ms(5000);
             GetLightLevel(); // This will reset LightSensorModeFlag to 1 if it had been set to 0 as a result of transient rather than persistent light.
         }
 
-        if (Tick > 10)
+        // if (Tick > 10) //Tick is not reset other than in DoHouseKeeping() and that is not called if this while loop is running.
+        if (TJTick % 40 == 0)
         {
             Audio2(1, 1, 1); // Brief beep before restarting while loop.
         }
@@ -1304,6 +1307,7 @@ void ResetTiming()
         {
             Secondsfromreset = 0;
             BT_ConnectedFlag = 0;
+            SetLaserVoltage(0); // 20250116
             HomeAxis();
         }
     }
@@ -1446,7 +1450,7 @@ void initMPU()
     }
     else
     {
-        uartPrintFlash(F("MPU awake \n"));
+        // uartPrintFlash(F("MPU awake \n"));
     }
     _delay_ms(300);
     // Reset signal paths
@@ -1574,7 +1578,7 @@ uint8_t GetZone(uint8_t i)
     }
     else
     {
-        uartPrintFlash(F("GetZone: i out of range."));
+        // uartPrintFlash(F("GetZone: i out of range."));
         return 0;
     }
 }
@@ -1583,12 +1587,11 @@ void getMapPtCounts()
 { // Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
     uint8_t MapIndex;
     uint8_t z = 0, Prev_z = 0; // Prev_i_1;
-    Prev_z = 0;
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++)
     {                                  // 20240628: Start at MapIndex = 1.  Pass (MapIndex -1) to GetZone as that looks up EramMapPositions[] which is zero based.
         z = GetZone(MapIndex - 1) - 1; // Zone index of MapIndex (the 2nd index) is zero based - so from 0 to 3. Stored points from 0 to MapTotalPoints-1.
-        if (z > 0)
-        { // If i == 0 (ie 1st zone), don't do anything. Assignments for that zone either when Prev_i = 0 or at total when there is only one zone.
+        if (z > 0)                     // Test for NOT the first zone
+        {                              // If i == 0 (ie 1st zone), don't do anything. Assignments for that zone either when Prev_i = 0 or at total when there is only one zone.
             if (z != Prev_z)
             { // Do something when you have the first point of a new zone.
                 if (Prev_z == 0)
@@ -1597,38 +1600,43 @@ void getMapPtCounts()
                     MapCount[1][Prev_z] = MapIndex - 1;
                 }
                 else
-                {                                                             // The case where prev_i > 1
-                    MapCount[1][Prev_z] = MapIndex - 1;                       // This is the same as the Prev_i = 1 case.
-                    MapCount[0][Prev_z] = MapIndex - MapCount[1][Prev_z - 1]; // Incremental for this zone is counter less cumulative for previous plus repeated 1st point.
-                    // 20250110.  No, MapIndex is that for the first point of the next zone.  So MapIndex less cumulative to last zone is correct.
+                {
+                    MapCount[1][Prev_z] = MapIndex - 1;
+                    MapCount[0][Prev_z] = MapIndex - MapCount[1][Prev_z - 1]; // 20250110.  MapIndex is that for the first point of the next zone.  So MapIndex less cumulative to last zone is correct.
                 }
+                while (z > Prev_z + 1) // Allow for case when a zone is not used. eg 0 and 1 used for autofill and 3 for path but 2 not used.  In that case you'd have z = 3, Prev_z = 1
+                {
+                    MapCount[1][Prev_z + 1] = MapCount[1][Prev_z];
+                    MapCount[0][Prev_z + 1] = 1; // Hopefully this isn't used - but consistent with other zones if there are n distinct points then this is recorded as n+1 to allow for the repeated first point
+                    Prev_z = Prev_z + 1;
+                    // sprintf(debugMsg, "MI %d, z %d, NewPrev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
+                    // uartPrint(debugMsg);
+                }
+                // sprintf(debugMsg, "If z!=Prev_z: MI %d, z %d, Prev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
+                // uartPrint(debugMsg);
             }
         }
-        if (MapIndex == MapTotalPoints)
-        {                              // This is the case i == Prev_i or i == 1. Only do something if it's the last stored point (so index is MapTotalPoints - 1).
-            MapCount[1][z] = MapIndex; // Consider 4 stored points in a single zone.  This would be entered when MapIndex == 4.  4 is the correct number of cumulative specified points.
-            if (z == 0)
-            {
-                MapCount[0][z] = MapIndex + 1; // This would be 5 which is the number of specified points (4) plus 1 for the first one being repeated.
-            }
-            else
-            {
-                MapCount[0][z] = MapIndex - MapCount[1][z - 1] + 1;
-            }
-        }
-
-#ifdef TEST_MAPCOUNT // Could you ReportVertices() to get these data.
-        sprintf(debugMsg, "MI: %d, zn: %d,  PrevZn: %d, MC0: %d MC1: %d, PrevMC0 %d", MapIndex, z, Prev_z, MapCount[0][z], MapCount[1][z], MapCount[0][Prev_z]);
-        uartPrint(debugMsg);
-        _delay_ms(50);
-#endif
         Prev_z = z;
     }
-    // if (doPrint)
+    // sprintf(debugMsg, "MI %d, z %d, MTP %d", MapIndex, z, MapTotalPoints);
+    // uartPrint(debugMsg);
+    if (MapIndex >= MapTotalPoints)      // Do something if it's the last stored point (so MapIndex is MapTotalPoints) - in which case it hasn't been covered above.
+    {                                    // The loop over MapIndex, ending at MapIndex <=MapTotalPoints, means that MapIndex ends that loop at MapTotalPoints + 1.
+        MapCount[1][z] = MapTotalPoints; // Consider 4 stored points in a single zone.  This would be entered when MapIndex == 4.  4 is the correct number of cumulative specified points.
+        if (z == 0)
+        {
+            MapCount[0][z] = MapTotalPoints + 1; // This would be 5 which is the number of specified points (4) plus 1 for the first one being repeated.
+        }
+        else
+        {
+            MapCount[0][z] = MapTotalPoints - MapCount[1][z - 1] + 1;
+        }
+    }
+
 #ifdef TEST_MAPCOUNT
     for (uint8_t z = 0; z < NBR_ZONES; z++)
     {
-        sprintf(debugMsg, "MC0z: %d, MC1z: %d", MapCount[0][z], MapCount[1][z]);
+        sprintf(debugMsg, "z: %d, MC0z: %d, MC1z: %d", z, MapCount[0][z], MapCount[1][z]);
         uartPrint(debugMsg);
     }
 #endif
@@ -1989,13 +1997,15 @@ uint16_t distance(int pt1[2], int pt2[2])
 }
 bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
 {
-    static uint8_t wigglyPt = 0;
+#ifdef WIGGLY_PTS
+    static uint8_t wigglyPt = 0; // Tested but not used.  wigglyPt = 0 effectively removes this functionality.
+#endif
     static int thisRes[2], tilt = 0;
     static int nextRes[2], beginRes[2], endRes[2];
-    static bool startRung = true;
-    static bool endRung = false;
+    static bool startRung = true; // This is an indicator of being at one side or the other of a rung.
+    static bool endRung = false;  // endRung is used to indicate that you've arrived at the end of a rung after perhaps several interpolated points along the rung
     static uint8_t rung = 0;
-    static uint8_t lastZn = 0;
+    // static uint8_t lastZn = 0;
 
     static uint8_t nbrSegPts = 0;
     static uint8_t seg = 0, fstSeg = 0, sndSeg = 0;
@@ -2005,8 +2015,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
     static uint8_t rungMidPtCnt = 0; // 20241219.  Count of mid points passed while traversing a rung.
 
-    if (newPatt || (zn != lastZn))
-    { // Test for a new pattern and, if so, reset seg.
+    if (newPatt)
+    { // Test for a new pattern and, if so, reset seg and turn off laser to go to start of pattern (which might also be new zone)
+        // sprintf(debugMsg, "getXY; newPatt true. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
+        // uartPrint(debugMsg);
         seg = 0;
         CmdLaserOnFlag = false; // 20241229.  Laser off if moving to first point of pattern (and hence also zone)
         SetLaserVoltage(0);
@@ -2025,7 +2037,6 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     // uartPrint(debugMsg);
 #endif
 
-    // This conditional determines if the next point is on the boundary or a rung.  First traverse the boundary.
     if (zn == PATH_ZONE)
     {
         if (seg < MapCount[0][zn])
@@ -2051,10 +2062,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         }
         ind++;
     }
-    else
+    else // The general autofill case
     {
-        if (seg == 0 && segPt == 0)
-        { // 20250108.  Turn laser off if going to first vertex of a zone.
+        if (seg == 0 && segPt == 0) // 20250108.  Turn laser off if going to first vertex of a zone.  Should be off as a result of newPatt condition in any case
+        {
             SetLaserVoltage(0);
             CmdLaserOnFlag = false;
         }
@@ -2066,10 +2077,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 CmdLaserOnFlag = true;
             }
         }
-        if (seg < MapCount[0][zn])
-        { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
+        // First traverse the boundary.
+        if (seg < MapCount[0][zn]) // This conditional determines if the next point is on the boundary or a rung.
+        {                          // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
             if (segPt == 0)
-            { // First point of segment.  Get the two points which define the segment and the number of interpolated, excluding wiggly, points.
+            { // First point of segment - which must be a zone vertex.  Get the two vertices  which define the segment and the number of interpolated, excluding wiggly, points.
                 pt1[0] = Vertices[0][seg];
                 pt1[1] = Vertices[1][seg];
                 // if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
@@ -2078,11 +2090,6 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 {
                     pt2[0] = Vertices[0][0];
                     pt2[1] = Vertices[1][0];
-                    if (zn == PATH_ZONE) // Turn off laser between last and repeated first vertex if in path mode.
-                    {
-                        SetLaserVoltage(0);
-                        CmdLaserOnFlag = false;
-                    }
                 }
                 else
                 {
@@ -2090,11 +2097,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     pt2[1] = Vertices[1][seg + 1];
                 }
                 nbrSegPts = static_cast<uint8_t>(distance(pt1, pt2) / SEG_LENGTH); // This is the number of dense points to be placed along the segment, excluding wiggly points.
-#ifdef DEBUG
-                sprintf(debugMsg, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
-                uartPrint(debugMsg);
-#endif
-                X = Vertices[0][seg];
+                                                                                   // #ifdef DEBUG
+                // sprintf(debugMsg, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
+                // uartPrint(debugMsg);
+                // #endif
+                X = Vertices[0][seg]; // Set the next target point to the first vertex of the segment.
                 Y = Vertices[1][seg];
                 // 20241221: These having aberrant values caused ghost points.  Try this to fix the problem.  Neither thisRes[] nor nextResp[]
                 // are (or should be) used on the boundary.  Keep it as it fixed the problem.
@@ -2104,53 +2111,62 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 nextRes[1] = Y;
 
                 segPt++; // 20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
+                // sprintf(debugMsg, "SegPt == 0 case. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
+                // uartPrint(debugMsg);
             }
-            else
+            else // segPt>0 case indicates that this is a point on the segment not being an end point (zone vertex)
             {
+#ifdef WIGGLY_PTS
                 // 20241119: WigglyBorder_
                 if (wigglyPt == 0)
+#endif
                 { // Move to the next dense segment point.
                     if (nbrSegPts > 0)
                     {
                         CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
                         X = res[0];
                         Y = res[1];
-                        // if (Y>MAX_TILT) Y = MAX_TILT; //20241204: Trying to avoid ghost points.  This is a temporary fix.
                     }
                     else
                     { // 20250109 May need to do something but not sure yet.
                     }
                 }
+#ifdef WIGGLY_PTS
                 else
                 { // For wiggly points get a few randomly positioned around the start of the (dense) segment.
                     X = res[0] + (rand() % (2 * X_WIGGLY_BORDER_RANGE + 1)) - X_WIGGLY_BORDER_RANGE;
                     Y = res[1] + (rand() % (2 * Y_WIGGLY_BORDER_RANGE + 1)) - Y_WIGGLY_BORDER_RANGE;
                 }
                 wigglyPt++; // 20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
+#endif
+                // sprintf(debugMsg, "segPt: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d", segPt, X, Y, AbsX, AbsY);
+                // uartPrint(debugMsg);
             }
+#ifdef WIGGLY_PTS
             if (wigglyPt > nbrWigglyPts)
             { // Reset wigglyPt and segPt after NBR_WIGGLY_POINTS around a segment end point.
                 wigglyPt = 0;
                 segPt++;
             }
+#endif
+#ifndef WIGGLY_PTS
+            segPt++; //
+#endif
             if (segPt >= nbrSegPts)
             { // Having traversed the interpolated segment points, move to the next segment
                 seg++;
                 segPt = 0;
             }
-            // if (seg >= MapCount[0][zn] - 1)
-            // if (seg > MapCount[0][zn] - 1)
-            //     ind++; // Quick and dirty fix for path mode.
         }
-        else if (Nbr_Rnd_Pts > 0)
-        { // Now deal with the rungs - above is just boundary.
+        else // if (Nbr_Rnd_Pts > 0)
+        {    // Now deal with the rungs - above is just boundary.
 #ifdef xGHOST
             sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
             uartPrint(debugMsg);
 #endif
-            // If ind  is zero and this else clause is entered, then this is the first required rung.
-            // If Nbr_Rnd_Pts is zero, used to specify path mode, then no rungs are calculated or traversed.
-            if ((ind == 0) || (endRung))
+            // If ind  is zero and this else clause is entered, then this is the first required rung.  So need to calculate both end points of rung.
+            // if ((ind == 0) || (endRung))
+            if (endRung)
             {
                 if (startRung)
                 {
@@ -2176,7 +2192,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                         sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
                         midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
                     }
-                } // When starting a new pass, whether with startRung ture or false, set beginning and end points of rung.
+                } // When starting a new pass, whether with startRung true or false, set beginning and end points of rung.
                 ind++;
                 rungMidPtCnt = 0;
                 if (startRung)
@@ -2194,7 +2210,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     beginRes[1] = res[1];
                 }
 #ifdef BASE_PRINT
-                sprintf(debugMsg, "ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+                sprintf(debugMsg, "EndRung calc. ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
                 uartPrint(debugMsg);
 #endif
             }
@@ -2253,7 +2269,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     {
         uartPrintFlash(F("fail convex \n"));
     }
-    lastZn = zn;
+    // lastZn = zn;
     if (zn == PATH_ZONE)
         return false;
     else
@@ -2632,16 +2648,16 @@ void HomeAxis()
 #ifndef ISOLATED_BOARD
     if ((PINB & (1 << PAN_STOP)))
     { // If pan_stop pin is high... "Move blade out of stop sensor at power up"
-        uartPrintFlash(F("Move from pan stop \n"));
-        MoveMotor(0, -300, 1);
+      // uartPrintFlash(F("Move from pan stop \n"));
+      // MoveMotor(0, -300, 1);
     }
 
     HomeMotor(0, 17000); // Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP)))
     { // If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-        uartPrintFlash(F("Move from tilt stop \n"));
-        MoveMotor(1, 300, 1);
+      // uartPrintFlash(F("Move from tilt stop \n"));
+      // MoveMotor(1, 300, 1);
     }
 
     CmdLaserOnFlag = false; // 20240731
@@ -2686,13 +2702,14 @@ void HomeAxis()
 
 void RunSweep(uint8_t zn)
 {
-    uint8_t PatType, ind = 0;
+    uint8_t PatType, ind = 0; // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
     int minTilt = 0, cnt = 0;
     int maxTilt = 0;
     int rhoMin = 0;
     bool runSweepStartRung = true; // 20241221.  This was startRung.  Change to runSweepStartRung to distinguish from that used (locally) in getXY().
     bool newPatt = true;
-
+    static uint8_t lastPatt = 6; // Something that can't be valid
+    static uint8_t lastZn = 10;
     SetLaserVoltage(0); // 20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
     printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
@@ -2700,6 +2717,14 @@ void RunSweep(uint8_t zn)
     uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
     for (PatType = 1; PatType <= 4; PatType++)
     {
+        if ((lastPatt != PatType) || (zn != lastZn)) // If the zone changes but only one pattern is selected, we want the next pass to be treated as a new pattern.
+            newPatt = true;
+        else
+        {
+            newPatt = false;
+            lastPatt = PatType;
+            lastZn = zn;
+        }
         if (ActivePatterns & (1 << PatType - 1)) // PatType runs from 1 to 4.  ActivePatterns stored in 4 least significant bits.
         {
             PatternRunning = PatType;
@@ -2714,20 +2739,16 @@ void RunSweep(uint8_t zn)
                 uartPrint(debugMsg);
             }
 #endif
-            bool doWhile = true;
-            while (doWhile)
-            { // ind is incremented in getXY(), but not for the boundary, only for rungs.
-              // testWatchDog(1);
+
+            while (((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << (PatType - 1))) && (ActiveMapZones & (1 << zn)))) //// ind is incremented in getXY(), but not for the boundary, only for rungs.
+            {
 #ifdef TEST_PATH_MODE
-                sprintf(debugMsg, "ind: %d, pat: %d, testPat: %d, z: %d, testZn: %d", ind, PatType, (ActivePatterns & (1 << (PatType - 1))), zn, (ActiveMapZones & (1 << zn)));
-                uartPrint(debugMsg);
 #endif
-                doWhile = ((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << PatType - 1)) && (ActiveMapZones & (1 << zn)));
 #ifdef ISOLATED_BOARD
                 _delay_ms(ISOLATED_BOARD_DELAY);
 #endif
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
-                newPatt = false;
+                newPatt = false; // This is set on entry to the loop over PatType. Once in this while loop, it should be false until the next pattern is called.
                 // if (cnt == 0 && PatType == 1)
                 if (cnt == 0)
                 { // 20240727:Laser off as it moves towards 0th point of pattern.
@@ -2782,8 +2803,7 @@ void RunSweep(uint8_t zn)
             cnt = 0;
             ind = 0;
         }
-        printToBT(18, 0); // Set current pattern to zero
-        newPatt = true;
+        printToBT(18, 0);   // Set current pattern to zero
         SetLaserVoltage(0); // 20250108
         CmdLaserOnFlag = false;
     }
@@ -2985,7 +3005,7 @@ void ProgrammingMode()
     // #ifdef ISOLATED_BOARD
     //     _delay_ms(1000);
     // #endif
-    // uartPrintFlash(F("ProgMode3 \n")); //This overwhelms <9:1> 
+    // uartPrintFlash(F("ProgMode3 \n")); //This overwhelms <9:1>
     printToBT(9, 1);
 }
 
@@ -3340,8 +3360,8 @@ void setup()
     IB = true;
 #endif
 
-    sprintf(debugMsg, "In setup, IB: %d", IB);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "In setup, IB: %d", IB);
+    // uartPrint(debugMsg);
 
     setupTimer1();
     setupTimer3();
@@ -3382,8 +3402,8 @@ void setup()
     ReadAccelerometer();
     DecodeAccelerometer(); // 20250112: Test before any movement.
     DoHouseKeeping();
-    sprintf(debugMsg, "LS: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "LS: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // uartPrint(debugMsg);
 
     HomeAxis();
     // uartPrintFlash(F("Would normally HomeAxis here.\n"));

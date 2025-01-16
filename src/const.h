@@ -124,6 +124,6 @@
 #define PROPERTY_GET_CHANNEL 58
 #define PROPERTY_SET_CHANNEL 59
 #define CANT_SET_PROPERTY 255
-#define PATH_ZONE 3 //
+#define PATH_ZONE 3 // 3 if paths are indexed from 0 to 3.
 #define WATCHDOG_DELAY 5000
 #define ISOLATED_BOARD_DELAY 500

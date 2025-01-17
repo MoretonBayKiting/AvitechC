@@ -222,7 +222,7 @@ uint8_t Index;
 uint16_t EEMEM EramLaserID;
 uint16_t LaserID;
 
-int EEMEM EramAccelTripPoint; // Accelerometer trip angle value
+uint16_t EEMEM EramAccelTripPoint; // Accelerometer trip angle value
 int AccelTripPoint;
 
 uint8_t Zonespeed;
@@ -2185,6 +2185,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     // For each boundary segment get the interpolated point in the segment needed for the new rung.
                     midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
                     midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
+#ifndef PAT3GHOST
                     if (pat == 3)
                     {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
                         int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
@@ -2192,6 +2193,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                         sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
                         midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
                     }
+#endif
                 } // When starting a new pass, whether with startRung true or false, set beginning and end points of rung.
                 ind++;
                 rungMidPtCnt = 0;
@@ -3230,16 +3232,18 @@ uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long. 
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    // sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
-    // uartPrint(debugMsg);
+    sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
+    uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
+    sprintf(debugMsg, "Result: %d", result);
+    uartPrint(debugMsg);
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    // sprintf(debugMsg, "arg to hGPR %d", property);
-    // uartPrint(debugMsg);
+    sprintf(debugMsg, "arg to hGPR %d", property);
+    uartPrint(debugMsg);
 
     switch (property)
     {
@@ -3369,7 +3373,7 @@ void setup()
     TurnOnGyro();
 #endif
     setupPeripherals();
-
+    ReadEramVars();                    // Move ReadEramVars() here so that LaserID is available to OperationModeSetup()
     OperationModeSetup(OperationMode); // Select the operation mode the device will work under before loading data presets
     Wd_byte = MCUSR;                   // Read the Watchdog flag
     if (Wd_byte & (1 << WDRF))
@@ -3383,8 +3387,8 @@ void setup()
         return;
     }; // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    firstOn();           // Load defaults to EEPROM if first time on.
-    ReadEramVars();      // Reads user data from EEPROM to RAM.
+    firstOn(); // Load defaults to EEPROM if first time on.
+    // ReadEramVars();      // Reads user data from EEPROM to RAM.
     initMPU();           // 20241231 This was commented out.  It will error if the wrong address for the given board is in EEPROM (and read from preious statement)
     PORTE |= (1 << FAN); // Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++)

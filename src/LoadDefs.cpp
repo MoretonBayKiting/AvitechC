@@ -108,7 +108,8 @@ void PrintEramVars()
     uartPrint(debugMsg);
     sprintf(debugMsg, "AccelTrip: %p, %d", (void *)&EramAccelTripPoint, eeprom_read_word(&EramAccelTripPoint));
     uartPrint(debugMsg);
-
+    sprintf(debugMsg, "Nbr_Rnd_Pts: %p, %d", (void *)&Eram_Nbr_Rnd_Pts, eeprom_read_byte(&Eram_Nbr_Rnd_Pts));
+    uartPrint(debugMsg);
     // ResetSeconds = eeprom_read_word(&EramResetSeconds);  //NOLINT
     sprintf(debugMsg, "OperationMode: %p, %d", (void *)&EramOperationMode, eeprom_read_byte(&EramOperationMode));
     uartPrint(debugMsg);

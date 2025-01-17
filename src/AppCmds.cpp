@@ -41,6 +41,8 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 
 void DecodeCommsData()
 {
+    sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
+    uartPrint(debugMsg);
     switch (Command)
     {
     case 1:
@@ -354,102 +356,103 @@ void Cmd9()
     Audio2(1, 2, 0); //,"AC9");
     setupTimer3();   // Restart having stopped it at the start of this function.  Really?
 }
+#ifdef NEW_APP
+void cmd10_running()
+{
+    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
+    WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
+    PrevSetupModeFlag = SetupModeFlag;
+    SetupModeFlag = 0;
+    printToBT(9, 0);
+}
+void cmd10_programming()
+{
+    WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
+    PrevSetupModeFlag = SetupModeFlag;
+    SetupModeFlag = 1;
+    // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
+    Audio2(2, 2, 2); //,"AC10:1");
+    // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
+    ProgrammingMode(); // Home machine ready for programming in points
+    // uartPrint("Exiting c10_prog");
+    uartPrint("cmd10pE \n");
+}
 
-// void cmd10_running()
-// {
-//     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
-//     WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
-//     PrevSetupModeFlag = SetupModeFlag;
-//     SetupModeFlag = 0;
-//     printToBT(9, 0);
-// }
-// void cmd10_programming()
-// {
-//     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
-//     PrevSetupModeFlag = SetupModeFlag;
-//     SetupModeFlag = 1;
-//     // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
-//     Audio2(2, 2, 2); //,"AC10:1");
-//     // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
-//     ProgrammingMode(); // Home machine ready for programming in points
-//     // uartPrint("Exiting c10_prog");
-//     uartPrint("cmd10pE \n");
-// }
+void cmd10_restart()
+{
+    Audio2(1, 2, 0); //,"AC10:4");
+    setupWatchdog();
+    _delay_ms(1000);
+}
 
-// void cmd10_restart()
-// {
-//     Audio2(1, 2, 0); //,"AC10:4");
-//     setupWatchdog();
-//     _delay_ms(1000);
-// }
+void cmd10_lightSensor() // Setup light sensor mode    <10:8>
+{
+    Audio2(1, 2, 0); //,"AC10:8");
+    SetupModeFlag = 2;
+    _delay_ms(1000);
+}
 
-// void cmd10_lightSensor() // Setup light sensor mode    <10:8>
-// {
-//     Audio2(1, 2, 0); //,"AC10:8");
-//     SetupModeFlag = 2;
-//     _delay_ms(1000);
-// }
+void cmd10_lightTrigger()
+{ // Store current value to default light trigger value    <10:16>
+    if (SetupModeFlag == 2 && LightLevel < 100)
+    {
+        eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
+        FactoryLightTripLevel = LightLevel;
+        Audio2(1, 2, 0); //,"AC10:16");
+        _delay_ms(1);
+    }
+}
 
-// void cmd10_lightTrigger()
-// { // Store current value to default light trigger value    <10:16>
-//     if (SetupModeFlag == 2 && LightLevel < 100)
-//     {
-//         eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
-//         FactoryLightTripLevel = LightLevel;
-//         Audio2(1, 2, 0); //,"AC10:16");
-//         _delay_ms(1);
-//     }
-// }
+void cmd10_btConnected()
+{ // App telling the micro that the bluetooth is connected
+    BT_ConnectedFlag = 1;
+    // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
+    // 20241209.  Put back to zero.  Dom has added refresh button to app.
+    SendDataFlag = 1; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
+    Audio2(1, 2, 0);  //,"AC10:32");
+    // sendStatusData()
+    TransmitData();
+    PrintAppData();    // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
+    PrintConfigData(); // Send area data back to the app for user to see
+}
+void cmd10_btDisconnected()
+{ // App telling the micro that the bluetooth is disconnected
+    BT_ConnectedFlag = 0;
+    Audio2(1, 2, 0); //,"AC10:64");
+}
 
-// void cmd10_btConnected()
-// { // App telling the micro that the bluetooth is connected
-//     BT_ConnectedFlag = 1;
-//     // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
-//     // 20241209.  Put back to zero.  Dom has added refresh button to app.
-//     SendDataFlag = 1; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-//     Audio2(1, 2, 0);  //,"AC10:32");
-//     // sendStatusData()
-//     TransmitData();
-//     PrintAppData();    // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-//     PrintConfigData(); // Send area data back to the app for user to see
-// }
-// void cmd10_btDisconnected()
-// { // App telling the micro that the bluetooth is disconnected
-//     BT_ConnectedFlag = 0;
-//     Audio2(1, 2, 0); //,"AC10:64");
-// }
-
-// void Cmd10()
-// {
-//     switch (Instruction)
-//     {
-//     case 0:
-//         // uartPrint("cmd10_r TBC");
-//         cmd10_running();
-//         // 20240922
-//         break;
-//     case 1:
-//         // uartPrint("cmd10_p TBC");
-//         cmd10_programming();
-//         break;
-//     case 4:
-//         cmd10_restart();
-//         break;
-//     case 8:
-//         cmd10_lightSensor();
-//         break;
-//     case 16:
-//         cmd10_lightTrigger();
-//         break;
-//     case 32:
-//         cmd10_btConnected();
-//         break;
-//     case 64:
-//         cmd10_btDisconnected();
-//         break;
-//     }
-// }
-
+void Cmd10()
+{
+    switch (Instruction)
+    {
+    case 0:
+        // uartPrint("cmd10_r TBC");
+        cmd10_running();
+        // 20240922
+        break;
+    case 1:
+        // uartPrint("cmd10_p TBC");
+        cmd10_programming();
+        break;
+    case 4:
+        cmd10_restart();
+        break;
+    case 8:
+        cmd10_lightSensor();
+        break;
+    case 16:
+        cmd10_lightTrigger();
+        break;
+    case 32:
+        cmd10_btConnected();
+        break;
+    case 64:
+        cmd10_btDisconnected();
+        break;
+    }
+}
+#endif
+#ifndef NEW_APP
 void Cmd10()
 { // Setup/Run mode selection. Delete all map points. Cold restart
     uint8_t A;
@@ -518,7 +521,7 @@ void Cmd10()
         Audio2(1, 2, 0); //,"AC10:64");
     }
 }
-
+#endif
 void Cmd11()
 {
     // Process the Send Diagnostic Data register
@@ -562,7 +565,7 @@ void Cmd11()
 void Cmd12()
 {
     // Store the accelerometer trip point
-    eeprom_update_word(&EramAccelTripPoint, Instruction);
+    eeprom_update_word(&EramAccelTripPoint, static_cast<int>(Instruction));
     AccelTripPoint = Instruction;
     Audio2(3, 4, 2); //,"AC12");
 }
@@ -1067,16 +1070,18 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::deviceMode:
-        switch (value)
+        switch (static_cast<FieldDeviceMode>(value))
         {
-        case running:
+        case FieldDeviceMode::running:
+            // case 0:
             cmd10_running();
             break;
-        case programming:
+        case FieldDeviceMode::programming:
+            // case 1:
             cmd10_programming();
 
             break;
-        case lightSensor:
+        case FieldDeviceMode::lightSensor:
             cmd10_lightSensor();
             break;
         }

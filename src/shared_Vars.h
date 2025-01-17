@@ -20,12 +20,13 @@ extern uint16_t isolated_board_factor;
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT
-// #define NEW_APP
+#define NEW_APP
 // #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
+#define PAT3GHOST // This takes out the conditional pat == 3 code that was generating ghosts.
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
@@ -72,7 +73,7 @@ extern uint8_t EramFirstTimeOn;
 extern uint8_t SetupModeFlag;
 extern int LightLevel;
 extern uint8_t SendSetupDataFlag;
-extern int EramAccelTripPoint;
+extern uint16_t EramAccelTripPoint;
 extern int AccelTripPoint;
 extern uint8_t EramOperationMode;
 extern uint8_t OperationMode;

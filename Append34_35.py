@@ -30,6 +30,6 @@ def process_file(file_path):
             file.write(line)
 
 if __name__ == '__main__':
-    file_path = 'debug\Debug0111M.txt'  # Replace with your input file name
+    file_path = 'debug\Debug0117B.txt'  # Replace with your input file name
     process_file(file_path)
     print(f"Processed file saved to {file_path}")

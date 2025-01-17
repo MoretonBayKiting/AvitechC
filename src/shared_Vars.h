@@ -30,7 +30,8 @@ extern uint16_t isolated_board_factor;
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
-// #define TEST_FDP //FieldDeviceProperty
+#define TEST_FDP // FieldDeviceProperty
+#define SAVE_RAM // If it's NOT defined, do extra printing.  So defined to minimise RAM usage.
 // #define TEST_CONVEX
 // #define DEBUG
 // #define PRINT_CMD9

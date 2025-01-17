@@ -359,14 +359,17 @@ void Cmd9()
 #ifdef NEW_APP
 void cmd10_running()
 {
+    uartPrint("cmd10rS \n");
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
     WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 0;
     printToBT(9, 0);
+    uartPrint("cmd10rE \n");
 }
 void cmd10_programming()
 {
+    uartPrint("cmd10pS \n");
     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 1;
@@ -821,14 +824,15 @@ void Cmd55()
 #ifdef NEW_APP
 void Cmd58()
 {
-    // sprintf(debugMsg, "Cmd58. Inst: %d", Instruction);
-    // uartPrint(debugMsg);
     handleGetPropertyRequest(static_cast<FieldDeviceProperty>(Instruction));
 }
 void Cmd59()
 {
     FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
     uint8_t value = Instruction & 0x00FF;
+    sprintf(debugMsg, "Cmd59. Inst(04x): %04x, prop %d, value %d ", Instruction, static_cast<uint8_t>(prop), value);
+    uartPrint(debugMsg);
+
     handleSetPropertyRequest(prop, value);
 }
 
@@ -1070,6 +1074,8 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::deviceMode:
+        sprintf(debugMsg,"hSPR deviceMode. Val: %d", value);
+        uartPrint(debugMsg);
         switch (static_cast<FieldDeviceMode>(value))
         {
         case FieldDeviceMode::running:

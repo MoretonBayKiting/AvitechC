@@ -320,7 +320,9 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd);                        //
 void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo); // Declaration of Audio2, overloaded, with debugInfo
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
+#ifndef SAVE_RAM
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
+#endif
 void StopSystem();
 void testWatchDog(uint8_t indicator);
 
@@ -1683,14 +1685,18 @@ void LoadZoneMap(uint8_t zn)
         Vertices[0][MapIndex] = eeprom_read_word(&EramPositions[MI].EramX);
         Vertices[1][MapIndex] = eeprom_read_word(&EramPositions[MI].EramY) & 0x0FFF;
 #ifdef LOG_PRINT // GHOST
+#ifndef SAVE_RAM
         printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
+#endif
 #endif
     }
     // Above loads distinct vertices.  MapIndex is now equal to MapCount[0][zn-1] as that is why the for loop has exited.  So set that vertex equal to the first one (index 0).
     Vertices[0][MapIndex] = Vertices[0][0];
     Vertices[1][MapIndex] = Vertices[1][0];
 #ifdef LOG_PRINT // GHOST
+#ifndef SAVE_RAM
     printPerimeterStuff("V0i, V1i", Vertices[0][MapIndex], Vertices[1][MapIndex]);
+#endif
 #endif
     // Get the slope of each segment & store in Vertices[2][i]
     for (MapIndex = 1; MapIndex < MapCount[0][zn_1]; MapIndex++)
@@ -1779,6 +1785,7 @@ int GetPanPolar(int TiltPolar, int PanCart)
     int rho = getCartFromTilt(TiltPolar);
     return PAN_STEPS_PER_RAD * PanCart / rho;
 }
+#ifndef SAVE_RAM
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
 {
     // Using snprintf for safer string formatting and concatenation
@@ -1786,7 +1793,7 @@ void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
     uartPrint(debugMsg);
     _delay_ms(100);
 }
-
+#endif
 void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
 {
     // Initialize minY and maxY with extreme values
@@ -1995,6 +2002,12 @@ uint16_t distance(int pt1[2], int pt2[2])
 #endif
     return dist;
 }
+#ifdef SAVE_RAM
+bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
+{
+}
+#endif
+#ifndef SAVE_RAM
 bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
 {
 #ifdef WIGGLY_PTS
@@ -2277,7 +2290,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     else
         return startRung; // Use this to set speed and (possibly) laser on.
 }
-
+#endif
 void ProcessCoordinates()
 {
 #ifdef ISOLATED_BOARD
@@ -2701,7 +2714,12 @@ void HomeAxis()
     SetLaserVoltage(0);
     IsHome = 1;
 }
-
+#ifdef SAVE_RAM
+void RunSweep(uint8_t zn)
+{
+}
+#endif
+#ifndef SAVE_RAM
 void RunSweep(uint8_t zn)
 {
     uint8_t PatType, ind = 0; // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
@@ -2737,8 +2755,10 @@ void RunSweep(uint8_t zn)
             // if (LastPatType != PatType)
             if (cnt == 0)
             {
+#ifndef SAVE_RAM
                 sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
                 uartPrint(debugMsg);
+#endif
             }
 #endif
 
@@ -2811,6 +2831,8 @@ void RunSweep(uint8_t zn)
     }
     ResetTiming();
 }
+#endif
+
 #ifdef NEW_APP
 // void TraceBoundary(uint8_t zone)
 // {
@@ -3232,19 +3254,18 @@ uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long. 
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
+    // uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
-    sprintf(debugMsg, "Result: %d", result);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Result: %d", result);
+    // uartPrint(debugMsg);
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    sprintf(debugMsg, "arg to hGPR %d", property);
-    uartPrint(debugMsg);
-
+    // sprintf(debugMsg, "arg to hGPR %d", property);
+    // uartPrint(debugMsg);
     switch (property)
     {
     case FieldDeviceProperty::batteryVoltAdc:

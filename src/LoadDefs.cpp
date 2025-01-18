@@ -16,7 +16,7 @@ int GetYVal(uint8_t i);
 
 void LoadEramDefaults(void)
 { // Load default values to EEPROM (only run if there is not already user data stored in EEPROM)
-    uartPrint("In LoadEramDefaults()");
+    // uartPrint("In LoadEramDefaults()");
     eeprom_update_byte(&EramUserLaserPower, DEF_USER_LASER_POWER);
     eeprom_update_byte(&EramMaxLaserPower, DEF_MAX_LASER_POWER);
     eeprom_update_byte(&EramLaser2TempTrip, DEF_LASER_2_TEMP_TRIP);

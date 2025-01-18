@@ -9,8 +9,9 @@
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
 // #define GHOST
+#define WATCHDOG // Use this if watchdog is being tested
 // #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
-// #define ISOLATED_BOARD
+#define ISOLATED_BOARD
 #ifdef ISOLATED_BOARD
 #define ISOLATED_BOARD_INTERVAL 2
 extern bool isolated_board_flag;
@@ -31,7 +32,7 @@ extern uint16_t isolated_board_factor;
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
 #define TEST_FDP // FieldDeviceProperty
-#define SAVE_RAM // If it's NOT defined, do extra printing.  So defined to minimise RAM usage.
+// #define SAVE_RAM // If it's NOT defined, do extra printing and normal operatoins.  Defined to minimise RAM usage including not running in run mode!!!!
 // #define TEST_CONVEX
 // #define DEBUG
 // #define PRINT_CMD9

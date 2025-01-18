@@ -1,10 +1,11 @@
 #ifndef FIELD_DEVICE_PROPERTY_H
 #define FIELD_DEVICE_PROPERTY_H
 
+#include <stdint.h> // Include the header for uint8_t
+
+// enum class FieldDeviceProperty : uint8_t
 enum FieldDeviceProperty
 {
-    // microMajorVersion,  // uint
-    // microMinorVersion,  // uint
     batteryVoltAdc,     // uint
     timeMode,           // TimeMode
     beamMode,           // BeamMode
@@ -28,6 +29,7 @@ enum FieldDeviceProperty
     microMinor,
 };
 
+// enum class TimeMode : uint8_t
 enum TimeMode
 {
     always,
@@ -35,12 +37,14 @@ enum TimeMode
     night
 };
 
+// enum class BeamMode : uint8_t
 enum BeamMode
 {
     continuous,
     continuousPulsing
 };
 
+// enum class LocationMode : uint8_t
 enum LocationMode
 {
     outdoor,
@@ -48,15 +52,12 @@ enum LocationMode
     indoorInverted
 };
 
+// enum class FieldDeviceMode : uint8_t
 enum FieldDeviceMode
 {
     running,
     programming,
-    // restart,
-    lightSensor,
-    // lightTrigger,
-    // btConnected,
-    // btDisconnected
+    lightSensor
 };
 
 #endif // FIELD_DEVICE_PROPERTY_H

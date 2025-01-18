@@ -70,4 +70,5 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
 // void Cmd52(void);
 
 void DecodeCommsData(void);
+void uartPrint(const char *message);
 #endif // APPCMDS_H

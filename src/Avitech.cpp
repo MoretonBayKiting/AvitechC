@@ -309,9 +309,10 @@ uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50; // Units are decimetres.  50 => 5metres
 
 // Debugging flags
+#ifdef WATCHDOG
 volatile bool timer3_isr_triggered = false;
 volatile bool watchdog_isr_triggered = false;
-
+#endif
 // uint8_t Max_Nbr_Perimeter_Pts = 100;
 void HomeAxis();
 void DoHouseKeeping();
@@ -324,7 +325,9 @@ void uartPrintFlash(const __FlashStringHelper *message);
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
 #endif
 void StopSystem();
+#ifdef WATCHDOG
 void testWatchDog(uint8_t indicator);
+#endif
 
 void setupPeripherals()
 {
@@ -491,29 +494,6 @@ char uartGetChar(void)
     return UDR0; /* Get and return received data from buffer */
 }
 
-// ISR(USART0_RX_vect) {
-//     char c = UDR0;
-//     if (c == '\r' || c == '\n') {
-//         // Do nothing
-//     } else {
-//         if (DataCount == 0 && c != '<') {
-//             // Do nothing
-//         } else {
-//             ReceivedData[DataCount] = c;
-//             DataCount++;
-//             if (DataCount >= BUFFER_SIZE) { // Prevent buffer overflow
-//                 DataCount = 0;
-//             }
-//             if (c == '>') { // Set the flag when a complete command is received
-//                 ReceivedData[DataCount] = '\0'; // Add null terminator
-//                 DataInBufferFlag = true;
-//                 CommandLength = DataCount; // Store the length of the command
-//                 DataCount = 0;
-//             }
-//         }
-//     }
-// }
-// 20240924.  This version to be used with double buffering CheckBlueTooth().  Reverted to old for short term.
 ISR(USART0_RX_vect)
 {
     char c = UDR0; // Read the received character from the UART data register
@@ -889,13 +869,19 @@ ISR(TIMER3_COMPA_vect)
 {
     wdt_reset(); // Reset the watchdog timer
     TickCounter_50ms_isr();
+#ifdef WATCHDOG
     timer3_isr_triggered = true; // Set flag to indicate Timer3 ISR was triggered
+#endif
     // uartPrintFlash(F("T3 i\n"));
 }
 
 ISR(WDT_vect)
 {
+#ifdef WATCHDOG
+    uartPrintFlash(F("WD ISR \n"));
     watchdog_isr_triggered = true; // Set flag to indicate watchdog ISR was triggered
+#endif
+
     // The system will reset after this ISR completes
     // This ISR will be called when the watchdog timer times out. Without any code, the system will reset.
 }
@@ -1186,11 +1172,15 @@ void DecodeAccelerometer()
             {
                 uartPrintFlash(F("ST3 DA \n"));
                 StopTimer3();
+#ifdef WATCHDOG
                 testWatchDog(3); // Stop Timer3 to prevent the watchdog timer from being reset
+#endif
                 // _delay_ms(WATCHDOG_DELAY); //' Wait for watchdog to overflow and system will reboot
                 for (uint8_t a; a < 250; a++)
                 {
-                    testWatchDog(4 + a);
+#ifdef WATCHDOG
+                    testWatchDog(4 + a); // Stop Timer3 to prevent the watchdog timer from being reset
+#endif
                     _delay_ms(500);
                 }
             }
@@ -3111,6 +3101,7 @@ void DoHouseKeeping()
         {
             ThrottleLaser();
         }
+        uartPrintFlash(F("uart alive \n"));
         Tick = 0;
     }
 
@@ -3340,6 +3331,7 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     }
 }
 
+#ifdef WATCHDOG
 void testWatchDog(uint8_t indicator)
 {
     static uint8_t n = 0;
@@ -3371,7 +3363,7 @@ void testWatchDog(uint8_t indicator)
         watchdog_isr_triggered = false; // Reset the flag
     }
 }
-
+#endif
 void setup()
 {
     // wdt_disable();  //Moved to main().
@@ -3494,6 +3486,8 @@ int main()
         }
         DoHouseKeeping();
     }
+#ifdef WATCHDOG
     testWatchDog(2);
+#endif
     return 0;
 }

@@ -155,7 +155,7 @@ void DecodeCommsData()
         Cmd52();
         break; // Update ActivePatterns (in EEPROM)
     case 53:
-        Cmd53();
+        Cmd53(); // SendStatusData()
         break;
 
     case 54:

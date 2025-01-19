@@ -63,8 +63,8 @@ def translate_command(command, instruction, original_line):
         return original_line.strip()
 
 # Read the serial output file
-input_file = "debug/Debug0112E.txt"
-temp_file = "debug/Debug0112E_temp.txt"
+input_file = "debug/Debug0119E.txt"
+temp_file = "debug/Debug0119E_temp.txt"
 
 # Process the file line by line and write to the temporary file
 with open(input_file, "r") as infile, open(temp_file, "w") as outfile:

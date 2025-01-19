@@ -3447,7 +3447,8 @@ int main()
                         SetLaserVoltage(0);
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
-                        if (MapCount[0][Zn - 1] > 0) // MapCount index is zero base - But map index in app is 1 based.
+                        if (MapCount[0][Zn - 1] > 4) // MapCount index is zero based for zone - But corresponding index in app is 1 based.
+                        // 20250120 Previously if (MapCount[0][Zn - 1] > 0).  But although zero based, MC[0][z] adds a repeated first point - so MC[0][z] is 1 when there are zero points.
                         {
                             MapRunning = Zn;
                             RunSweep(Zn - 1);

@@ -14,7 +14,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
-    sprintf(debugMsg, "val %ld, oldMin %ld, oldMax %ld, newMin %ld, newMax %ld, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, oldMin %ld, oldMax %ld, newMin %ld, newMax %ld, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
     uartPrint(debugMsg);
     if (inOut)
     {
@@ -34,7 +34,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    sprintf(debugMsg, "r:  %d,", r);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "r:  %d,", r);
     uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
@@ -333,21 +333,21 @@ void Cmd9()
 // Compounding with Y only works if the first byte of Y (4 bytes, first being highest) is 0 (which is where zone is encoded).
 // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);
 #ifdef PRINT_CMD9
-    sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y, Instruction, ZoneY);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y, Instruction, ZoneY);
     uartPrint(debugMsg);
 #endif
     // Update EEPROM with X and Y values.  Note that index for EramPositions is zero based whereas app treats as 1 based.  Hence MapPointNumber-1
     uint16_t eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramX;
     eeprom_update_word((uint16_t *)eepromAddress, X);
 #ifdef PRINT_CMD9
-    sprintf(debugMsg, "X: %04x,%d", eepromAddress, X);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %04x,%d", eepromAddress, X);
     uartPrint(debugMsg);
 #endif
 
     eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramY;
     eeprom_update_word((uint16_t *)eepromAddress, ZoneY);
 #ifdef PRINT_CMD9
-    sprintf(debugMsg, "Y: %04x,%d", eepromAddress, Y);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Y: %04x,%d", eepromAddress, Y);
     uartPrint(debugMsg);
 #endif
 
@@ -524,12 +524,12 @@ void Cmd11()
     // Process the Send Diagnostic Data register
     if (Instruction == 0b00000001)
     {
-        // sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SendDataFlag before: %d", SendDataFlag);
         // uartPrint(debugMsg);
         SendDataFlag ^= 1; // Toggle value of SendDataFlag
         SendSetupDataFlag = 0;
         Audio2(1, 2, 0); //,"AC11:1");
-        // sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SendDataFlag after: %d", SendDataFlag);
         // uartPrint(debugMsg);
     }
 
@@ -675,7 +675,7 @@ void Cmd31()
 {
     eeprom_update_byte(&EramMapTotalPoints, 0);
     MapTotalPoints = 0;
-    // sprintf(debugMsg, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
     // uartPrint(debugMsg);
     Audio2(2, 1, 3); //,"AC31");
 }
@@ -784,7 +784,7 @@ void Cmd53()
     if (BT_ConnectedFlag)
         resetBTFlag = false;
 
-    // sprintf(debugMsg, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
     // uartPrint(debugMsg);
     printPos = true; // printPos is bool so True for any positive value, false if zero.
     SendDataFlag = 1;
@@ -812,13 +812,13 @@ void Cmd54()
 void Cmd55()
 {
     audioOn = !audioOn;
-    sprintf(debugMsg, "audioOn: %d", audioOn);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "audioOn: %d", audioOn);
     uartPrint(debugMsg);
 }
 #ifdef NEW_APP
 void Cmd58()
 {
-    // sprintf(debugMsg, "Cmd58. Inst: %d", Instruction);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Cmd58. Inst: %d", Instruction);
     // uartPrint(debugMsg);
     handleGetPropertyRequest(static_cast<FieldDeviceProperty>(Instruction));
 }
@@ -906,7 +906,7 @@ void CmdStorePts(bool test)
     else
     {
 #ifdef TEST_FDP
-        sprintf(debugMsg, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
         uartPrint(debugMsg);
 #endif
     }
@@ -927,7 +927,7 @@ void ReportVertices()
 {
     // uartPrint("Enter RV");
     getMapPtCounts();
-    // sprintf(debugMsg, "MTP: %d", MapTotalPoints);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MTP: %d", MapTotalPoints);
     // uartPrint(debugMsg);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
@@ -949,7 +949,7 @@ void ReportVertices()
         else
             n = i;
 
-        sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
         uartPrint(debugMsg);
         _delay_ms(REPORT_VERTICES_DELAY);
     }
@@ -960,7 +960,7 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
 {
     if (value == CANT_SET_PROPERTY)
     {
-        sprintf(debugMsg, "Property not settable %d", property);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "Property not settable %d", property);
         uartPrint(debugMsg);
     }
     else
@@ -973,7 +973,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
     uint8_t newValue = 0;
     uint8_t currentValue = 0;
 #ifdef TEST_FDP
-    sprintf(debugMsg, "Received by hSPR. Prop: %d, val: %d", property, value);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Received by hSPR. Prop: %d, val: %d", property, value);
     uartPrint(debugMsg);
 #endif
 

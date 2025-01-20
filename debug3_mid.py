@@ -44,6 +44,47 @@ def parse_debug_file(file_path):
                 data[-1]['Y'] = y_value
     return pd.DataFrame(data)
 
+def plot_2d_data(df, output_image_path, axis):
+    zones = df['zone'].unique()
+    colors = ['blue', 'green', 'red', 'orange']
+    for zone in zones:
+        zone_df = df[df['zone'] == zone]
+        plt.figure()
+        for pattern in zone_df['pattern'].unique():
+            pattern_df = zone_df[zone_df['pattern'] == pattern]
+            time_steps = pattern_df['time']
+            plt.scatter(time_steps, pattern_df[axis], label=f'Pattern {pattern}', color=colors[pattern % len(colors)])
+            plt.plot(time_steps, pattern_df[axis], linestyle='-', color=colors[pattern % len(colors)], alpha=0.5)
+        plt.xlabel('Time')
+        plt.ylabel(axis)
+        plt.title(f'2D Plot for Zone {zone}')
+        plt.legend()
+        plt.grid(True)
+        # Save the plot to a file
+        output_file = f"{output_image_path}_2d{axis}_Z{zone}.png"
+        plt.savefig(output_file)
+        plt.close()
+
+def plot_2d_xy(df, output_image_path):
+    zones = df['zone'].unique()
+    colors = ['blue', 'green', 'red', 'orange']
+    for zone in zones:
+        zone_df = df[df['zone'] == zone]
+        plt.figure()
+        for pattern in zone_df['pattern'].unique():
+            pattern_df = zone_df[zone_df['pattern'] == pattern]
+            plt.scatter(pattern_df['X'], pattern_df['Y'], label=f'Pattern {pattern}', color=colors[pattern % len(colors)])
+            plt.plot(pattern_df['X'], pattern_df['Y'], linestyle='-', color=colors[pattern % len(colors)], alpha=0.5)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title(f'2D Plot for Zone {zone}')
+        plt.legend()
+        plt.grid(True)
+        # Save the plot to a file
+        output_file = f"{output_image_path}_2dXY_Z{zone}.png"
+        plt.savefig(output_file)
+        plt.close()
+
 def plot_2d_render_of_3d(df, output_image_path):
     zones = df['zone'].unique()
     colors = ['blue', 'green', 'red', 'orange']
@@ -51,39 +92,19 @@ def plot_2d_render_of_3d(df, output_image_path):
         zone_df = df[df['zone'] == zone]
         fig = plt.figure(figsize=(10, 6))
         ax = fig.add_subplot(111, projection='3d')
-        cumulative_time = 0
         for pattern in zone_df['pattern'].unique():
             pattern_df = zone_df[zone_df['pattern'] == pattern]
-            time_steps = range(cumulative_time, cumulative_time + len(pattern_df))
-            cumulative_time += len(pattern_df)
+            time_steps = pattern_df['time']
             ax.scatter(time_steps, pattern_df['X'], pattern_df['Y'], c=colors[pattern % len(colors)], label=f'Pattern {pattern}')
             ax.plot(time_steps, pattern_df['X'], pattern_df['Y'], linestyle='-', color=colors[pattern % len(colors)], alpha=0.5)
-        ax.set_xlabel('Time Step')
+        ax.set_xlabel('Time')
         ax.set_ylabel('X')
         ax.set_zlabel('Y')
-        ax.set_title(f'3D Scatter Plot with Time Order for Zone {zone}')
-        ax.legend()
-        plt.grid(True)
-        # Save the plot to a file
-        output_file = f"{output_image_path}_3d_Z{zone}.png"
-        plt.savefig(output_file)
-        plt.close()
-
-def plot_2d_data(df, output_image_path):
-    zones = df['zone'].unique()
-    colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-    for zone in zones:
-        zone_df = df[df['zone'] == zone]
-        for pattern in zone_df['pattern'].unique():
-            pattern_df = zone_df[zone_df['pattern'] == pattern]
-            plt.plot(pattern_df['X'], pattern_df['Y'], linestyle='-', marker='o', color=colors[pattern % len(colors)], label=f'Pattern {pattern}')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title(f'2D Plot for Zone {zone}')
+        plt.title(f'3D Plot for Zone {zone}')
         plt.legend()
         plt.grid(True)
         # Save the plot to a file
-        output_file = f"{output_image_path}_2d_Z{zone}.png"
+        output_file = f"{output_image_path}_3d_Z{zone}.png"
         plt.savefig(output_file)
         plt.close()
 
@@ -94,11 +115,13 @@ def main(file_path):
     df = parse_debug_file(file_path)
     base_name = os.path.splitext(file_path)[0]
     plot_2d_render_of_3d(df, base_name)
-    plot_2d_data(df, base_name)
+    plot_2d_data(df, base_name, 'X')
+    plot_2d_data(df, base_name, 'Y')
+    plot_2d_xy(df, base_name)
     csv_output_path = f"{base_name}.csv"
     export_to_csv(df, csv_output_path)
-    print(f"Processed file saved to {base_name}_2d_Z<zone>.png, {base_name}_3d_Z<zone>.png, and {csv_output_path}")
+    print(f"Processed file saved to {base_name}_2dX_Z<zone>.png, {base_name}_2dY_Z<zone>.png, {base_name}_2dXY_Z<zone>.png, {base_name}_3d_Z<zone>.png, and {csv_output_path}")
 
 if __name__ == '__main__':
-    file_path = 'debug/Debug0120A_1run.txt'  # Replace with your input file name
+    file_path = 'debug/Debug0121G.txt'  # Replace with your input file name
     main(file_path)

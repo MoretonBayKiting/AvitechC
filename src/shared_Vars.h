@@ -29,6 +29,7 @@ extern uint16_t isolated_board_factor;
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
+// #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
 // #define TEST_FDP //FieldDeviceProperty
 // #define TEST_CONVEX
 // #define DEBUG

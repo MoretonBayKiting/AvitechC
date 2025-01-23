@@ -105,11 +105,13 @@
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
 #define SPEED_SCALE_MIN 130
-#define SPEED_SCALE_MAX 5 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MAX 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30
+// #define MAX_LASER_POWER 255
+#define PROGMODE_EXTRA_LASERPOWER 20
 #define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4

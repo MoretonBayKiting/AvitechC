@@ -448,7 +448,6 @@ void uart_init(uint16_t ubrr)
     _delay_ms(1000); // Wait for HC-05 to respond
     // Set HC-05 to master role
     uartPrintFlash(F("AT+ROLE=1\r"));
-    // uartPrint(F("AT+ROLE=1\r"));
     _delay_ms(1000); // Wait for HC-05 to respond
 }
 // Serial write/read functions
@@ -1070,6 +1069,14 @@ void WarnLaserOn()
     }
 }
 
+uint8_t ProgLaserPower(uint8_t lp)
+{
+    if (PROGMODE_EXTRA_LASERPOWER + lp > 255)
+        return 255;
+    else
+        return LaserPower + PROGMODE_EXTRA_LASERPOWER;
+}
+
 void StartLaserFlickerInProgMode()
 {
     if (LaserTick == 0)
@@ -1078,8 +1085,8 @@ void StartLaserFlickerInProgMode()
     }
     else if (LaserTick == 3)
     {
-        SetLaserVoltage(LaserPower); // On 850ms
-        Audio2(2, 2, 1);             //,"Flick");
+        SetLaserVoltage(ProgLaserPower(LaserPower));
+        Audio2(2, 2, 1); //,"Flick");
     }
 }
 
@@ -1252,6 +1259,21 @@ void GetLightLevel()
     }
 }
 
+uint8_t adaptiveLaserPower()
+{
+#ifdef ADAPTIVELY_BRIGHT
+    if (LightLevel < LOW_BRIGHT)
+        return LOW_BRIGHT_LASER_PERCENTAGE;
+    else if (LightLevel < MED_BRIGHT)
+        return MED_BRIGHT_LASER_PERCENTAGE;
+    else
+        return 100;
+#endif
+#ifndef ADAPTIVELY_BRIGHT
+    return 100;
+#endif
+}
+
 void MrSleepyTime()
 {
     uint8_t Xlocal; //, Ylocal;
@@ -1362,7 +1384,7 @@ void ThrottleLaser()
 
     // Calculate the laser power directly from the sensor reading using the quadratic function
     // Ref sheet LaserTemp of Alg.xlsm - this correlation directly from sensor reading to percentage of laser power.
-    // y = -0.0087x2 + 12.361x - 4268.5
+    // y = -0.0087x^2 + 12.361x - 4268.5
     // R² = 0.9996
     L_power = -0.0087 * SensorReading * SensorReading + 12.361 * SensorReading - 4268.5; // 20241205: Why is SensorReading used rather than LaserTemperature?
     if (SensorReading < 710)
@@ -1376,12 +1398,22 @@ void ThrottleLaser()
     else if (L_power > 100)
         L_power = 100;
     if (B_volt < L_power)
-        L_power = B_volt;             // Ensure L_power is less than battery voltage.
-    Result = L_power / 100.0f;        // Convert to %age
-    L_power = Result * MaxLaserPower; // Convert to voltage
-    Result = UserLaserPower / 100.0f; // This looks like nonsense
-    LaserPower = L_power * Result;    // Scale voltage to
+        L_power = B_volt;              // Ensure L_power is less than battery voltage.
+    Result = L_power / 100.0f;         // Convert to %age
+    L_power = Result * UserLaserPower; // Convert to voltage
 
+    L_power = adaptiveLaserPower() * L_power / 100.0f;
+
+    if (L_power > UserLaserPower)
+        LaserPower = UserLaserPower;
+    else if (L_power < 0)
+        LaserPower = 0;
+    else
+        LaserPower = static_cast<uint8_t>(L_power);
+#ifdef THROTTLE
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LL: %d, SR: %u, Res: %d.%02d, L_power: %d.%02d, LP: %u", LightLevel, SensorReading, static_cast<int>(Result), static_cast<int>((Result - static_cast<int>(Result)) * 100), static_cast<int>(L_power), static_cast<int>((L_power - static_cast<int>(L_power)) * 100), LaserPower);
+    uartPrint(debugMsg);
+#endif
     if (LaserTemperature > 55)
     {
         LaserPower = 0;
@@ -1395,14 +1427,13 @@ void ThrottleLaser()
         // 20241221 Check imu in case SystemFaultFlag should still be set.
         DecodeAccelerometer();
     }
-    // LaserPower = 100; //20240625: Don't let it go to zero (for testing)
-    // LaserPower = UserLaserPower; //20241202: Try UserLaserPower until this function is properly reviewed.
+
     if (LaserPower > UserLaserPower)
         LaserPower = UserLaserPower; // 20241205: Ensure LaserPower is less than UserLaserPower.
 
 #ifdef THROTTLE
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH,"BatteryVoltage: %d, B_volt: %d, Result: %d, SensorReading: %d, LaserPower: %d, ", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "BatteryVoltage: %d, B_volt: %d, Result: %.2f, SensorReading: %d, LaserPower: %d", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "BV: %d, B_volt: %d, SR: %d,  LaserPower: %d", BatteryVoltage, B_volt, SensorReading, LaserPower);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "B_volt: %u,SR: %u, ULP: %u, MLP: %u, LP: %u", B_volt, SensorReading, UserLaserPower, MaxLaserPower, LaserPower);
     uartPrint(debugMsg);
 #endif
 }
@@ -1782,7 +1813,7 @@ int GetPanPolar(int TiltPolar, int PanCart)
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
 {
     // Using sprintf for safer string formatting and concatenation
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
     _delay_ms(100);
 }
@@ -2580,7 +2611,11 @@ uint16_t CalcSpeed(bool fst)
         // s /= 100;
     }
     else
+    {
         s = HOMING_SPEED;
+    }
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "speed: %d, AbsY: %d", s, Y);
+    // uartPrint(debugMsg);
     return s;
 }
 
@@ -3114,9 +3149,9 @@ void DoHouseKeeping()
         PrintAppData(); // 20241209.  Too much data in log.  Send on refresh.
         GetLaserTemperature();
         GetLightLevel(); // 20250109.  Add this here for testing.
-#ifdef THROTTLE
-        ThrottleLaser();
-#endif
+                         // #ifdef THROTTLE
+                         //         ThrottleLaser();
+                         // #endif
         if (Z_AccelFlag == false)
         {
             ThrottleLaser();

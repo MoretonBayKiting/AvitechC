@@ -101,8 +101,8 @@ void PrintEramVars()
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
-        sprintf("Xi add: %p", (void *)(&EramPositions[i].EramX));
-        uartPrint(debugMsg);
+        // sprintf("Xi add: %p", (void *)(&EramPositions[i].EramX));
+        // uartPrint(debugMsg);
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "WPi: %u Zone: %d X: %d, Y: %d", i, GetZVal(i), GetXVal(i), GetYVal(i));
         uartPrint(debugMsg);
     }

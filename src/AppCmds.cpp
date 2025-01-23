@@ -14,8 +14,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, oldMin %ld, oldMax %ld, newMin %ld, newMax %ld, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
-    uartPrint(debugMsg);
+
     if (inOut)
     {
         if (val < oldMin)
@@ -34,7 +33,7 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "r:  %d,", r);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, r: %u, Min %ld, Max %ld", val, static_cast<uint16_t>(r), newMin, newMax);
     uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
@@ -211,8 +210,13 @@ void DecodeCommsData()
 void Cmd1()
 {
     // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
-    eeprom_update_byte(&EramUserLaserPower, Instruction);
-    UserLaserPower = Instruction;
+    uint8_t LP = 0;
+    if (Instruction > MaxLaserPower)
+        LP = MaxLaserPower;
+    else
+        LP = Instruction;
+    eeprom_update_byte(&EramUserLaserPower, LP);
+    UserLaserPower = LP;
     // LaserPower = Instruction; //20241202: Temporary for testing.
     GetLaserTemperature();
     ThrottleLaser();
@@ -621,6 +625,8 @@ void Cmd16()
     uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
     eeprom_update_byte(&EramSpeedScale, NewInstruction);
     SpeedScale = NewInstruction;
+    sprintf(debugMsg, "SpeedS: %d, Inst %d", SpeedScale, Instruction);
+    uartPrint(debugMsg);
     Audio2(1, 2, 0); //,"AC22");
 }
 
@@ -640,14 +646,15 @@ void Cmd18()
 void Cmd19()
 // 20241231.  Change this to adjust user laser power.
 {
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, DEF_MAX_LASER_POWER, true);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
+    eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
     UserLaserPower = NewInstruction;
 }
 void Cmd20()
 {
     uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, LASER_HT_MIN, LASER_HT_MAX, true);
-    eeprom_update_byte(&EramLaserHt, NewInstruction);
-    LaserHt = NewInstruction;
+    eeprom_update_byte(&EramLaserHt, static_cast<uint8_t>(NewInstruction));
+    LaserHt = static_cast<uint8_t>(NewInstruction);
 }
 
 void Cmd21()

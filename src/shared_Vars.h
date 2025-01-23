@@ -16,7 +16,15 @@
 extern bool isolated_board_flag;
 extern uint16_t isolated_board_factor;
 #endif
-// #define THROTTLE //20241205: Use to debug laser temperature and power.
+// #define THROTTLE // 20241205: Use to debug laser temperature and power.
+
+// #define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
+#ifdef ADAPTIVELY_BRIGHT
+#define LOW_BRIGHT 100
+#define MED_BRIGHT 300
+#define LOW_BRIGHT_LASER_PERCENTAGE 30
+#define MED_BRIGHT_LASER_PERCENTAGE 60
+#endif
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT
@@ -29,7 +37,7 @@ extern uint16_t isolated_board_factor;
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
-// #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
+#define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
 // #define TEST_FDP //FieldDeviceProperty
 // #define TEST_CONVEX
 // #define DEBUG

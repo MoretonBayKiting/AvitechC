@@ -691,12 +691,24 @@ void Cmd30()
 }
 
 void Cmd31()
-{
-    eeprom_update_byte(&EramMapTotalPoints, 0);
-    MapTotalPoints = 0;
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
-    // uartPrint(debugMsg);
-    Audio2(2, 1, 3); //,"AC31");
+{ // 20250126 Setting MapTotalPoints to 0 (delete all points) occasionally causes grief (reported by GM).  Use <31:10> to clear EEPROM and allow reboot.
+    // But still explicitly set MapTotalPoints to 0.
+    if (Instruction == 10)
+    {
+#define EEPROM_BYTES 1024
+        for (uint16_t i = 0; i < EEPROM_BYTES; i++)
+        {
+            eeprom_write_byte((uint8_t *)i, 0xFF);
+        }
+    }
+    else
+    {
+        eeprom_update_byte(&EramMapTotalPoints, 0);
+        MapTotalPoints = 0;
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+        uartPrint(debugMsg);
+        Audio2(2, 1, 3); //,"AC31");
+    }
 }
 
 void Cmd32()

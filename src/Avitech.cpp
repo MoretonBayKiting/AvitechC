@@ -2319,8 +2319,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
         uartPrint(debugMsg);
 #endif
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
-        uartPrint(debugMsg);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
+        // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
         LastX = X;
@@ -2602,8 +2602,8 @@ uint16_t CalcSpeed(bool fst)
             long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
             long den = (long)(Rho_Max - Rho_Min);
             s = (uint16_t)(num / den);
-            snprintf(debugMsg, DEBUG_MSG_LENGTH, "num: %ld, den: %ld, s: %d", num, den, s);
-            uartPrint(debugMsg);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "num: %ld, den: %ld, s: %d", num, den, s);
+            // uartPrint(debugMsg);
         }
         s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
         if (s < Step_Rate_Max)
@@ -2615,8 +2615,8 @@ uint16_t CalcSpeed(bool fst)
     {
         s = INTER_RUNG_SPEED;
     }
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Speed: %d, AbsY: %d", s, Y);
-    uartPrint(debugMsg);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Speed: %d, AbsY: %d", s, Y);
+    // uartPrint(debugMsg);
     return s;
 }
 

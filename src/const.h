@@ -71,6 +71,10 @@
 #define DEF_LIGHT_TRIGGER_OPERATION 1
 #define DEF_OPERATION_MODE 0
 
+#define DEF_STEP_RATE_MIN 2000
+#define DEF_STEP_RATE_MAX 70
+#define DEF_SPEEDSCALE 30
+
 // #define WHO_AM_I_MPU6050 0x75
 // MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.
 // These values, 0xD2 and 0xD3, are for version 6.13  Ref sub Initgyro() in BASCOM code.

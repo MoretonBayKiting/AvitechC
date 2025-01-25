@@ -37,6 +37,9 @@ void LoadEramDefaults(void)
     eeprom_update_byte(&EramLightTriggerOperation, DEF_LIGHT_TRIGGER_OPERATION);
     eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
     eeprom_update_byte(&Eram_Tilt_Sep, DEF_TILT_SEP);
+    eeprom_update_word(&Eram_Step_Rate_Min, DEF_STEP_RATE_MIN);
+    eeprom_update_word(&Eram_Step_Rate_Max, DEF_STEP_RATE_MAX);
+    eeprom_update_byte(&EramSpeedScale, DEF_SPEEDSCALE);
 }
 
 void ReadEramVars(void)

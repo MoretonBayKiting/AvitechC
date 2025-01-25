@@ -216,12 +216,19 @@ void Cmd1()
 {
     // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
     uint8_t LP = 0;
-    if (Instruction > MaxLaserPower)
-        LP = MaxLaserPower;
-    else
-        LP = Instruction;
-    eeprom_update_byte(&EramUserLaserPower, LP);
-    UserLaserPower = LP;
+    // if (Instruction > MaxLaserPower)  //20250126. Replace with scaling relative to MaxLaserPower.
+    //     LP = MaxLaserPower;
+    // else
+    //     LP = Instruction;
+    // eeprom_update_byte(&EramUserLaserPower, LP);
+    // UserLaserPower = LP;
+    // 20250126.  Slider in old app has android:rotation= "270".  Whether it's this or something else, with the expected call:
+    // uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX,0, MaxLaserPower,  true);
+    // Behaviour is inverted.  I've fixed it here by reversing the order of MaxLaserPower and 0.
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, MaxLaserPower, 0, true);
+    eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
+    UserLaserPower = NewInstruction;
+
     // LaserPower = Instruction; //20241202: Temporary for testing.
     GetLaserTemperature();
     ThrottleLaser();

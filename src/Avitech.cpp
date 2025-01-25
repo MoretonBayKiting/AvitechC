@@ -387,7 +387,7 @@ void TickCounter_50ms_isr()
     //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "About to call Audio3. TJTick %d", TJTick);
     //     uartPrint(debugMsg);
     // }
-    // Audio3();
+    Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0)
     {
         // StartBuzzerInProgMode();
@@ -1006,11 +1006,11 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo)
 }
 void Audio3()
 { // Call this in ISR to implement buzzer when it has been setup by Audio2().
-    if (TJTick % 40 == 0)
-    {
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
-        uartPrint(debugMsg);
-    }
+    // if (TJTick % 40 == 0)
+    // {
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
+    //     uartPrint(debugMsg);
+    // }
     if (audioOn)
     {
         static bool BuzzerOn = false;

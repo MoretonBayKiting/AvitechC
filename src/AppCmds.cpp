@@ -14,26 +14,31 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
+    int32_t compVal = 100 - val;
+    if (compVal > 100)
+        compVal = 100;
+    if (compVal < 0)
+        compVal = 0;
 
     if (inOut)
     {
-        if (val < oldMin)
-            val = oldMin;
-        if (val > oldMax)
-            val = oldMax;
-        ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+        if (compVal < oldMin)
+            compVal = oldMin;
+        if (compVal > oldMax)
+            compVal = oldMax;
+        ratio = (static_cast<float>(compVal) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
         r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
     }
     else
     {
-        if (val < newMin)
-            val = newMin;
-        if (val > newMax)
-            val = newMax;
-        ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
+        if (compVal < newMin)
+            compVal = newMin;
+        if (compVal > newMax)
+            compVal = newMax;
+        ratio = (static_cast<float>(compVal) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, r: %u, Min %ld, Max %ld", val, static_cast<uint16_t>(r), newMin, newMax);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, compVal %ld, r: %u, Min %ld, Max %ld", val, compVal, static_cast<uint16_t>(r), newMin, newMax);
     uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }

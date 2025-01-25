@@ -6,7 +6,7 @@
 #define RAMPING_STEPS 1
 // #define STARTUP_SPEED 100
 #define START_RAMPING_COUNT 100
-#define STEP_RATE_MAX 75
+#define STEP_RATE_MAX 30 // 75
 // #define STEP_RATE_MIN 200 //20240724 Arbitrary value
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
@@ -104,8 +104,8 @@
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
-#define SPEED_SCALE_MIN 130
-#define SPEED_SCALE_MAX 30 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MIN 100  // 130
+#define SPEED_SCALE_MAX 0    // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
@@ -128,4 +128,5 @@
 #define CANT_SET_PROPERTY 255
 #define PATH_ZONE 3 // 3 if paths are indexed from 0 to 3.
 #define WATCHDOG_DELAY 5000
-#define ISOLATED_BOARD_DELAY 500
+#define ISOLATED_BOARD_DELAY 250
+#define INTER_RUNG_SPEED 70

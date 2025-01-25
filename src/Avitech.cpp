@@ -295,7 +295,7 @@ uint16_t Step_Rate_Max = STEP_RATE_MAX;
 uint8_t EEMEM Eram_Rho_Min;
 uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
-uint8_t Rho_Max = 200;
+uint8_t Rho_Max = 250;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 uint8_t Nbr_Rnd_Pts = 20;
 uint8_t EEMEM Eram_Tilt_Sep;
@@ -2319,6 +2319,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
         uartPrint(debugMsg);
 #endif
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
+        uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
         LastX = X;
@@ -2340,7 +2342,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 void ProcessCoordinates()
 {
 #ifdef ISOLATED_BOARD
-    if (isolated_board_flag)
+    // if (isolated_board_flag)
     {
         AbsX = X; // Increment position, simulating movement of the stepper motors, at specified period.
         AbsY = Y;
@@ -2600,22 +2602,21 @@ uint16_t CalcSpeed(bool fst)
             long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
             long den = (long)(Rho_Max - Rho_Min);
             s = (uint16_t)(num / den);
-            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "num: %ld, den: %ld, s: %d", num, den, s);
-            // uartPrint(debugMsg);
-            // _delay_ms(50);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "num: %ld, den: %ld, s: %d", num, den, s);
+            uartPrint(debugMsg);
         }
         s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
         if (s < Step_Rate_Max)
             s = Step_Rate_Max; // 20241204: Ensure that the speed is not too high.
-        // s *= SpeedScale;
-        // s /= 100;
+        if (s > Step_Rate_Min)
+            s = Step_Rate_Min; // 20241204: Ensure that the speed is not too low.
     }
     else
     {
-        s = HOMING_SPEED;
+        s = INTER_RUNG_SPEED;
     }
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "speed: %d, AbsY: %d", s, Y);
-    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Speed: %d, AbsY: %d", s, Y);
+    uartPrint(debugMsg);
     return s;
 }
 
@@ -2764,8 +2765,12 @@ void HomeAxis()
     SetLaserVoltage(0);
     IsHome = 1;
 }
-
+#ifdef TUNE_SPEED
 void RunSweep(uint8_t zn)
+#endif
+
+#ifndef TUNE_SPEED
+    void RunSweep(uint8_t zn)
 {
     uint8_t PatType, ind = 0; // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
     int minTilt = 0, cnt = 0;
@@ -2815,6 +2820,11 @@ void RunSweep(uint8_t zn)
 #endif
 #ifdef ISOLATED_BOARD
                 _delay_ms(ISOLATED_BOARD_DELAY);
+                // static uint16_t cnter = 0;
+                // if (!(cnter == TJTick)){
+                //     cnter = TJTick;
+                // }
+
 #endif
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs, minTilt, maxTilt);
                 newPatt = false; // This is set on entry to the loop over PatType. Once in this while loop, it should be false until the next pattern is called.
@@ -2878,6 +2888,8 @@ void RunSweep(uint8_t zn)
     }
     ResetTiming();
 }
+#endif
+
 #ifdef NEW_APP
 // void TraceBoundary(uint8_t zone)
 // {

@@ -17,7 +17,7 @@ extern bool isolated_board_flag;
 extern uint16_t isolated_board_factor;
 #endif
 // #define THROTTLE // 20241205: Use to debug laser temperature and power.
-
+// #define TUNE_SPEED
 // #define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
 #ifdef ADAPTIVELY_BRIGHT
 #define LOW_BRIGHT 100

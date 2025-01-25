@@ -78,6 +78,9 @@ void ReadEramVars(void)
     UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
     FactoryLightTripLevel = eeprom_read_byte(&EramFactoryLightTripLevel);
     LightTriggerOperation = eeprom_read_byte(&EramLightTriggerOperation);
+    Step_Rate_Min = eeprom_read_word(&Eram_Step_Rate_Min);
+    Step_Rate_Max = eeprom_read_word(&Eram_Step_Rate_Max);
+    SpeedScale = eeprom_read_byte(&EramSpeedScale);
 }
 
 void PrintEramVars()
@@ -97,6 +100,8 @@ void PrintEramVars()
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "MapTotalPoints:  %p, %d", (void *)&EramMapTotalPoints, eeprom_read_byte(&EramMapTotalPoints));
     uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Gyro address: %p, %02x", (void *)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "First vertex address: %p", (void *)&EramPositions);
     uartPrint(debugMsg);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
@@ -126,6 +131,13 @@ void PrintEramVars()
     uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "LightTriggerOperation: %p, %d", (void *)&EramLightTriggerOperation, eeprom_read_byte(&EramLightTriggerOperation));
     uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Step_Rate_Min: %p, %d", (void *)&Eram_Step_Rate_Min, eeprom_read_word(&Eram_Step_Rate_Min));
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Step_Rate_Max: %p, %d", (void *)&Eram_Step_Rate_Max, eeprom_read_word(&Eram_Step_Rate_Max));
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "SpeedScale: %p, %d", (void *)&EramSpeedScale, eeprom_read_byte(&EramSpeedScale));
+    uartPrint(debugMsg);
+
 #endif
 }
 

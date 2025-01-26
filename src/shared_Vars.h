@@ -18,15 +18,15 @@ extern uint16_t isolated_board_factor;
 #endif
 // #define THROTTLE // 20241205: Use to debug laser temperature and power.
 // #define TUNE_SPEED
-// #define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
+#define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
 #ifdef ADAPTIVELY_BRIGHT
 #define LOW_BRIGHT 100
-#define MED_BRIGHT 300
-#define LOW_BRIGHT_LASER_PERCENTAGE 30
-#define MED_BRIGHT_LASER_PERCENTAGE 60
+#define MED_BRIGHT 230
+#define LOW_BRIGHT_LASER_PERCENTAGE 70
+#define MED_BRIGHT_LASER_PERCENTAGE 90
 #endif
 // #define BASE_PRINT
-#define LOG_PRINT
+// #define LOG_PRINT
 // #define JOG_PRINT
 // #define NEW_APP
 // #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.

@@ -14,7 +14,8 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
-    int32_t compVal = 100 - val;
+    int32_t compVal = 100 - val; // The old app sends (100 - selected value on slider).  For example, it sends 30 if the user chooses 70.
+    // Allow for that by using the complement as this function was implemented assuming that if it received 30, it would use 30%.
     if (compVal > 100)
         compVal = 100;
     if (compVal < 0)
@@ -705,8 +706,8 @@ void Cmd31()
     {
         eeprom_update_byte(&EramMapTotalPoints, 0);
         MapTotalPoints = 0;
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
-        uartPrint(debugMsg);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+        // uartPrint(debugMsg);
         Audio2(2, 1, 3); //,"AC31");
     }
 }

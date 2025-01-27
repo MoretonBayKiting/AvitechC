@@ -3126,11 +3126,9 @@ void OperationModeSetup(int OperationMode)
         strcpy(OpModeTxt, "4:Test-i");
         break;
     }
-    // testLoopUart("OMS: >switch ");
     char atCommand[50];
-    sprintf(atCommand, "AT+NAME%s %d\r\n", name, LaserID);
+    sprintf(atCommand, "AT+NAME %s %d", name, LaserID);
     uartPrint(atCommand);
-    // testLoopUart("OMS: end function ");
 }
 
 void DoHouseKeeping()
@@ -3452,6 +3450,15 @@ void setup()
     TurnOnGyro();
 #endif
     setupPeripherals();
+    LaserID = eeprom_read_word(&EramLaserID); // Read LaserID before it is used to set the name.
+    // uint8_t p = 0;
+    // while (p < 2)
+    // {
+    //     _delay_ms(1000);
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Loop cnt: %u, L_ID: %u", p, LaserID);
+    //     uartPrint(debugMsg);
+    //     p++;
+    // }
 
     OperationModeSetup(OperationMode); // Select the operation mode the device will work under before loading data presets
     Wd_byte = MCUSR;                   // Read the Watchdog flag

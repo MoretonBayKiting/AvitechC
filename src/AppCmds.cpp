@@ -645,13 +645,13 @@ void Cmd16()
 
 void Cmd17()
 { // Previously SpeedZone 2 (with 1st numbered 1)
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
+    uint16_t NewInstruction = ReScale((100 - Instruction), OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
     Nbr_Rnd_Pts = NewInstruction;
 }
 void Cmd18()
 {
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
+    uint16_t NewInstruction = ReScale((100 - Instruction), OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
     eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
     Tilt_Sep = NewInstruction;
 }

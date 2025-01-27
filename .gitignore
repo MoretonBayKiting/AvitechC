@@ -17,6 +17,7 @@
 *.eep
 *.pyc
 *.hex
+*.py
 
 # Ignore debug and venv folders
 debug/

@@ -1,7 +1,9 @@
 #include <Arduino.h>
+
 #ifdef NEW_APP
 #include "FieldDeviceProperty.h"
 #endif
+
 #include "shared_Vars.h"
 #include "pin_mappings.h"
 #include "AppCmds.h"
@@ -16,27 +18,32 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 {
     float ratio = 0.0;
     float r = 0.0;
-    sprintf(debugMsg, "val %ld, oldMin %ld, oldMax %ld, newMin %ld, newMax %ld, inOut %d", val, oldMin, oldMax, newMin, newMax, inOut);
-    uartPrint(debugMsg);
+    int32_t compVal = 100 - val; // The old app sends (100 - selected value on slider).  For example, it sends 30 if the user chooses 70.
+    // Allow for that by using the complement as this function was implemented assuming that if it received 30, it would use 30%.
+    if (compVal > 100)
+        compVal = 100;
+    if (compVal < 0)
+        compVal = 0;
+
     if (inOut)
     {
-        if (val < oldMin)
-            val = oldMin;
-        if (val > oldMax)
-            val = oldMax;
-        ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+        if (compVal < oldMin)
+            compVal = oldMin;
+        if (compVal > oldMax)
+            compVal = oldMax;
+        ratio = (static_cast<float>(compVal) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
         r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
     }
     else
     {
-        if (val < newMin)
-            val = newMin;
-        if (val > newMax)
-            val = newMax;
-        ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
+        if (compVal < newMin)
+            compVal = newMin;
+        if (compVal > newMax)
+            compVal = newMax;
+        ratio = (static_cast<float>(compVal) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    sprintf(debugMsg, "r:  %d,", r);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, compVal %ld, r: %u, Min %ld, Max %ld", val, compVal, static_cast<uint16_t>(r), newMin, newMax);
     uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
@@ -161,8 +168,7 @@ void DecodeCommsData()
         Cmd52();
         break; // Update ActivePatterns (in EEPROM)
     case 53:
-        Cmd53();
-        break;
+        SendStatusData() break;
 
     case 54:
         Cmd54();
@@ -174,7 +180,8 @@ void DecodeCommsData()
         printPos ^= 1;
         break;
     case 58: // PROPERTY_GET_CHANNEL:
-        Cmd58();
+        // Cmd58();
+        uartPrint("Cmd 58 not available");
         break;
     case 59: // PROPERTY_SET_CHANNEL:
         Cmd59();
@@ -249,563 +256,6 @@ void DecodeCommsData()
     }
 }
 #endif
-
-#ifndef NEW_APP
-void Cmd1()
-{
-    // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
-    eeprom_update_byte(&EramUserLaserPower, Instruction);
-    UserLaserPower = Instruction;
-    // LaserPower = Instruction; //20241202: Temporary for testing.
-    GetLaserTemperature();
-    ThrottleLaser();
-    Audio2(1, 2, 0); //,"AC1");
-    _delay_ms(100);
-}
-
-void Cmd2()
-{
-    PORTD &= ~(1 << Y_STEP);
-    if (Instruction == 0)
-        StopSystem(); // Attempt to stop kink at direction changes    }
-    // Process Pan Stop/Start Register
-    TiltEnableFlag = 0; // 20240620: Added by TJ.
-    PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-
-    // Process Pan Direction Register
-    PanDirection = (Instruction & 0b00000010) ? 1 : 0;
-    // Process Pan Speed Register
-    PanSpeed = (Instruction & 0b00000100) ? 1 : 0;
-}
-
-void Cmd3()
-{
-    PORTD &= ~(1 << X_STEP);
-    if (Instruction == 0)
-        StopSystem();  // Attempt to stop kink at direction changes    }    // Process Tilt Stop/Start Register
-    PanEnableFlag = 0; // 20240620: Added by TJ.
-    TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-
-    // Process Tilt Direction Register
-    TiltDirection = (Instruction & 0b00000010) ? 0 : 1; // 20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
-    // 20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
-    //  Process Tilt Speed Register
-    TiltSpeed = (Instruction & 0b00000100) ? 1 : 0;
-}
-
-void Cmd4()
-{
-    eeprom_update_byte(&EramMaxLaserPower, Instruction);
-    MaxLaserPower = Instruction; // #define DEF_MAX_LASER_POWER 120
-    GetLaserTemperature();
-    ThrottleLaser();
-    Audio2(1, 2, 0); //,"AC4");
-}
-
-void Cmd5()
-{
-    eeprom_update_word(&EramLaserID, Instruction);
-    LaserID = Instruction;
-    Audio2(1, 2, 0); //,"AC5");
-}
-
-void Cmd6()
-{
-    X = Instruction;
-    ProcessCoordinates();
-    SteppingStatus = 1;
-    Audio2(1, 2, 0); //,"AC6");
-    // StartTimer1();
-    TCCR1B |= (1 << CS12) | (1 << CS10);
-}
-
-void Cmd7()
-{
-    Y = Instruction;
-    ProcessCoordinates();
-    SteppingStatus = 1;
-    Audio2(1, 2, 0); //,"AC7");
-    // StartTimer1();
-    TCCR1B |= (1 << CS12) | (1 << CS10);
-}
-void Cmd8()
-{
-    PrintEramVars();
-}
-
-void Cmd9()
-{
-    uint16_t OperationZone;
-    int16_t ZoneY = Y; // 20240628 ZoneY is Y with zone added. Y populates the 12LSBs and zone is one of the 4MSBs.
-    uartPrint("ST3 C9 \n");
-    StopTimer3(); // 20240628 Don't want interrupt getting in the way of EEPROM write?
-    // Get the Operation Zone data from the received data
-    // OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
-    OperationZone = Instruction & 0xF00; // Get raw Operation Zone from Instruction
-    OperationZone >>= 8;                 // Position the Operation Zone bits
-    // Decode the binary data for Operation Zone
-    switch (OperationZone)
-    {
-    case 1:
-        OperationZone = 1;
-        break;
-    case 2:
-        OperationZone = 2;
-        break;
-    case 4:
-        OperationZone = 3;
-        break;
-    case 8:
-        OperationZone = 4;
-        break;
-    default:
-        uartPrint("Invalid Operation Zone!");
-        break; // Handle invalid Operation Zone
-    }
-    uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0xFF); // Get Map Point number from Instruction
-
-    MapTotalPoints = MapPointNumber;
-    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // 20240726 This had not been included
-
-    if (MapPointNumber >= MAX_NBR_MAP_PTS)
-    {
-        uartPrint("Error: MapPointNumber out of range!");
-        return; // Early return to prevent out-of-bounds access
-    }
-    ZoneY = ((Instruction & 0b111100000000) << 4) | abs(Y); // 20240628. eg <9:257. => 0b0001 0000 0001 .  This is point 1 in zone 1.  <9:518> =>  0b0010 0000 0110 would be point 6 in zone 2.
-// Compounding with Y only works if the first byte of Y (4 bytes, first being highest) is 0 (which is where zone is encoded).
-// eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);
-#ifdef PRINT_CMD9
-    sprintf(debugMsg, "MapPoint: %d in zone %d with X: %d, Y: %d, Inst: %d, ZoneY: %04x", MapPointNumber, OperationZone, X, Y, Instruction, ZoneY);
-    uartPrint(debugMsg);
-#endif
-    // Update EEPROM with X and Y values.  Note that index for EramPositions is zero based whereas app treats as 1 based.  Hence MapPointNumber-1
-    uint16_t eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramX;
-    eeprom_update_word((uint16_t *)eepromAddress, X);
-#ifdef PRINT_CMD9
-    sprintf(debugMsg, "X: %04x,%d", eepromAddress, X);
-    uartPrint(debugMsg);
-#endif
-
-    eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramY;
-    eeprom_update_word((uint16_t *)eepromAddress, ZoneY);
-#ifdef PRINT_CMD9
-    sprintf(debugMsg, "Y: %04x,%d", eepromAddress, Y);
-    uartPrint(debugMsg);
-#endif
-
-    Audio2(1, 2, 0); //,"AC9");
-    setupTimer3();   // Restart having stopped it at the start of this function.  Really?
-}
-
-void Cmd10()
-{ // Setup/Run mode selection. Delete all map points. Cold restart
-    uint8_t A;
-    A = Instruction;
-
-    if (A == 0b00000000)
-    {                                                            // Run mode   <10:0>
-        eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
-        WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
-        PrevSetupModeFlag = SetupModeFlag;
-        SetupModeFlag = 0;
-        printToBT(9, 0); // 20240922
-        // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-    }
-
-    if (A == 0b00000001)
-    {                        // Program Mode  <10:1>
-        WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
-        PrevSetupModeFlag = SetupModeFlag;
-        SetupModeFlag = 1;
-        // printToBT(9, 1); // 20240922
-        // Audio2(2,2,2);//,"AC10:1");
-        ProgrammingMode(); // Home machine ready for programming in points
-    }
-
-    if (A == 0b00000100)
-    {                    // Full cold restart of device <10:4>
-        Audio2(1, 2, 0); //,"AC10:4");
-        setupWatchdog();
-        _delay_ms(1000);
-    }
-
-    if (A == 0b00001000)
-    {                    // Setup light sensor mode    <10:8>
-        Audio2(1, 2, 0); //,"AC10:8");
-        SetupModeFlag = 2;
-        _delay_ms(1000);
-    }
-    // --Setup light sensor mode---
-    if (A == 0b00010000)
-    { // Store current value to default light trigger value    <10:16>
-        if (SetupModeFlag == 2 && LightLevel < 100)
-        {
-            eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
-            FactoryLightTripLevel = LightLevel;
-            Audio2(1, 2, 0); //,"AC10:16");
-            _delay_ms(1);
-        }
-    }
-
-    if (A == 0b00100000)
-    { // App telling the micro that the bluetooth is connected
-        BT_ConnectedFlag = 1;
-        // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
-        // 20241209.  Put back to zero.  Dom has added refresh button to app.
-        SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-        Audio2(1, 2, 0);  //,"AC10:32");
-        PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-        TransmitData();
-        PrintConfigData(); // Send area data back to the app for user to see
-    }
-
-    if (A == 0b01000000)
-    { // App telling the micro that the bluetooth is disconnected
-        BT_ConnectedFlag = 0;
-        Audio2(1, 2, 0); //,"AC10:64");
-    }
-}
-
-void Cmd11()
-{
-    // Process the Send Diagnostic Data register
-    if (Instruction == 0b00000001)
-    {
-        // sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
-        // uartPrint(debugMsg);
-        SendDataFlag ^= 1; // Toggle value of SendDataFlag
-        SendSetupDataFlag = 0;
-        Audio2(1, 2, 0); //,"AC11:1");
-        // sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
-        // uartPrint(debugMsg);
-    }
-
-    // Process the full reset flag on next restart
-    if (Instruction == 0b00000010)
-    {
-        eeprom_update_byte(&EramFirstTimeOn, 0xFF);
-        Audio2(1, 2, 0); //,"AC11:2");
-    }
-
-    if (Instruction == 0b00000100)
-    { // Set GyroAddress to true
-        eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
-        GyroAddress = MPU6050_ADDRESS;
-        GyroOnFlag = true;
-        initMPU();
-        Audio2(1, 2, 0); //,"AC11:4");
-    }
-
-    if (Instruction == 0b00001000)
-    { // Set GyroAddress to false
-        eeprom_update_byte(&EramGyroAddress, MPU6000_ADDRESS);
-        GyroAddress = MPU6000_ADDRESS;
-        GyroOnFlag = true;
-        initMPU();
-        Audio2(1, 2, 0); //,"AC11:8");
-    }
-}
-
-void Cmd12()
-{
-    // Store the accelerometer trip point
-    eeprom_update_word(&EramAccelTripPoint, static_cast<int>(Instruction));
-    AccelTripPoint = Instruction;
-    Audio2(3, 4, 2); //,"AC12");
-}
-
-void Cmd13()
-{
-    eeprom_update_byte(&EramOperationMode, Instruction);
-    OperationMode = Instruction;
-    Audio2(1, 2, 0, "AC13");
-}
-
-void Cmd14()
-{ // 20240522: Delete a map point.  It's always the last map point.
-    // Note that with C arrays being zero based, the point to be deleted is MapTotalPoints -1
-    EramPos PosType;
-    uint16_t OpZone; // Operation zone number from the Y encoded data
-
-    // Read the map location from EEPROM into Mytype
-    uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints - 1];
-    eeprom_read_block(&PosType, (const void *)eepromAddress, sizeof(EramPos));
-    // eeprom_read_block(&PosType, &EramPositions[MapTotalPoints - 1], sizeof(EramPos));
-    // Get the Y map location and operation data
-    OpZone = PosType.EramY;
-    OpZone >>= 12; // Bit shift the data to the correct format with a value of 1 to 4 Operating Zones
-
-    // Decode the binary data
-    switch (OpZone)
-    {
-    case 1:
-        OpZone = 1;
-        break;
-    case 2:
-        OpZone = 2;
-        break;
-    case 4:
-        OpZone = 3;
-        break;
-    case 8:
-        OpZone = 4;
-        break;
-    }
-
-    printToBT(19, OpZone);
-    MapTotalPoints -= 1;
-    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
-    Audio2(1, 2, 0); //,"AC14");
-}
-
-// void Cmd15(){
-//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
-//     // MinimumLaserPower = Instruction;
-// }
-
-void Cmd16()
-{ // 20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
-    eeprom_update_byte(&EramSpeedScale, NewInstruction);
-    SpeedScale = NewInstruction;
-    Audio2(1, 2, 0); //,"AC22");
-}
-
-void Cmd17()
-{ // Previously SpeedZone 2 (with 1st numbered 1)
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
-    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
-    Nbr_Rnd_Pts = NewInstruction;
-}
-void Cmd18()
-{
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
-    eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
-    Tilt_Sep = NewInstruction;
-}
-
-void Cmd19()
-// 20241231.  Change this to adjust user laser power.
-{
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, DEF_MAX_LASER_POWER, true);
-    UserLaserPower = NewInstruction;
-}
-void Cmd20()
-{
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, LASER_HT_MIN, LASER_HT_MAX, true);
-    eeprom_update_byte(&EramLaserHt, NewInstruction);
-    LaserHt = NewInstruction;
-}
-
-void Cmd21()
-{
-    ActiveMapZones = Instruction; // 20250108
-    eeprom_update_byte(&EramActiveMapZones, Instruction);
-}
-
-void Cmd24()
-{ // 20241212 Report vertices to app
-    for (uint8_t zn = 1; zn <= NBR_ZONES; zn++)
-    {
-        LoadZoneMap(zn);
-    }
-}
-
-void Cmd30()
-{
-    eeprom_update_word(&EramResetSeconds, Instruction);
-    ResetSeconds = Instruction;
-    Audio2(1, 2, 0); //,"AC30");
-}
-
-void Cmd31()
-{
-    eeprom_update_byte(&EramMapTotalPoints, 0);
-    MapTotalPoints = 0;
-    // sprintf(debugMsg, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
-    // uartPrint(debugMsg);
-    Audio2(2, 1, 3); //,"AC31");
-}
-
-void Cmd32()
-{
-    eeprom_update_byte(&EramLaser2OperateFlag, Instruction);
-    Laser2OperateFlag = Instruction;
-    Audio2(1, 2, 0); //,"AC32");
-}
-
-void Cmd33()
-{
-    eeprom_update_byte(&EramLaser2BattTrip, Instruction);
-    Laser2BattTrip = Instruction;
-    Audio2(1, 2, 0); //,"AC33");
-}
-
-void Cmd34()
-{
-    eeprom_update_byte(&EramLaser2TempTrip, Instruction);
-    Laser2TempTrip = Instruction;
-    Audio2(1, 2, 0); //,"AC34");
-}
-
-void Cmd35()
-{
-    eeprom_update_byte(&EramUserLightTripLevel, Instruction);
-    UserLightTripLevel = Instruction;
-    Audio2(1, 2, 0); //,"AC35");
-}
-
-void Cmd36()
-{
-    eeprom_update_byte(&EramLightTriggerOperation, Instruction);
-    LightTriggerOperation = Instruction;
-    Audio2(1, 2, 0); //,"AC36");
-}
-
-void Cmd37()
-{
-    uint16_t HexResult;
-    char Result[5];
-
-    SetLaserVoltage(0);
-    _delay_ms(1000);
-
-    GetLightLevel();
-    HexResult = LightLevel;
-    sprintf(Result, "%X", HexResult);
-    printToBT(26, HexResult);
-    _delay_ms(50);
-    // Clear serial input buffer
-    Audio2(1, 2, 0); //,"AC37");
-}
-
-void Cmd38()
-{
-    eeprom_update_byte(&EramFactoryLightTripLevel, Instruction);
-    FactoryLightTripLevel = Instruction;
-    Audio2(1, 2, 0); //,"AC38");
-}
-
-void Cmd39()
-{
-    received39 = true;
-}
-
-void Cmd46()
-{ //
-    eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
-    Step_Rate_Min = Instruction;
-}
-void Cmd47()
-{ //
-    eeprom_update_word(&Eram_Step_Rate_Max, Instruction);
-    Step_Rate_Max = Instruction;
-}
-void Cmd48()
-{ //
-    eeprom_update_byte(&Eram_Rho_Min, Instruction);
-    Rho_Min = Instruction;
-}
-void Cmd49()
-{ //
-    eeprom_update_byte(&Eram_Rho_Max, Instruction);
-    Rho_Max = Instruction;
-}
-void Cmd52()
-{
-    if ((Instruction < 0x10) && (Instruction >= 0))
-    {
-        eeprom_update_byte(&EramActivePatterns, Instruction);
-        ActivePatterns = Instruction;
-    }
-}
-void Cmd53()
-{
-    bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
-    bool resetSendDataFlag = true;
-    bool resetBTFlag = true;
-    if (printPos)
-        resetPrintPos = false;
-    if (SendDataFlag)
-        resetSendDataFlag = false;
-    if (BT_ConnectedFlag)
-        resetBTFlag = false;
-
-    // sprintf(debugMsg, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
-    // uartPrint(debugMsg);
-    printPos = true; // printPos is bool so True for any positive value, false if zero.
-    SendDataFlag = 1;
-    BT_ConnectedFlag = true;
-    // printPos  determines if some regular run time data is printed - not needed for normal app use.
-    sendStatusData();
-
-    if (resetPrintPos)
-        printPos = false;
-    if (resetSendDataFlag)
-        SendDataFlag = 0;
-    if (resetBTFlag)
-        BT_ConnectedFlag = false;
-}
-
-void Cmd54()
-{
-    if ((Instruction < 0x10) && (Instruction >= 0))
-    {
-        ActiveMapZones = Instruction;
-        eeprom_update_byte(&EramActiveMapZones, Instruction);
-    }
-}
-
-void Cmd55()
-{
-    audioOn = !audioOn;
-    sprintf(debugMsg, "audioOn: %d", audioOn);
-    uartPrint(debugMsg);
-}
-#endif
-
-#ifdef NEW_APP
-
-void Cmd11()
-{
-    // Process the Send Diagnostic Data register
-    if (Instruction == 0b00000001)
-    {
-        // sprintf(debugMsg, "SendDataFlag before: %d", SendDataFlag);
-        // uartPrint(debugMsg);
-        SendDataFlag ^= 1; // Toggle value of SendDataFlag
-        SendSetupDataFlag = 0;
-        Audio2(1, 2, 0); //,"AC11:1");
-        // sprintf(debugMsg, "SendDataFlag after: %d", SendDataFlag);
-        // uartPrint(debugMsg);
-    }
-
-    // Process the full reset flag on next restart
-    if (Instruction == 0b00000010)
-    {
-        eeprom_update_byte(&EramFirstTimeOn, 0xFF);
-        Audio2(1, 2, 0); //,"AC11:2");
-    }
-
-    if (Instruction == 0b00000100)
-    { // Set GyroAddress to true
-        eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
-        GyroAddress = MPU6050_ADDRESS;
-        GyroOnFlag = true;
-        initMPU();
-        Audio2(1, 2, 0); //,"AC11:4");
-    }
-
-    if (Instruction == 0b00001000)
-    { // Set GyroAddress to false
-        eeprom_update_byte(&EramGyroAddress, MPU6000_ADDRESS);
-        GyroAddress = MPU6000_ADDRESS;
-        GyroOnFlag = true;
-        initMPU();
-        Audio2(1, 2, 0); //,"AC11:8");
-    }
-}
 
 void cmd10_running()
 {
@@ -904,6 +354,47 @@ void Cmd10()
         break;
     }
 }
+
+void Cmd11()
+{
+    // Process the Send Diagnostic Data register
+    if (Instruction == 0b00000001)
+    {
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SendDataFlag before: %d", SendDataFlag);
+        // uartPrint(debugMsg);
+        SendDataFlag ^= 1; // Toggle value of SendDataFlag
+        SendSetupDataFlag = 0;
+        Audio2(1, 2, 0); //,"AC11:1");
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SendDataFlag after: %d", SendDataFlag);
+        // uartPrint(debugMsg);
+    }
+
+    // Process the full reset flag on next restart
+    if (Instruction == 0b00000010)
+    {
+        eeprom_update_byte(&EramFirstTimeOn, 0xFF);
+        Audio2(1, 2, 0); //,"AC11:2");
+    }
+
+    if (Instruction == 0b00000100)
+    { // Set GyroAddress to true
+        eeprom_update_byte(&EramGyroAddress, MPU6050_ADDRESS);
+        GyroAddress = MPU6050_ADDRESS;
+        GyroOnFlag = true;
+        initMPU();
+        Audio2(1, 2, 0); //,"AC11:4");
+    }
+
+    if (Instruction == 0b00001000)
+    { // Set GyroAddress to false
+        eeprom_update_byte(&EramGyroAddress, MPU6000_ADDRESS);
+        GyroAddress = MPU6000_ADDRESS;
+        GyroOnFlag = true;
+        initMPU();
+        Audio2(1, 2, 0); //,"AC11:8");
+    }
+}
+
 void Cmd53()
 {
     bool resetPrintPos = true; // If the flags are set, don't change them.  If they are NOT set, change them to allow printing then put back to original state.
@@ -916,7 +407,7 @@ void Cmd53()
     if (BT_ConnectedFlag)
         resetBTFlag = false;
 
-    // sprintf(debugMsg, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Before setting. printPos: %d, SendDataFlag: %d, BT_ConnectedFlag: %d", static_cast<uint8_t>(printPos), SendDataFlag, BT_ConnectedFlag);
     // uartPrint(debugMsg);
     printPos = true; // printPos is bool so True for any positive value, false if zero.
     SendDataFlag = 1;
@@ -931,6 +422,470 @@ void Cmd53()
     if (resetBTFlag)
         BT_ConnectedFlag = false;
 }
+
+#ifndef NEW_APP
+void Cmd1()
+{
+    // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
+    uint8_t LP = 0;
+    // if (Instruction > MaxLaserPower)  //20250126. Replace with scaling relative to MaxLaserPower.
+    //     LP = MaxLaserPower;
+    // else
+    //     LP = Instruction;
+    // eeprom_update_byte(&EramUserLaserPower, LP);
+    // UserLaserPower = LP;
+    // 20250126.  Slider in old app has android:rotation= "270".  Whether it's this or something else, with the expected call:
+    // uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX,0, MaxLaserPower,  true);
+    // Behaviour is inverted.  I've fixed it here by reversing the order of MaxLaserPower and 0.
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, MaxLaserPower, 0, true);
+    eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
+    UserLaserPower = NewInstruction;
+
+    // LaserPower = Instruction; //20241202: Temporary for testing.
+    GetLaserTemperature();
+    ThrottleLaser();
+    Audio2(1, 2, 0); //,"AC1");
+    _delay_ms(100);
+}
+
+void Cmd2()
+{
+    PORTD &= ~(1 << Y_STEP);
+    if (Instruction == 0)
+        StopSystem(); // Attempt to stop kink at direction changes    }
+    // Process Pan Stop/Start Register
+    TiltEnableFlag = 0; // 20240620: Added by TJ.
+    PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
+
+    // Process Pan Direction Register
+    PanDirection = (Instruction & 0b00000010) ? 1 : 0;
+    // Process Pan Speed Register
+    PanSpeed = (Instruction & 0b00000100) ? 1 : 0;
+}
+
+void Cmd3()
+{
+    PORTD &= ~(1 << X_STEP);
+    if (Instruction == 0)
+        StopSystem();  // Attempt to stop kink at direction changes    }    // Process Tilt Stop/Start Register
+    PanEnableFlag = 0; // 20240620: Added by TJ.
+    TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
+
+    // Process Tilt Direction Register
+    TiltDirection = (Instruction & 0b00000010) ? 0 : 1; // 20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
+    // 20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
+    //  Process Tilt Speed Register
+    TiltSpeed = (Instruction & 0b00000100) ? 1 : 0;
+}
+
+void Cmd4()
+{
+    eeprom_update_byte(&EramMaxLaserPower, Instruction);
+    MaxLaserPower = Instruction; // DEF_MAX_LASER_POWER 120
+    GetLaserTemperature();
+    ThrottleLaser();
+    Audio2(1, 2, 0); //,"AC4");
+}
+
+void Cmd5()
+{
+    eeprom_update_word(&EramLaserID, Instruction);
+    LaserID = Instruction;
+    Audio2(1, 2, 0); //,"AC5");
+}
+
+void Cmd6()
+{
+    X = Instruction;
+    ProcessCoordinates();
+    SteppingStatus = 1;
+    Audio2(1, 2, 0); //,"AC6");
+    // StartTimer1();
+    TCCR1B |= (1 << CS12) | (1 << CS10);
+}
+
+void Cmd7()
+{
+    Y = Instruction;
+    ProcessCoordinates();
+    SteppingStatus = 1;
+    Audio2(1, 2, 0); //,"AC7");
+    // StartTimer1();
+    TCCR1B |= (1 << CS12) | (1 << CS10);
+}
+void Cmd8()
+{
+    PrintEramVars();
+}
+
+void Cmd9()
+{
+    uint16_t OperationZone;
+    int16_t ZoneY = Y; // 20240628 ZoneY is Y with zone added. Y populates the 12LSBs and zone is one of the 4MSBs.
+    uartPrint("ST3 C9 \n");
+    StopTimer3(); // 20240628 Don't want interrupt getting in the way of EEPROM write?
+    // Get the Operation Zone data from the received data
+    // OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
+    OperationZone = Instruction & 0xF00; // Get raw Operation Zone from Instruction
+    OperationZone >>= 8;                 // Position the Operation Zone bits
+    // Decode the binary data for Operation Zone
+    switch (OperationZone)
+    {
+    case 1:
+        OperationZone = 1;
+        break;
+    case 2:
+        OperationZone = 2;
+        break;
+    case 4:
+        OperationZone = 3;
+        break;
+    case 8:
+        OperationZone = 4;
+        break;
+    default:
+        uartPrint("Invalid Operation Zone!");
+        break; // Handle invalid Operation Zone
+    }
+    uint8_t MapPointNumber = static_cast<uint8_t>(Instruction & 0xFF); // Get Map Point number from Instruction
+
+    MapTotalPoints = MapPointNumber;
+    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // 20240726 This had not been included
+
+    if (MapPointNumber >= MAX_NBR_MAP_PTS)
+    {
+        uartPrint("Error: MapPointNumber out of range!");
+        return; // Early return to prevent out-of-bounds access
+    }
+    ZoneY = ((Instruction & 0b111100000000) << 4) | abs(Y); // 20240628. eg <9:257. => 0b0001 0000 0001 .  This is point 1 in zone 1.  <9:518> =>  0b0010 0000 0110 would be point 6 in zone 2.
+                                                            // Compounding with Y only works if the first byte of Y (4 bytes, first being highest) is 0 (which is where zone is encoded).
+                                                            // eeprom_update_word((uint16_t*)&EramMapTotalPoints, MapPointNumber);
+    // Update EEPROM with X and Y values.  Note that index for EramPositions is zero based whereas app treats as 1 based.  Hence MapPointNumber-1
+    uint16_t eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramX;
+    eeprom_update_word((uint16_t *)eepromAddress, X);
+
+    eepromAddress = (uint16_t)&EramPositions[MapPointNumber - 1].EramY;
+    eeprom_update_word((uint16_t *)eepromAddress, ZoneY);
+    Audio2(1, 2, 0); //,"AC9");
+    setupTimer3();   // Restart having stopped it at the start of this function.  Really?
+}
+
+// void Cmd10()
+// { // Setup/Run mode selection. Delete all map points. Cold restart
+//     uint8_t A;
+//     A = Instruction;
+
+//     if (A == 0b00000000)
+//     {                                                            // Run mode   <10:0>
+//         eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
+//         WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
+//         PrevSetupModeFlag = SetupModeFlag;
+//         SetupModeFlag = 0;
+//         printToBT(9, 0); // 20240922
+//         // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
+//     }
+
+//     if (A == 0b00000001)
+//     {                        // Program Mode  <10:1>
+//         WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
+//         PrevSetupModeFlag = SetupModeFlag;
+//         SetupModeFlag = 1;
+//         // printToBT(9, 1); // 20240922
+//         // Audio2(2,2,2);//,"AC10:1");
+//         ProgrammingMode(); // Home machine ready for programming in points
+//     }
+
+//     if (A == 0b00000100)
+//     {                    // Full cold restart of device <10:4>
+//         Audio2(1, 2, 0); //,"AC10:4");
+//         setupWatchdog();
+//         _delay_ms(1000);
+//     }
+
+//     if (A == 0b00001000)
+//     {                    // Setup light sensor mode    <10:8>
+//         Audio2(1, 2, 0); //,"AC10:8");
+//         SetupModeFlag = 2;
+//         _delay_ms(1000);
+//     }
+//     // --Setup light sensor mode---
+//     if (A == 0b00010000)
+//     { // Store current value to default light trigger value    <10:16>
+//         if (SetupModeFlag == 2 && LightLevel < 100)
+//         {
+//             eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
+//             FactoryLightTripLevel = LightLevel;
+//             Audio2(1, 2, 0); //,"AC10:16");
+//             _delay_ms(1);
+//         }
+//     }
+
+//     if (A == 0b00100000)
+//     { // App telling the micro that the bluetooth is connected
+//         BT_ConnectedFlag = 1;
+//         // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
+//         // 20241209.  Put back to zero.  Dom has added refresh button to app.
+//         SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
+//         Audio2(1, 2, 0);  //,"AC10:32");
+//         PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
+//         TransmitData();
+//         PrintConfigData(); // Send area data back to the app for user to see
+//     }
+
+//     if (A == 0b01000000)
+//     { // App telling the micro that the bluetooth is disconnected
+//         BT_ConnectedFlag = 0;
+//         Audio2(1, 2, 0); //,"AC10:64");
+//     }
+}
+
+void Cmd12()
+{
+    // Store the accelerometer trip point
+    eeprom_update_word(&EramAccelTripPoint, static_cast<int>(Instruction));
+    AccelTripPoint = Instruction;
+    Audio2(3, 4, 2); //,"AC12");
+}
+
+void Cmd13()
+{
+    eeprom_update_byte(&EramOperationMode, Instruction);
+    OperationMode = Instruction;
+    Audio2(1, 2, 0, "AC13");
+}
+
+void Cmd14()
+{ // 20240522: Delete a map point.  It's always the last map point.
+    // Note that with C arrays being zero based, the point to be deleted is MapTotalPoints -1
+    EramPos PosType;
+    uint16_t OpZone; // Operation zone number from the Y encoded data
+
+    // Read the map location from EEPROM into Mytype
+    uint16_t eepromAddress = (uint16_t)&EramPositions[MapTotalPoints - 1];
+    eeprom_read_block(&PosType, (const void *)eepromAddress, sizeof(EramPos));
+    // eeprom_read_block(&PosType, &EramPositions[MapTotalPoints - 1], sizeof(EramPos));
+    // Get the Y map location and operation data
+    OpZone = PosType.EramY;
+    OpZone >>= 12; // Bit shift the data to the correct format with a value of 1 to 4 Operating Zones
+
+    // Decode the binary data
+    switch (OpZone)
+    {
+    case 1:
+        OpZone = 1;
+        break;
+    case 2:
+        OpZone = 2;
+        break;
+    case 4:
+        OpZone = 3;
+        break;
+    case 8:
+        OpZone = 4;
+        break;
+    }
+
+    printToBT(19, OpZone);
+    MapTotalPoints -= 1;
+    eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints);
+    Audio2(1, 2, 0); //,"AC14");
+}
+
+// void Cmd15(){
+//     // eeprom_update_word(&EramMinimumLaserPower, Instruction);
+//     // MinimumLaserPower = Instruction;
+// }
+
+void Cmd16()
+{ // 20241202 Cmd16 was previously for speedzone 1. As speedzones are no longer used, use the speedzone 1 function for this general parameter.
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
+    eeprom_update_byte(&EramSpeedScale, NewInstruction);
+    SpeedScale = NewInstruction;
+    sprintf(debugMsg, "SpeedS: %d, Inst %d", SpeedScale, Instruction);
+    uartPrint(debugMsg);
+    Audio2(1, 2, 0); //,"AC22");
+}
+
+void Cmd17()
+{ // Previously SpeedZone 2 (with 1st numbered 1)
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
+    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
+    Nbr_Rnd_Pts = NewInstruction;
+}
+void Cmd18()
+{
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
+    eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
+    Tilt_Sep = NewInstruction;
+}
+
+void Cmd19()
+// 20241231.  Change this to adjust user laser power.
+{
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
+    eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
+    UserLaserPower = NewInstruction;
+}
+void Cmd20()
+{
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, LASER_HT_MIN, LASER_HT_MAX, true);
+    eeprom_update_byte(&EramLaserHt, static_cast<uint8_t>(NewInstruction));
+    LaserHt = static_cast<uint8_t>(NewInstruction);
+}
+
+void Cmd21()
+{
+    ActiveMapZones = Instruction; // 20250108
+    eeprom_update_byte(&EramActiveMapZones, Instruction);
+}
+
+void Cmd24()
+{ // 20241212 Report vertices to app
+    for (uint8_t zn = 1; zn <= NBR_ZONES; zn++)
+    {
+        LoadZoneMap(zn);
+    }
+}
+
+void Cmd30()
+{
+    eeprom_update_word(&EramResetSeconds, Instruction);
+    ResetSeconds = Instruction;
+    Audio2(1, 2, 0); //,"AC30");
+}
+
+void Cmd31()
+{ // 20250126 Setting MapTotalPoints to 0 (delete all points) occasionally causes grief (reported by GM).  Use <31:10> to clear EEPROM and allow reboot.
+    // But still explicitly set MapTotalPoints to 0.
+    if (Instruction == 10)
+    {
+#define EEPROM_BYTES 1024
+        for (uint16_t i = 0; i < EEPROM_BYTES; i++)
+        {
+            eeprom_write_byte((uint8_t *)i, 0xFF);
+        }
+    }
+    else
+    {
+        eeprom_update_byte(&EramMapTotalPoints, 0);
+        MapTotalPoints = 0;
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "eMTP: %d", eeprom_read_byte(&EramMapTotalPoints));
+        // uartPrint(debugMsg);
+        Audio2(2, 1, 3); //,"AC31");
+    }
+}
+
+void Cmd32()
+{
+    eeprom_update_byte(&EramLaser2OperateFlag, Instruction);
+    Laser2OperateFlag = Instruction;
+    Audio2(1, 2, 0); //,"AC32");
+}
+
+void Cmd33()
+{
+    eeprom_update_byte(&EramLaser2BattTrip, Instruction);
+    Laser2BattTrip = Instruction;
+    Audio2(1, 2, 0); //,"AC33");
+}
+
+void Cmd34()
+{
+    eeprom_update_byte(&EramLaser2TempTrip, Instruction);
+    Laser2TempTrip = Instruction;
+    Audio2(1, 2, 0); //,"AC34");
+}
+
+void Cmd35()
+{
+    eeprom_update_byte(&EramUserLightTripLevel, Instruction);
+    UserLightTripLevel = Instruction;
+    Audio2(1, 2, 0); //,"AC35");
+}
+
+void Cmd36()
+{
+    eeprom_update_byte(&EramLightTriggerOperation, Instruction);
+    LightTriggerOperation = Instruction;
+    Audio2(1, 2, 0); //,"AC36");
+}
+
+void Cmd37()
+{
+    uint16_t HexResult;
+    char Result[5];
+
+    SetLaserVoltage(0);
+    _delay_ms(1000);
+
+    GetLightLevel();
+    HexResult = LightLevel;
+    sprintf(Result, "%X", HexResult);
+    printToBT(26, HexResult);
+    _delay_ms(50);
+    // Clear serial input buffer
+    Audio2(1, 2, 0); //,"AC37");
+}
+
+void Cmd38()
+{
+    eeprom_update_byte(&EramFactoryLightTripLevel, Instruction);
+    FactoryLightTripLevel = Instruction;
+    Audio2(1, 2, 0); //,"AC38");
+}
+
+void Cmd39()
+{
+    received39 = true;
+}
+
+void Cmd46()
+{ //
+    eeprom_update_word(&Eram_Step_Rate_Min, Instruction);
+    Step_Rate_Min = Instruction;
+}
+void Cmd47()
+{ //
+    eeprom_update_word(&Eram_Step_Rate_Max, Instruction);
+    Step_Rate_Max = Instruction;
+}
+void Cmd48()
+{ //
+    eeprom_update_byte(&Eram_Rho_Min, Instruction);
+    Rho_Min = Instruction;
+}
+void Cmd49()
+{ //
+    eeprom_update_byte(&Eram_Rho_Max, Instruction);
+    Rho_Max = Instruction;
+}
+void Cmd52()
+{
+    if ((Instruction < 0x10) && (Instruction >= 0))
+    {
+        eeprom_update_byte(&EramActivePatterns, Instruction);
+        ActivePatterns = Instruction;
+    }
+}
+
+void Cmd54()
+{
+    if ((Instruction < 0x10) && (Instruction >= 0))
+    {
+        ActiveMapZones = Instruction;
+        eeprom_update_byte(&EramActiveMapZones, Instruction);
+    }
+}
+
+void Cmd55()
+{
+    audioOn = !audioOn;
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "audioOn: %d", audioOn);
+    uartPrint(debugMsg);
+}
+#endif
+
+#ifdef NEW_APP
 
 void Cmd58()
 {
@@ -1023,7 +978,7 @@ void CmdStorePts(bool test)
     else
     {
 #ifdef TEST_FDP
-        sprintf(debugMsg, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, " MTP: %d, count: %d,inFunctionTime: %d, outFunctionTime: %d", MapTotalPoints, cnt, inFunctionTime, outFunctionTime);
         uartPrint(debugMsg);
 #endif
     }
@@ -1044,7 +999,7 @@ void ReportVertices()
 {
     // uartPrint("Enter RV");
     getMapPtCounts();
-    // sprintf(debugMsg, "MTP: %d", MapTotalPoints);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MTP: %d", MapTotalPoints);
     // uartPrint(debugMsg);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
@@ -1066,7 +1021,7 @@ void ReportVertices()
         else
             n = i;
 
-        sprintf(debugMsg, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "<61: i: %d, z: %d, n: %d, X: %d, Y: %d>", i, z, n, eeprom_read_word(&EramPositions[i].EramX), static_cast<int16_t>(y_value));
         uartPrint(debugMsg);
         _delay_ms(REPORT_VERTICES_DELAY);
     }
@@ -1077,7 +1032,7 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
 {
     if (value == CANT_SET_PROPERTY)
     {
-        sprintf(debugMsg, "Property not settable %d", property);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "Property not settable %d", property);
         uartPrint(debugMsg);
     }
     else
@@ -1090,7 +1045,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
     uint8_t newValue = 0;
     uint8_t currentValue = 0;
 #ifdef TEST_FDP
-    sprintf(debugMsg, "Received by hSPR. Prop: %d, val: %d", static_cast<uint8_t>(property), value);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Received by hSPR. Prop: %d, val: %d", property, value);
     uartPrint(debugMsg);
 #endif
 

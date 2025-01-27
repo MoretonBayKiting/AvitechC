@@ -6,7 +6,7 @@
 #define RAMPING_STEPS 1
 // #define STARTUP_SPEED 100
 #define START_RAMPING_COUNT 100
-#define STEP_RATE_MAX 75
+#define STEP_RATE_MAX 30 // 75
 // #define STEP_RATE_MIN 200 //20240724 Arbitrary value
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
@@ -71,6 +71,10 @@
 #define DEF_LIGHT_TRIGGER_OPERATION 1
 #define DEF_OPERATION_MODE 0
 
+#define DEF_STEP_RATE_MIN 2000
+#define DEF_STEP_RATE_MAX 70
+#define DEF_SPEEDSCALE 30
+
 // #define WHO_AM_I_MPU6050 0x75
 // MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.
 // These values, 0xD2 and 0xD3, are for version 6.13  Ref sub Initgyro() in BASCOM code.
@@ -85,7 +89,7 @@
 #define AUDIO_DELAY 50
 #define BAUD 9600                    // 57600  //Baud rate for HC-05
 #define MYUBRR F_CPU / 16 / BAUD - 1 // The formula for calculating the UBRR value is given in the AVR datasheet:
-#define DEBUG_MSG_LENGTH 120
+#define DEBUG_MSG_LENGTH 60
 #define BUFFER_SIZE 24 // 20240924
 // 20240624 Constants to be used for i2c (MCP4725 DAC)
 #define TW_START_TRANSMITTED 0x08
@@ -104,12 +108,14 @@
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
-#define SPEED_SCALE_MIN 130
-#define SPEED_SCALE_MAX 5 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MIN 100  // 130
+#define SPEED_SCALE_MAX 0    // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30
+// #define MAX_LASER_POWER 255
+#define PROGMODE_EXTRA_LASERPOWER 20
 #define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
@@ -126,4 +132,5 @@
 #define CANT_SET_PROPERTY 255
 #define PATH_ZONE 3 // 3 if paths are indexed from 0 to 3.
 #define WATCHDOG_DELAY 5000
-#define ISOLATED_BOARD_DELAY 500
+#define ISOLATED_BOARD_DELAY 250
+#define INTER_RUNG_SPEED 70

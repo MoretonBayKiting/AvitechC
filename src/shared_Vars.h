@@ -17,9 +17,18 @@
 extern bool isolated_board_flag;
 extern uint16_t isolated_board_factor;
 #endif
-// #define THROTTLE //20241205: Use to debug laser temperature and power.
+// #define THROTTLE // 20241205: Use to debug laser temperature and power.
+#define DONT_THROTTLE_WITH_BATT
+// #define TUNE_SPEED
+#define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
+#ifdef ADAPTIVELY_BRIGHT
+#define LOW_BRIGHT 100
+#define MED_BRIGHT 230
+#define LOW_BRIGHT_LASER_PERCENTAGE 70
+#define MED_BRIGHT_LASER_PERCENTAGE 90
+#endif
 // #define BASE_PRINT
-#define LOG_PRINT
+// #define LOG_PRINT
 // #define JOG_PRINT
 #define NEW_APP
 // #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
@@ -31,8 +40,8 @@ extern uint16_t isolated_board_factor;
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
-#define TEST_FDP // FieldDeviceProperty
-// #define SAVE_RAM // If it's NOT defined, do extra printing and normal operatoins.  Defined to minimise RAM usage including not running in run mode!!!!
+// #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
+// #define TEST_FDP //FieldDeviceProperty
 // #define TEST_CONVEX
 // #define DEBUG
 // #define PRINT_CMD9

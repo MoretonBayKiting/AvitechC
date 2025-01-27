@@ -146,7 +146,6 @@ uint8_t Laser2StateFlag;        // Sets the current state if the laser 2 is work
 uint8_t EEMEM EramLaser2OperateFlag;
 uint8_t Laser2OperateFlag; // Set a flag whether the user wants Laser 2 to operate  0=laser 2 off, 1=Laser2 on
 
-// uint8_t EramLaser2TempTrip[3];
 uint8_t Laser2TempTrip; // Sets the % trip value of the laser 1 temp where to turn the laser 2 on/off  100=100%,50=50% 25=25%
 uint8_t EEMEM EramLaser2TempTrip;
 
@@ -295,7 +294,7 @@ uint16_t Step_Rate_Max = STEP_RATE_MAX;
 uint8_t EEMEM Eram_Rho_Min;
 uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
-uint8_t Rho_Max = 200;
+uint8_t Rho_Max = 250;
 uint8_t EEMEM Eram_Nbr_Rnd_Pts;
 uint8_t Nbr_Rnd_Pts = 20;
 uint8_t EEMEM Eram_Tilt_Sep;
@@ -389,10 +388,10 @@ void TickCounter_50ms_isr()
     TJTick++;
     // if (TJTick % 40 == 0)
     // {
-    //     sprintf(debugMsg, "About to call Audio3. TJTick %d", TJTick);
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "About to call Audio3. TJTick %d", TJTick);
     //     uartPrint(debugMsg);
     // }
-    // Audio3();
+    Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0)
     {
         // StartBuzzerInProgMode();
@@ -453,7 +452,6 @@ void uart_init(uint16_t ubrr)
     _delay_ms(1000); // Wait for HC-05 to respond
     // Set HC-05 to master role
     uartPrintFlash(F("AT+ROLE=1\r"));
-    // uartPrint(F("AT+ROLE=1\r"));
     _delay_ms(1000); // Wait for HC-05 to respond
 }
 // Serial write/read functions
@@ -593,7 +591,7 @@ void ProcessBuffer(char *buffer)
                 Command = atoi(token + 1);     // Convert the command to an integer
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
 
-                // sprintf(debugMsg, "Cmd: %d, Inst: %d", Command, Instruction);
+                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Cmd: %d, Inst: %d", Command, Instruction);
                 // uartPrint(debugMsg);
                 DecodeCommsData(); // Process the command and instruction
                 // uartPrintFlash(F("Finished DecodeCommsData \n"));
@@ -717,13 +715,13 @@ uint8_t i2c_start(uint8_t address)
     // testLoopUart("Conditional exit from i2c_start");
     if ((twst != TW_MT_SLA_ACK) && (twst != TW_MR_SLA_ACK))
     { // TW_MT_SLA_ACK: 0x18 = 0b11100; TW_MR_SLA_ACK: 0x40 = 0b1000000;
-        // sprintf(debugMsg, "i2c initiation failed");
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "i2c initiation failed");
         // uartPrint(debugMsg);
         return 1;
     }
     else
     {
-        // sprintf(debugMsg, "i2c initiation succesful");
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "i2c initiation succesful");
         // uartPrint(debugMsg);
         return 0;
     }
@@ -842,22 +840,22 @@ void StepperDriverISR()
 // Setup ISRs
 volatile uint16_t timer1Counter = 0;
 volatile bool TC1ind = false;
-#ifdef HOME_AXIS
-void CheckTimer1(uint8_t n, uint16_t cntThreshold)
-{
-    if (TC1ind)
-    {
-        timer1Counter++;
-        TC1ind = false;
-        if (timer1Counter > cntThreshold)
-        {
-            timer1Counter = 0;
-            sprintf(debugMsg, "CT1 n: %d", n);
-            uartPrint(debugMsg);
-        }
-    }
-}
-#endif
+// #ifdef HOME_AXIS
+// void CheckTimer1(uint8_t n, uint16_t cntThreshold)
+// {
+//     if (TC1ind)
+//     {
+//         timer1Counter++;
+//         TC1ind = false;
+//         if (timer1Counter > cntThreshold)
+//         {
+//             timer1Counter = 0;
+//             snprintf(debugMsg, DEBUG_MSG_LENGTH, "CT1 n: %d", n);
+//             uartPrint(debugMsg);
+//         }
+//     }
+// }
+// #endif
 ISR(TIMER1_COMPA_vect)
 {
     TC1ind = true;
@@ -891,7 +889,7 @@ void GetBatteryVoltage()
     BattTotal = BattTotal - BattReadings[BattReadIndex];
     // uartPrintFlash(F("Read ADC 1"));
     SensorReading = readADC(1);
-    // sprintf(debugMsg, "SR1: %d", SensorReading);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SR1: %d", SensorReading);
     // uartPrint(debugMsg);
 
     BattReadings[BattReadIndex] = SensorReading;
@@ -950,7 +948,7 @@ void SetLaserVoltage(uint16_t voltage)
 #ifdef BASE_PRINT
     if (prevVoltage != thisVoltage)
     {
-        sprintf(debugMsg, "In SetLV.  voltage: %u, prevVoltage: %u", thisVoltage, prevVoltage);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "In SetLV.  voltage: %u, prevVoltage: %u", thisVoltage, prevVoltage);
         uartPrint(debugMsg);
     }
 #endif
@@ -995,11 +993,11 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo)
 }
 void Audio3()
 { // Call this in ISR to implement buzzer when it has been setup by Audio2().
-    if (TJTick % 40 == 0)
-    {
-        sprintf(debugMsg, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
-        uartPrint(debugMsg);
-    }
+    // if (TJTick % 40 == 0)
+    // {
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "A3 audioOn: %d, TJTick %d, FstTick %d, AudioLength %d, ", audioOn, TJTick, FstTick, AudioLength);
+    //     uartPrint(debugMsg);
+    // }
     if (audioOn)
     {
         static bool BuzzerOn = false;
@@ -1058,6 +1056,14 @@ void WarnLaserOn()
     }
 }
 
+uint8_t ProgLaserPower(uint8_t lp)
+{
+    if (PROGMODE_EXTRA_LASERPOWER + lp > 255)
+        return 255;
+    else
+        return LaserPower + PROGMODE_EXTRA_LASERPOWER;
+}
+
 void StartLaserFlickerInProgMode()
 {
     if (LaserTick == 0)
@@ -1066,8 +1072,8 @@ void StartLaserFlickerInProgMode()
     }
     else if (LaserTick == 3)
     {
-        SetLaserVoltage(LaserPower); // On 850ms
-        Audio2(2, 2, 1);             //,"Flick");
+        SetLaserVoltage(ProgLaserPower(LaserPower));
+        Audio2(2, 2, 1); //,"Flick");
     }
 }
 
@@ -1081,7 +1087,7 @@ void GetLaserTemperature()
     {
         // uartPrintFlash(F("Read ADC 0 "));
         SensorReading = readADC(0);
-        // sprintf(debugMsg, "SR0: %d", SensorReading);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SR0: %d", SensorReading);
         // uartPrint(debugMsg);
         Result += SensorReading;
     }
@@ -1126,7 +1132,7 @@ void ReadAccelerometer()
     int16_t rawTemp = (Accel.H_acceltemp << 8) | Accel.L_acceltemp;
     Accel.Acceltemp = (rawTemp / 340.0) + 36.53;
     // if(!(cnt % 10000)){
-    //     sprintf(debugMsg,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH,"Accel %d, Accel h %02x, l %02x, Temp H %02x, L %02x", Accel_Z.Z_accel, Accel_Z.Zh_accel, Accel_Z.Zl_accel, Accel.H_acceltemp, Accel.L_acceltemp);
     //     uartPrint(debugMsg);
     // }
 }
@@ -1146,7 +1152,7 @@ void DecodeAccelerometer()
                 Z_AccelFlag = true;
                 SystemFaultFlag = true;
 #ifndef ISOLATED_BOARD
-                sprintf(debugMsg, "ATP err DA_cnt: %u, DA_cnt2: %u, Z: %d, ATP: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel, AccelTripPoint);
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "ATP err DA_cnt: %u, DA_cnt2: %u, Z: %d, ATP: %d", DA_cnt, DA_cnt2, Accel_Z.Z_accel, AccelTripPoint);
                 uartPrint(debugMsg);
 #endif
             }
@@ -1203,10 +1209,10 @@ void GetLightLevel()
     long Ylocal;
     // uartPrintFlash(F("Read ADC 2 "));
     LightLevel = readADC(2);
-    // sprintf(debugMsg, "SR2: %d", LightLevel);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SR2: %d", LightLevel);
     // uartPrint(debugMsg);
     LightLevel >>= 2;
-    // sprintf(debugMsg, "LightLev after bit shift: %d", LightLevel);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "LightLev after bit shift: %d", LightLevel);
     // uartPrint(debugMsg);
     if (LightTriggerOperation == 0)
     { // Run 24hr
@@ -1242,6 +1248,21 @@ void GetLightLevel()
             LightSensorModeFlag = 1;
         }
     }
+}
+
+uint8_t adaptiveLaserPower()
+{
+#ifdef ADAPTIVELY_BRIGHT
+    if (LightLevel < LOW_BRIGHT)
+        return LOW_BRIGHT_LASER_PERCENTAGE;
+    else if (LightLevel < MED_BRIGHT)
+        return MED_BRIGHT_LASER_PERCENTAGE;
+    else
+        return 100;
+#endif
+#ifndef ADAPTIVELY_BRIGHT
+    return 100;
+#endif
 }
 
 void MrSleepyTime()
@@ -1308,7 +1329,7 @@ void CalibrateLightSensor()
 {
     SetLaserVoltage(0);
     GetLightLevel();
-    sprintf(debugMsg, "LL in CalibrateLightSensor: %d", LightLevel);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LL in CalibrateLightSensor: %d", LightLevel);
     uartPrint(debugMsg);
     printToBT(25, LightLevel); // Send current light level reading
 }
@@ -1321,6 +1342,7 @@ void ThrottleLaser()
     uint8_t Y;
     uint8_t X;
 
+#ifndef DONT_THROTTLE_WITH_BATT
     if (BatteryVoltage < 98)
         B_volt = 25;
     else if (BatteryVoltage < 100)
@@ -1331,7 +1353,10 @@ void ThrottleLaser()
         B_volt = 90;
     else
         B_volt = 100;
-
+#endif
+#ifdef DONT_THROTTLE_WITH_BATT
+    B_volt = 110;
+#endif
     if (Laser2OperateFlag == 1)
     {                           // 20241205 Ignore this case.
         Y = Laser2BattTrip + 5; // Add hysteresis value if battery is low    eg 10.5 +0.5  = 11.0 for the reset level
@@ -1354,7 +1379,7 @@ void ThrottleLaser()
 
     // Calculate the laser power directly from the sensor reading using the quadratic function
     // Ref sheet LaserTemp of Alg.xlsm - this correlation directly from sensor reading to percentage of laser power.
-    // y = -0.0087x2 + 12.361x - 4268.5
+    // y = -0.0087x^2 + 12.361x - 4268.5
     // R² = 0.9996
     L_power = -0.0087 * SensorReading * SensorReading + 12.361 * SensorReading - 4268.5; // 20241205: Why is SensorReading used rather than LaserTemperature?
     if (SensorReading < 710)
@@ -1368,12 +1393,22 @@ void ThrottleLaser()
     else if (L_power > 100)
         L_power = 100;
     if (B_volt < L_power)
-        L_power = B_volt;             // Ensure L_power is less than battery voltage.
-    Result = L_power / 100.0f;        // Convert to %age
-    L_power = Result * MaxLaserPower; // Convert to voltage
-    Result = UserLaserPower / 100.0f; // This looks like nonsense
-    LaserPower = L_power * Result;    // Scale voltage to
+        L_power = B_volt;              // Ensure L_power is less than battery voltage.
+    Result = L_power / 100.0f;         // Convert to %age
+    L_power = Result * UserLaserPower; // Convert to voltage
 
+    L_power = adaptiveLaserPower() * L_power / 100.0f;
+
+    if (L_power > UserLaserPower)
+        LaserPower = UserLaserPower;
+    else if (L_power < 0)
+        LaserPower = 0;
+    else
+        LaserPower = static_cast<uint8_t>(L_power);
+#ifdef THROTTLE
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "BV: %u, LL: %d, SR: %u, ULP: %u, MLP: %u, LP: %u", BatteryVoltage, LightLevel, SensorReading, UserLaserPower, MaxLaserPower, LaserPower);
+    uartPrint(debugMsg);
+#endif
     if (LaserTemperature > 55)
     {
         LaserPower = 0;
@@ -1387,14 +1422,12 @@ void ThrottleLaser()
         // 20241221 Check imu in case SystemFaultFlag should still be set.
         DecodeAccelerometer();
     }
-    // LaserPower = 100; //20240625: Don't let it go to zero (for testing)
-    // LaserPower = UserLaserPower; //20241202: Try UserLaserPower until this function is properly reviewed.
+
     if (LaserPower > UserLaserPower)
         LaserPower = UserLaserPower; // 20241205: Ensure LaserPower is less than UserLaserPower.
 
 #ifdef THROTTLE
-    // sprintf(debugMsg,"BatteryVoltage: %d, B_volt: %d, Result: %d, SensorReading: %d, LaserPower: %d, ", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
-    sprintf(debugMsg, "BatteryVoltage: %d, B_volt: %d, Result: %.2f, SensorReading: %d, LaserPower: %d", BatteryVoltage, B_volt, Result, SensorReading, LaserPower);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "B_volt: %u,SR: %u, ULP: %u, MLP: %u, LP: %u", B_volt, SensorReading, UserLaserPower, MaxLaserPower, LaserPower);
     uartPrint(debugMsg);
 #endif
 }
@@ -1409,7 +1442,7 @@ void initMPU()
     error = Wire.endTransmission(false); // Restart condition
     if (error)
     {
-        // sprintf(debugMsg, "Error b4 WHO_AM_I: %d", error);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Error b4 WHO_AM_I: %d", error);
         uartPrintFlash(F("Error b4 WHO_AM_I: "));
         uartPrint(error);
         // uartPrintFlash(F("\n"));
@@ -1422,7 +1455,7 @@ void initMPU()
         {
             uint8_t whoAmI = Wire.read(); // Read WHO_AM_I byte
             // uartPrintFlash(F("Accel Chip & Gyro address: "));
-            // sprintf(debugMsg, "%d, %02x", whoAmI, GyroAddress);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "%d, %02x", whoAmI, GyroAddress);
             // uartPrint(debugMsg);
         }
         else
@@ -1452,7 +1485,7 @@ void initMPU()
     error = Wire.endTransmission(true);
     if (error)
     {
-        // sprintf(debugMsg, "Error resetting signal paths: %d", error);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Error resetting signal paths: %d", error);
         uartPrintFlash(F("MPU 2 \n"));
     }
     else
@@ -1484,7 +1517,7 @@ void initMPU()
     error = Wire.endTransmission(true);
     if (error)
     {
-        // sprintf(debugMsg, "Error setting full scale: %d", error);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Error setting full scale: %d", error);
         uartPrintFlash(F("MPU 4 \n"));
     }
     else
@@ -1542,7 +1575,7 @@ uint8_t GetZone(uint8_t i)
     {
         Opzone = eeprom_read_word((uint16_t *)((uintptr_t)&EramPositions[i].EramY));
         uint8_t zoneBits = Opzone >> 12; // Extract the upper 4 bits
-        // sprintf(debugMsg, "GetZone: i: %d, Opzone: %d, zoneBits: %d", i, Opzone, zoneBits);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "GetZone: i: %d, Opzone: %d, zoneBits: %d", i, Opzone, zoneBits);
         // uartPrint(debugMsg);
 
         switch (zoneBits)
@@ -1564,7 +1597,7 @@ uint8_t GetZone(uint8_t i)
             break;
         }
 
-        // sprintf(debugMsg, "GetZone: i: %d, z: %d", i, z);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "GetZone: i: %d, z: %d", i, z);
         // uartPrint(debugMsg);
         return z;
     }
@@ -1601,16 +1634,16 @@ void getMapPtCounts()
                     MapCount[1][Prev_z + 1] = MapCount[1][Prev_z];
                     MapCount[0][Prev_z + 1] = 1; // Hopefully this isn't used - but consistent with other zones if there are n distinct points then this is recorded as n+1 to allow for the repeated first point
                     Prev_z = Prev_z + 1;
-                    // sprintf(debugMsg, "MI %d, z %d, NewPrev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
+                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MI %d, z %d, NewPrev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
                     // uartPrint(debugMsg);
                 }
-                // sprintf(debugMsg, "If z!=Prev_z: MI %d, z %d, Prev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
+                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "If z!=Prev_z: MI %d, z %d, Prev_z %d, MC0 %d, MC1 %d", MapIndex, z, Prev_z, MapCount[0][Prev_z], MapCount[1][Prev_z]);
                 // uartPrint(debugMsg);
             }
         }
         Prev_z = z;
     }
-    // sprintf(debugMsg, "MI %d, z %d, MTP %d", MapIndex, z, MapTotalPoints);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MI %d, z %d, MTP %d", MapIndex, z, MapTotalPoints);
     // uartPrint(debugMsg);
     if (MapIndex >= MapTotalPoints)      // Do something if it's the last stored point (so MapIndex is MapTotalPoints) - in which case it hasn't been covered above.
     {                                    // The loop over MapIndex, ending at MapIndex <=MapTotalPoints, means that MapIndex ends that loop at MapTotalPoints + 1.
@@ -1628,7 +1661,7 @@ void getMapPtCounts()
 #ifdef TEST_MAPCOUNT
     for (uint8_t z = 0; z < NBR_ZONES; z++)
     {
-        sprintf(debugMsg, "z: %d, MC0z: %d, MC1z: %d", z, MapCount[0][z], MapCount[1][z]);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "z: %d, MC0z: %d, MC1z: %d", z, MapCount[0][z], MapCount[1][z]);
         uartPrint(debugMsg);
     }
 #endif
@@ -1654,7 +1687,7 @@ void LoadZoneMap(uint8_t zn)
     }
     else
     {
-        sprintf(debugMsg, "LZM: MapTotalPoints: %d \r\n", MapTotalPoints);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "LZM: MapTotalPoints: %d \r\n", MapTotalPoints);
         uartPrint(debugMsg);
     }
 #endif
@@ -1730,8 +1763,8 @@ int getTiltFromCart(int rho)
     // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
     // float b = atan2(LaserHt,rho*10);
     float b = atan2(static_cast<float>(LaserHt), static_cast<float>(rho) * 10.0f); // 20241205 Arguments were reverse ordered.  Arguments also now cast to float.
-#ifdef xGHOST
-    sprintf(debugMsg, "rho %d, 100*b %d, LaserHt %d", rho, static_cast<int>(100 * b), LaserHt);
+#ifdef GHOST
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "rho %d, 100*b %d, LaserHt %d", rho, static_cast<int>(100 * b), LaserHt);
     uartPrint(debugMsg);
 #endif
     return (int)(b * TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
@@ -1761,7 +1794,7 @@ void getPolars(int c1, int c2, int thisRes[2])
     // 20241205 Change r from long to double.
     double r = sqrt(static_cast<double>(c1) * c1 + static_cast<double>(c2) * c2); // Get the distance from the laser to the point by Pythagoras.
 #ifdef xGHOST
-    sprintf(debugMsg, "c1 %d, c2 %d, r %d", c1, c2, static_cast<int>(r));
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "c1 %d, c2 %d, r %d", c1, c2, static_cast<int>(r));
     uartPrint(debugMsg);
 #endif
     // First argument of atan2 is opp, second is adj.  Ref https://cplusplus.com/reference/cmath/atan2/.
@@ -1778,8 +1811,8 @@ int GetPanPolar(int TiltPolar, int PanCart)
 #ifndef SAVE_RAM
 void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
 {
-    // Using snprintf for safer string formatting and concatenation
-    snprintf(debugMsg, sizeof(debugMsg), "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    // Using sprintf for safer string formatting and concatenation
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
     _delay_ms(100);
 }
@@ -1813,10 +1846,10 @@ uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint16_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
 #ifdef xGHOST
-    sprintf(debugMsg, "Ints: rhoMax: %d rhoMin: %d tilt_sep: %d nbrRungs: %d ", static_cast<int>(rhoMax), static_cast<int>(rhoMin), static_cast<int>(Tilt_Sep));
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Ints: rhoMax: %d rhoMin: %d tilt_sep: %d nbrRungs: %d ", static_cast<int>(rhoMax), static_cast<int>(rhoMin), static_cast<int>(Tilt_Sep));
     uartPrint(debugMsg);
 
-    sprintf(debugMsg, "rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
     uartPrint(debugMsg);
 #endif
     return (uint16_t)temp;
@@ -1825,17 +1858,22 @@ uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
 uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd)
 { // Get the segment of the perimeter that the tilt value falls in.
     uint8_t i = 0;
+    uint8_t j = 0;
     for (i = fstInd; i < nbrZnPts; i++)
     {
-        if ((Vertices[1][i] <= tilt && Vertices[1][i + 1] > tilt) ||
-            (Vertices[1][i] > tilt && Vertices[1][i + 1] <= tilt))
+        if (i == nbrZnPts - 1)
+            j = 0;
+        else
+            j = i + 1; // 20250121: Previously j was always i+1.
+        if ((Vertices[1][i] <= tilt && Vertices[1][j] > tilt) ||
+            (Vertices[1][i] > tilt && Vertices[1][j] <= tilt))
         {
             // return i;
             break;
         }
     }
 #ifdef GHOST
-    sprintf(debugMsg, "Tilt %d, i %d, fstInd %d, V1i %d, V1i+1 %d", tilt, i, fstInd, Vertices[1][i], Vertices[1][i + 1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Tilt %d, i %d, fstInd %d, V1i %d, V1i+1 %d", tilt, i, fstInd, Vertices[1][i], Vertices[1][i + 1]);
     uartPrint(debugMsg);
 #endif
     if (i < nbrZnPts)
@@ -1856,7 +1894,7 @@ void PolarInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[2])
     temp = num * abs(nxt[1] - last[1]);
     res[1] = last[1] + temp / den * sign(nxt[1] - last[1]);
 #ifdef DEBUG
-    sprintf(debugMsg, "PI: num: %d, den: %d, x0: %d, y0: %d, x1: %d, y1: %d, res0: %d, res1: %d", num, den, last[0], last[1], nxt[0], nxt[1], res[0], res[1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "PI: num: %d, den: %d, x0: %d, y0: %d, x1: %d, y1: %d, res0: %d, res1: %d", num, den, last[0], last[1], nxt[0], nxt[1], res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -1867,7 +1905,7 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     getCart(last[0], last[1], c1); // Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
 #ifdef xGHOST
-    sprintf(debugMsg, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d, c10: %d, c20: %d, c11: %d, c21: %d", num, den, last[0], last[1], nxt[0], nxt[1], c1[0], c2[0], c1[1], c2[1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d, c10: %d, c20: %d, c11: %d, c21: %d", num, den, last[0], last[1], nxt[0], nxt[1], c1[0], c2[0], c1[1], c2[1]);
     uartPrint(debugMsg);
 #endif
     uint32_t temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[0] - c1[0])); // 20241204: Changed to uint32_t from int. Though note sign() used below.
@@ -1876,12 +1914,12 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
 // Use the cartesian values stored in res and write the corresponding polar values to the same variable.
 #ifdef xGHOST
-    sprintf(debugMsg, "CI: res0 %d, res1 %d", res[0], res[1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
     getPolars(res[0], res[1], res);
 #ifdef xGHOST
-    sprintf(debugMsg, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -1891,7 +1929,7 @@ void midPt(int tilt, uint8_t seg, int (&res)[2])
     // uint8_t ratio = 0;
     int den = 0;
     int num = abs(tilt - Vertices[1][seg]);
-    // sprintf(debugMsg,"S0 %d, S1 %d, diff %d", Vertices[1][seg], Vertices[1][seg+1],abs(Vertices[1][seg]-Vertices[1][seg+1]));
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH,"S0 %d, S1 %d, diff %d", Vertices[1][seg], Vertices[1][seg+1],abs(Vertices[1][seg]-Vertices[1][seg+1]));
     // uartPrint(debugMsg);
     den = abs(Vertices[1][seg] - Vertices[1][seg + 1]);
     if (den > 0)
@@ -1906,9 +1944,9 @@ void midPt(int tilt, uint8_t seg, int (&res)[2])
         res[0] = Vertices[0][seg];
         res[1] = Vertices[1][seg];
     }
-// sprintf(debugMsg,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
+// snprintf(debugMsg, DEBUG_MSG_LENGTH,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
 #ifdef xGHOST
-    sprintf(debugMsg, "midPt: S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d", Vertices[1][seg], Vertices[1][seg + 1], tilt, num, den, seg, res[0], res[1]);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "midPt: S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d", Vertices[1][seg], Vertices[1][seg + 1], tilt, num, den, seg, res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -1949,7 +1987,7 @@ bool testConvex(uint8_t zone, int pt[])
 #ifdef xGHOST // TEST_CONVEX
         if (!CPTest)
         {
-            sprintf(debugMsg, "zone: %d, vertex: %d, CP: %d, l: %d, X: %d, Y: %d, CPTest: %d", zone, i, CP, l, pt[0], pt[1], CPTest);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "zone: %d, vertex: %d, CP: %d, l: %d, X: %d, Y: %d, CPTest: %d", zone, i, CP, l, pt[0], pt[1], CPTest);
             uartPrint(debugMsg);
         }
 #endif
@@ -1967,13 +2005,13 @@ uint16_t cartDistance(int pt1[2], int pt2[2])
     uint32_t dx = static_cast<uint32_t>(abs(pt2[0] - pt1[0]));
     uint32_t dy = static_cast<uint32_t>(abs(pt2[1] - pt1[1]));
 #ifdef DEBUG
-    sprintf(debugMsg, "dx %lu, dy %lu", dx, dy);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "dx %lu, dy %lu", dx, dy);
     uartPrint(debugMsg);
 #endif
     uint32_t sqr = dx * dx + dy * dy;
     double dist = sqrt(sqr);
 #ifdef DEBUG
-    sprintf(debugMsg, "pt20 %d, pt10 %d, pt21 %d, pt11 %d, sqr %lu, dist %u", pt2[0], pt1[0], pt2[1], pt1[1], sqr, static_cast<uint16_t>(dist));
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "pt20 %d, pt10 %d, pt21 %d, pt11 %d, sqr %lu, dist %u", pt2[0], pt1[0], pt2[1], pt1[1], sqr, static_cast<uint16_t>(dist));
     uartPrint(debugMsg);
 #endif
 
@@ -1987,18 +2025,12 @@ uint16_t distance(int pt1[2], int pt2[2])
     // uint16_t dist = std::max(dx,dy);
     uint16_t dist = (dx > dy) ? dx : dy;
 #ifdef DEBUG
-    sprintf(debugMsg, "pt20 %d, pt10 %d, pt21 %d, pt11 %d, dist %u, dx %u, dy %u", pt2[0], pt1[0], pt2[1], pt1[1], dist, dx, dy);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "pt20 %d, pt10 %d, pt21 %d, pt11 %d, dist %u, dx %u, dy %u", pt2[0], pt1[0], pt2[1], pt1[1], dist, dx, dy);
     uartPrint(debugMsg);
 #endif
     return dist;
 }
-#ifdef SAVE_RAM
-bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
-{
-}
-#endif
-#ifndef SAVE_RAM
-bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs)
+bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs, int minTilt, int maxTilt)
 {
 #ifdef WIGGLY_PTS
     static uint8_t wigglyPt = 0; // Tested but not used.  wigglyPt = 0 effectively removes this functionality.
@@ -2020,7 +2052,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
     if (newPatt)
     { // Test for a new pattern and, if so, reset seg and turn off laser to go to start of pattern (which might also be new zone)
-        // sprintf(debugMsg, "getXY; newPatt true. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "getXY; newPatt true. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
         // uartPrint(debugMsg);
         seg = 0;
         CmdLaserOnFlag = false; // 20241229.  Laser off if moving to first point of pattern (and hence also zone)
@@ -2036,32 +2068,41 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         }
     }
 #ifdef TEST_PATH_MODE
-    // sprintf(debugMsg, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
-    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "zn: %d, seg: %d, nbrSegPts: %u, segPt: %d, Nbr_Rnd_Pts: %d, MPC[0]: %d", zn, seg, nbrSegPts, segPt, Nbr_Rnd_Pts, MapCount[0][zn]);
+    uartPrint(debugMsg);
 #endif
 
     if (zn == PATH_ZONE)
     {
-        if (seg < MapCount[0][zn])
+        if (seg < MapCount[0][zn] - 1) //  If there are n vertices, then MC[0][z] = n + 1. But seg is zero based.
         {
 #ifdef TEST_PATH_MODE
-            sprintf(debugMsg, "Loading V0i: %d, V1i: %d, for seg: %d", Vertices[0][seg], Vertices[1][seg], seg);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "Loading V0i: %d, V1i: %d, for seg: %d", Vertices[0][seg], Vertices[1][seg], seg);
             uartPrint(debugMsg);
 #endif
-            X = Vertices[0][seg];
-            Y = Vertices[1][seg];
-
             seg++;
         }
         else
         {
 #ifdef TEST_PATH_MODE
-            sprintf(debugMsg, "Seg >=MC[0] so put X: %d, and Y: %d to AbsX: %d, and AbsY: %d. MC: %d, seg: %d", X, Y, AbsX, AbsY, MapCount[0][zn], seg);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "Seg >=MC[0] so put X: %d, and Y: %d to AbsX: %d, and AbsY: %d. MC: %d, seg: %d", X, Y, AbsX, AbsY, MapCount[0][zn], seg);
             uartPrint(debugMsg);
 #endif
             seg = 0;
-            X = AbsX;
-            Y = AbsY;
+            // X = AbsX; //20250121 Why was (X,Y) set to (AbsX,AbsY)?
+            // Y = AbsY;
+        }
+        X = Vertices[0][seg];
+        Y = Vertices[1][seg];
+        if (seg == 0)
+        {
+            SetLaserVoltage(0);
+            CmdLaserOnFlag = false;
+        }
+        else
+        {
+            SetLaserVoltage(LaserPower);
+            CmdLaserOnFlag = true;
         }
         ind++;
     }
@@ -2101,7 +2142,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 }
                 nbrSegPts = static_cast<uint8_t>(distance(pt1, pt2) / SEG_LENGTH); // This is the number of dense points to be placed along the segment, excluding wiggly points.
                                                                                    // #ifdef DEBUG
-                // sprintf(debugMsg, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
+                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Distance: %u, nbrSegPts: %u", distance(pt1, pt2), nbrSegPts);
                 // uartPrint(debugMsg);
                 // #endif
                 X = Vertices[0][seg]; // Set the next target point to the first vertex of the segment.
@@ -2114,7 +2155,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 nextRes[1] = Y;
 
                 segPt++; // 20241120. Added.  Increment segPt here so that the first point of the segment is not repeated.
-                // sprintf(debugMsg, "SegPt == 0 case. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
+                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SegPt == 0 case. X: %d, Y: %d, AbsX: %d, AbsY: %d", X, Y, AbsX, AbsY);
                 // uartPrint(debugMsg);
             }
             else // segPt>0 case indicates that this is a point on the segment not being an end point (zone vertex)
@@ -2142,7 +2183,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                 }
                 wigglyPt++; // 20241129: With #define NBR_WIGGLY_POINTS 0, this increment means that no wiggly points are used.
 #endif
-                // sprintf(debugMsg, "segPt: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d", segPt, X, Y, AbsX, AbsY);
+                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "segPt: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d", segPt, X, Y, AbsX, AbsY);
                 // uartPrint(debugMsg);
             }
 #ifdef WIGGLY_PTS
@@ -2164,7 +2205,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         else // if (Nbr_Rnd_Pts > 0)
         {    // Now deal with the rungs - above is just boundary.
 #ifdef xGHOST
-            sprintf(debugMsg, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind: %d, startRung: %d, endRung: %d>", ind, startRung, endRung);
             uartPrint(debugMsg);
 #endif
             // If ind  is zero and this else clause is entered, then this is the first required rung.  So need to calculate both end points of rung.
@@ -2182,21 +2223,38 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     }
                     if (RndNbr == 0)
                         RndNbr = 1;
-                    tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep);                  // Argument is Cartesian offset from laser.  Get tilt angle for this.
+                    tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep); // Argument is Cartesian offset from laser.  Get tilt angle for this.
+                    // 20250121
+                    if (tilt < minTilt)
+                    {
+#ifdef GHOST
+                        uartPrintFlash(F("minTilt err\n"));
+#endif
+                        tilt = minTilt;
+                    }
+                    if (tilt > maxTilt)
+                    {
+#ifdef GHOST
+                        uartPrintFlash(F("maxTilt err\n"));
+#endif
+                        tilt = maxTilt;
+                    }
                     fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
                     sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
+#ifdef GHOST
+                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "rhoMin: %d, Rnd: %d, Tilt_Sep: %d>", rhoMin, RndNbr, Tilt_Sep);
+                    uartPrint(debugMsg);
+#endif
                     // For each boundary segment get the interpolated point in the segment needed for the new rung.
                     midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
                     midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
-#ifndef PAT3GHOST
-                    if (pat == 3)
-                    {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
-                        int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
-                        fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
-                        sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
-                        midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
-                    }
-#endif
+                    // if (pat == 3)
+                    // {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
+                    //     int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
+                    //     fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
+                    //     sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, fstSeg + 1); // Get the segment with this pan intercept on side 2.
+                    //     midPt(tilt2, sndSeg, nextRes);                                        // Note that although fstSeg is recalculated, thisRes[] is not.
+                    // }
                 } // When starting a new pass, whether with startRung true or false, set beginning and end points of rung.
                 ind++;
                 rungMidPtCnt = 0;
@@ -2214,8 +2272,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     beginRes[0] = res[0]; // res[] is last point targeted.  If this is the start of a new rung in reverse direction, last point of old rung is starting point (possibly?).
                     beginRes[1] = res[1];
                 }
-#ifdef BASE_PRINT
-                sprintf(debugMsg, "EndRung calc. ind: %d, endX: %d, endY: %d, beginX: %d, beginY: %d>", ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+#ifdef GHOST
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "sr: %d, ind: %d, endX: %d, endY: %d, bX: %d, bY: %d>", startRung, ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
                 uartPrint(debugMsg);
 #endif
             }
@@ -2240,7 +2298,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             }
             X = res[0];
             Y = res[1];
-            // sprintf(debugMsg, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RungMidPtCnt: %d, num: %d, den: %d>", rungMidPtCnt, num, den);
             // uartPrint(debugMsg);
         }
     }
@@ -2250,18 +2308,17 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     static int LastY = 0;
     if ((X != LastX || Y != LastY) && printPos)
     {
-#ifdef GHOST
-        // sprintf(debugMsg, "<50: ind: %d, X: %d, Y: %d, AbsX: %d, AbsY: %d>", ind, X, Y, AbsX, AbsY);
-        sprintf(debugMsg, "ind: %d, SegPt: %d, X: %d, Y: %d, MC[zn] %d", ind, segPt, X, Y, MapCount[0][zn]);
-        uartPrint(debugMsg);
-#endif
 #ifdef TEST_LASER_POWER
         if (CmdLaserOnFlag)
             uartPrintFlash(F("On \n"));
         else
             uartPrintFlash(F("Off \n"));
 #endif
-        // sprintf(debugMsg, "AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+#ifdef GHOST
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
+        uartPrint(debugMsg);
+#endif
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
         // uartPrint(debugMsg);
         printToBT(34, AbsX);
         printToBT(35, AbsY);
@@ -2280,11 +2337,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     else
         return startRung; // Use this to set speed and (possibly) laser on.
 }
-#endif
+
 void ProcessCoordinates()
 {
 #ifdef ISOLATED_BOARD
-    if (isolated_board_flag)
+    // if (isolated_board_flag)
     {
         AbsX = X; // Increment position, simulating movement of the stepper motors, at specified period.
         AbsY = Y;
@@ -2351,7 +2408,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
         Y = steps;
     }
     ProcessCoordinates();
-    // CheckTimer1(0, 100);
+    // CheckTimer1(0, 20);
     DSS_preload = HOMING_SPEED;
     SteppingStatus = 1;
     setupTimer1();
@@ -2371,9 +2428,9 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
             if (cnt == DEBUG61_INTERVAL)
             {
                 cnt = 0;
-                unsigned long interval = currentTime - prevTime;                                               // Calculate the interval
-                prevTime = currentTime;                                                                        // Update the previous time
-                sprintf(debugMsg, "Test DHK in MM. Interval: %lu ms, NbrPds: %d", interval, DEBUG61_INTERVAL); // Report the interval
+                unsigned long interval = currentTime - prevTime;                                                                  // Calculate the interval
+                prevTime = currentTime;                                                                                           // Update the previous time
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "Test DHK in MM. Interval: %lu ms, NbrPds: %d", interval, DEBUG61_INTERVAL); // Report the interval
                 uartPrint(debugMsg);
             }
             cnt++;
@@ -2431,7 +2488,7 @@ void avoidLimits(bool axis)
     {
         if (!(loopCount % 2000))
         {
-            sprintf(debugMsg, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "JogFlag: %d, Y: %d, AbsY: %d,", JogFlag, Y, AbsY);
             uartPrint(debugMsg);
         }
     }
@@ -2513,7 +2570,7 @@ void JogMotors() // 20250107  Add and explicit stop call
 #ifdef LOG_PRINT
         if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
         {
-            // sprintf(debugMsg, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
             // uartPrint(debugMsg);
             printToBT(34, AbsX);
             printToBT(35, AbsY);
@@ -2544,30 +2601,33 @@ uint16_t CalcSpeed(bool fst)
             long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
             long den = (long)(Rho_Max - Rho_Min);
             s = (uint16_t)(num / den);
-            // sprintf(debugMsg, "num: %ld, den: %ld, s: %d", num, den, s);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "num: %ld, den: %ld, s: %d", num, den, s);
             // uartPrint(debugMsg);
-            // _delay_ms(50);
         }
         s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
         if (s < Step_Rate_Max)
             s = Step_Rate_Max; // 20241204: Ensure that the speed is not too high.
-        // s *= SpeedScale;
-        // s /= 100;
+        if (s > Step_Rate_Min)
+            s = Step_Rate_Min; // 20241204: Ensure that the speed is not too low.
     }
     else
-        s = HOMING_SPEED;
+    {
+        s = INTER_RUNG_SPEED;
+    }
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Speed: %d, AbsY: %d", s, Y);
+    // uartPrint(debugMsg);
     return s;
 }
 
 void HomeMotor(uint8_t axis, int steps)
 { // Move specified motor until it reaches the relevant limit switch.
-    MoveMotor(axis, steps, 0);
-    // sprintf(debugMsg, "HM. axis:  %d,steps:  %d", axis, steps);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "HM. axis:  %d,steps:  %d", axis, steps);
     // uartPrint(debugMsg);
 
+    MoveMotor(axis, steps, 0);
     setupTimer1(); // 20240614 This added.  Shouldn't be necessary.
 
-    // sprintf(debugMsg, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
     // uartPrint(debugMsg);
 #ifndef ISOLATED_BOARD
     if (axis == 0)
@@ -2604,7 +2664,7 @@ void HomeMotor(uint8_t axis, int steps)
         AbsY = 0;
     }
     // uartPrintFlash(F("HM5\n"));
-    // sprintf(debugMsg, "LS end HM: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "LS end HM: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
     // uartPrint(debugMsg);
 }
 void MoveLaserMotor()
@@ -2653,16 +2713,16 @@ void HomeAxis()
 #ifndef ISOLATED_BOARD
     if ((PINB & (1 << PAN_STOP)))
     { // If pan_stop pin is high... "Move blade out of stop sensor at power up"
-      // uartPrintFlash(F("Move from pan stop \n"));
-      // MoveMotor(0, -300, 1);
+        // uartPrintFlash(F("Move from pan stop \n"));
+        MoveMotor(0, -300, 1);
     }
 
     HomeMotor(0, 17000); // Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
     if ((PINB & (1 << TILT_STOP)))
     { // If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
-      // uartPrintFlash(F("Move from tilt stop \n"));
-      // MoveMotor(1, 300, 1);
+        // uartPrintFlash(F("Move from tilt stop \n"));
+        MoveMotor(1, 300, 1);
     }
 
     CmdLaserOnFlag = false; // 20240731
@@ -2704,12 +2764,7 @@ void HomeAxis()
     SetLaserVoltage(0);
     IsHome = 1;
 }
-#ifdef SAVE_RAM
-void RunSweep(uint8_t zn)
-{
-}
-#endif
-#ifndef SAVE_RAM
+
 void RunSweep(uint8_t zn)
 {
     uint8_t PatType, ind = 0; // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
@@ -2725,6 +2780,10 @@ void RunSweep(uint8_t zn)
     printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
+#ifdef GHOST
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "minTilt: %d, maxTilt: %d, rhoMin: %d", minTilt, maxTilt, rhoMin);
+    uartPrint(debugMsg);
+#endif
     for (PatType = 1; PatType <= 4; PatType++)
     {
         if ((lastPatt != PatType) || (zn != lastZn)) // If the zone changes but only one pattern is selected, we want the next pass to be treated as a new pattern.
@@ -2745,21 +2804,16 @@ void RunSweep(uint8_t zn)
             // if (LastPatType != PatType)
             if (cnt == 0)
             {
-#ifndef SAVE_RAM
                 sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
                 uartPrint(debugMsg);
-#endif
             }
 #endif
-
             while (((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << (PatType - 1))) && (ActiveMapZones & (1 << zn)))) //// ind is incremented in getXY(), but not for the boundary, only for rungs.
             {
-#ifdef TEST_PATH_MODE
-#endif
 #ifdef ISOLATED_BOARD
                 _delay_ms(ISOLATED_BOARD_DELAY);
 #endif
-                runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs);
+                runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs, minTilt, maxTilt);
                 newPatt = false; // This is set on entry to the loop over PatType. Once in this while loop, it should be false until the next pattern is called.
                 // if (cnt == 0 && PatType == 1)
                 if (cnt == 0)
@@ -2821,72 +2875,6 @@ void RunSweep(uint8_t zn)
     }
     ResetTiming();
 }
-#endif
-
-#ifdef NEW_APP
-// void TraceBoundary(uint8_t zone)
-// {
-//     static uint8_t Current_Nbr_Rnd_Pts = 0;
-//     Current_Nbr_Rnd_Pts = Nbr_Rnd_Pts; // Store Nbr_Rnd_Pts so that it can be reset after this check.  It determines the number of rungs in an autofill.
-//     Nbr_Rnd_Pts = 0;                   // Set to zero so that RunSweep() only does the boundary.
-//     getMapPtCounts();                  // Load zone data (count of vertices by zone) from eeprom to MapCount array
-//     LoadZoneMap(zone);
-//     RunSweep(zone);
-//     Nbr_Rnd_Pts = Current_Nbr_Rnd_Pts; // Reset to stored value so that the stored value is used in run mode.
-// }
-#endif
-// Define the command to variable map, initially only for TransmitData
-// std::map<uint8_t, int32_t> commandToVariable = {
-//     // map<uint8_t, int32_t> commandToVariable = {
-//     {20, MaxLaserPower},
-//     {30, Accel.Acceltemp},
-//     {31, Index},
-//     {32, X},
-//     {33, Y},
-//     {34, AbsX},
-//     {35, AbsY},
-//     {36, Accel_Z.Z_accel},
-//     {37, Tod_tick / 2}, // Tod_tick increments every 500ms. Should this be *2 rather than /2 to get seconds?
-//     {38, BattVoltAvg},
-//     {39, Frame_size},
-//     {42, Wd_flag},
-//     {43, Boardrevision},
-//     {44, LaserID},
-//     {46, DSS_preload},
-//     {47, AccelTripPoint},
-//     {48, ResetSeconds / 2},
-//     {49, OperationMode}};
-// void TransmitData()
-// {
-//     for (const auto &entry : commandToVariable)
-//     {
-//         uint8_t command = entry.first;
-//         int variable = entry.second;
-//         printToBT(command, variable);
-//     }
-// }
-// void TransmitData()
-// { //Would prefer to use map - std not available to ATmega328PB compiler.
-//     const uint8_t commands[] = {
-//         20, 30, 31, 32, 33, 34, 35, 36, 37, 38, 42, 43, 44, 46, 47, 48, 49
-//     };
-
-//     const int32_t variables[] = {
-//         MaxLaserPower, Accel.Acceltemp, Index, X, Y, AbsX, AbsY, Accel_Z.Z_accel,
-//         Tod_tick / 2, BattVoltAvg, Wd_flag, Boardrevision, LaserID,
-//         DSS_preload, AccelTripPoint, ResetSeconds / 2, OperationMode
-//     };
-
-//     for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i)
-//     {
-//         uint8_t command = commands[i];
-//         int32_t variable = variables[i];
-//         if (command == 37) {
-//             variable /= 2; // Adjust Tod_tick as needed
-//         }
-//         printToBT(command, variable);
-//     }
-// }
 
 void TransmitData()
 {
@@ -2993,7 +2981,7 @@ void PrintConfigData()
     for (i = 1; i <= 11; i++)
     {
         printToBT(ConfigCode[i], ConfigData[i]);
-        // sprintf(debugMsg, "i: %d, val: %d", i, ConfigData[i]);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "i: %d, val: %d", i, ConfigData[i]);
         // uartPrint(debugMsg);
     }
 }
@@ -3094,9 +3082,9 @@ void DoHouseKeeping()
         PrintAppData(); // 20241209.  Too much data in log.  Send on refresh.
         GetLaserTemperature();
         GetLightLevel(); // 20250109.  Add this here for testing.
-#ifdef THROTTLE
-        ThrottleLaser();
-#endif
+                         // #ifdef THROTTLE
+                         //         ThrottleLaser();
+                         // #endif
         if (Z_AccelFlag == false)
         {
             ThrottleLaser();
@@ -3128,7 +3116,7 @@ void DoHouseKeeping()
         SteppingStatus = 0;
         // if (!(dhkn % 3000))
         // {
-        //     sprintf(debugMsg, "DHKerr. ZFlag: %d, ZVal: %d, LaserTemp: %d", Z_AccelFlag, Accel_Z.Z_accel, LaserTemperature);
+        //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "DHKerr. ZFlag: %d, ZVal: %d, LaserTemp: %d", Z_AccelFlag, Accel_Z.Z_accel, LaserTemperature);
         //     uartPrint(debugMsg);
         // }
         ProcessError();
@@ -3235,7 +3223,7 @@ uint8_t getRandomizeSpeed() { return 0; } // TJ: I don't know what this is suppo
 uint8_t getSpeedScale()
 {
     uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
-    // sprintf(debugMsg, "Invert SpeedScale %d,  r %d", SpeedScale, r);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Invert SpeedScale %d,  r %d", SpeedScale, r);
     // uartPrint(debugMsg);
     return r;
 }
@@ -3245,7 +3233,7 @@ uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long. 
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    // sprintf(debugMsg, "args to sendProp. Prop: %d, val: %d", property, value);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "args to sendProp. Prop: %d, val: %d", property, value);
     // uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
     // sprintf(debugMsg, "Result: %d", result);
@@ -3255,7 +3243,7 @@ void sendProperty(FieldDeviceProperty property, uint8_t value)
 
 void handleGetPropertyRequest(FieldDeviceProperty property)
 {
-    // sprintf(debugMsg, "arg to hGPR %d", property);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "arg to hGPR %d", property);
     // uartPrint(debugMsg);
     switch (property)
     {
@@ -3281,12 +3269,12 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, Nbr_Rnd_Pts);
         break;
     case FieldDeviceProperty::activeMapZones:
-        sprintf(debugMsg, "ActZones: %d", ActiveMapZones);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ActZones: %d", ActiveMapZones);
         uartPrint(debugMsg);
         sendProperty(property, ActiveMapZones);
         break;
     case FieldDeviceProperty::activePatterns:
-        sprintf(debugMsg, "ActPats: %d", ActivePatterns);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ActPats: %d", ActivePatterns);
         uartPrint(debugMsg);
         sendProperty(property, ActivePatterns);
         break;
@@ -3335,7 +3323,7 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
 void testWatchDog(uint8_t indicator)
 {
     static uint8_t n = 0;
-    sprintf(debugMsg, "testWD, no trigger %d", indicator);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "testWD, no trigger %d", indicator);
     uartPrint(debugMsg);
     // Check if Timer3 ISR was triggered
     // if (TJTick % 40 > 10)
@@ -3343,14 +3331,14 @@ void testWatchDog(uint8_t indicator)
     //     n++;
     //     if (n > 4)
     //     {
-    //         sprintf(debugMsg, "In main. TJTick %d", TJTick);
+    //         snprintf(debugMsg, DEBUG_MSG_LENGTH, "In main. TJTick %d", TJTick);
     //         uartPrint(debugMsg);
     //         n = 0;
     //     }
     // }
     if (timer3_isr_triggered)
     {
-        sprintf(debugMsg, "T3 %d", indicator);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "T3 %d", indicator);
         uartPrint(debugMsg);
         timer3_isr_triggered = false; // Reset the flag
     }
@@ -3358,7 +3346,7 @@ void testWatchDog(uint8_t indicator)
     // Check if Watchdog ISR was triggered
     if (watchdog_isr_triggered)
     {
-        sprintf(debugMsg, "WD %d", indicator);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "WD %d", indicator);
         uartPrint(debugMsg);
         watchdog_isr_triggered = false; // Reset the flag
     }
@@ -3377,8 +3365,8 @@ void setup()
     IB = true;
 #endif
 
-    // sprintf(debugMsg, "In setup, IB: %d", IB);
-    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "In setup, IB: %d", IB);
+    uartPrint(debugMsg);
 
     setupTimer1();
     setupTimer3();
@@ -3419,7 +3407,7 @@ void setup()
     ReadAccelerometer();
     DecodeAccelerometer(); // 20250112: Test before any movement.
     DoHouseKeeping();
-    // sprintf(debugMsg, "LS: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "LS: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
     // uartPrint(debugMsg);
 
     HomeAxis();
@@ -3464,7 +3452,8 @@ int main()
                         SetLaserVoltage(0);
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
-                        if (MapCount[0][Zn - 1] > 0) // MapCount index is zero base - But map index in app is 1 based.
+                        if (MapCount[0][Zn - 1] > 4) // MapCount index is zero based for zone - But corresponding index in app is 1 based.
+                        // 20250120 Previously if (MapCount[0][Zn - 1] > 0).  But although zero based, MC[0][z] adds a repeated first point - so MC[0][z] is 1 when there are zero points.
                         {
                             MapRunning = Zn;
                             RunSweep(Zn - 1);

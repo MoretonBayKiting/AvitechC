@@ -22,9 +22,9 @@ extern uint16_t isolated_board_factor;
 #define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
 #ifdef ADAPTIVELY_BRIGHT
 #define LOW_BRIGHT 100
-#define MED_BRIGHT 230
-#define LOW_BRIGHT_LASER_PERCENTAGE 70
-#define MED_BRIGHT_LASER_PERCENTAGE 90
+#define MED_BRIGHT 240
+#define LOW_BRIGHT_LASER_PERCENTAGE 62
+#define MED_BRIGHT_LASER_PERCENTAGE 88
 #endif
 // #define BASE_PRINT
 // #define LOG_PRINT

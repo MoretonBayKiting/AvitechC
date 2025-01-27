@@ -146,7 +146,6 @@ uint8_t Laser2StateFlag;        // Sets the current state if the laser 2 is work
 uint8_t EEMEM EramLaser2OperateFlag;
 uint8_t Laser2OperateFlag; // Set a flag whether the user wants Laser 2 to operate  0=laser 2 off, 1=Laser2 on
 
-// uint8_t EramLaser2TempTrip[3];
 uint8_t Laser2TempTrip; // Sets the % trip value of the laser 1 temp where to turn the laser 2 on/off  100=100%,50=50% 25=25%
 uint8_t EEMEM EramLaser2TempTrip;
 
@@ -1351,6 +1350,7 @@ void ThrottleLaser()
     uint8_t Y;
     uint8_t X;
 
+#ifndef DONT_THROTTLE_WITH_BATT
     if (BatteryVoltage < 98)
         B_volt = 25;
     else if (BatteryVoltage < 100)
@@ -1361,7 +1361,10 @@ void ThrottleLaser()
         B_volt = 90;
     else
         B_volt = 100;
-
+#endif
+#ifdef DONT_THROTTLE_WITH_BATT
+    B_volt = 110;
+#endif
     if (Laser2OperateFlag == 1)
     {                           // 20241205 Ignore this case.
         Y = Laser2BattTrip + 5; // Add hysteresis value if battery is low    eg 10.5 +0.5  = 11.0 for the reset level
@@ -1411,7 +1414,7 @@ void ThrottleLaser()
     else
         LaserPower = static_cast<uint8_t>(L_power);
 #ifdef THROTTLE
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LL: %d, SR: %u, Res: %d.%02d, L_power: %d.%02d, LP: %u", LightLevel, SensorReading, static_cast<int>(Result), static_cast<int>((Result - static_cast<int>(Result)) * 100), static_cast<int>(L_power), static_cast<int>((L_power - static_cast<int>(L_power)) * 100), LaserPower);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "BV: %u, LL: %d, SR: %u, ULP: %u, MLP: %u, LP: %u", BatteryVoltage, LightLevel, SensorReading, UserLaserPower, MaxLaserPower, LaserPower);
     uartPrint(debugMsg);
 #endif
     if (LaserTemperature > 55)
@@ -1432,7 +1435,6 @@ void ThrottleLaser()
         LaserPower = UserLaserPower; // 20241205: Ensure LaserPower is less than UserLaserPower.
 
 #ifdef THROTTLE
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "BV: %d, B_volt: %d, SR: %d,  LaserPower: %d", BatteryVoltage, B_volt, SensorReading, LaserPower);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "B_volt: %u,SR: %u, ULP: %u, MLP: %u, LP: %u", B_volt, SensorReading, UserLaserPower, MaxLaserPower, LaserPower);
     uartPrint(debugMsg);
 #endif

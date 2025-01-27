@@ -98,8 +98,10 @@ void PrintEramVars()
     uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Laser2TempTrip:  %p, %d", (void *)&EramLaser2TempTrip, eeprom_read_byte(&EramLaser2TempTrip));
     uartPrint(debugMsg);
-    // Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
-    // Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Laser2BattTrip:  %p, %d", (void *)&EramLaser2BattTrip, eeprom_read_byte(&EramLaser2BattTrip));
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Laser2OperateFlag:  %p, %d", (void *)&EramLaser2OperateFlag, eeprom_read_byte(&EramLaser2OperateFlag));
+    uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "MapTotalPoints:  %p, %d", (void *)&EramMapTotalPoints, eeprom_read_byte(&EramMapTotalPoints));
     uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Gyro address: %p, %02x", (void *)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));

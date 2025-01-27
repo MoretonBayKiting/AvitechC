@@ -5,18 +5,22 @@ def parse_debug_file(file_path):
     data = []
     with open(file_path, 'r') as file:
         for line in file:
-            # Check for B_volt, SR, ULP, MLP, and LP values
-            if "B_volt:" in line and "SR:" in line and "ULP:" in line and "MLP:" in line and "LP:" in line:
+            # Check for BV, LL, SR, ULP, MLP, and LP values
+            if "BV:" in line and "LL:" in line and "SR:" in line and "ULP:" in line and "MLP:" in line and "LP:" in line:
                 parts = line.split(',')
-                b_volt_part = parts[0].strip()
-                sr_part = parts[1].strip()
-                ulp_part = parts[2].strip()
-                mlp_part = parts[3].strip()
-                lp_part = parts[4].strip()
+                BV_part = parts[0].strip()
+                LL_part = parts[1].strip()
+                sr_part = parts[2].strip()
+                ulp_part = parts[3].strip()
+                mlp_part = parts[4].strip()
+                lp_part = parts[5].strip()
                 
-                b_volt_start = b_volt_part.find("B_volt:") + len("B_volt:")
-                b_volt = int(b_volt_part[b_volt_start:].strip())
+                BV_start = BV_part.find("BV:") + len("BV:")
+                BV = int(BV_part[BV_start:].strip())
                 
+                LL_start = LL_part.find("LL:") + len("LL:")
+                LL = int(LL_part[LL_start:].strip())
+
                 sr_start = sr_part.find("SR:") + len("SR:")
                 sr = int(sr_part[sr_start:].strip())
                 
@@ -29,7 +33,7 @@ def parse_debug_file(file_path):
                 lp_start = lp_part.find("LP:") + len("LP:")
                 lp = int(lp_part[lp_start:].strip())
                 
-                data.append({'B_volt': b_volt, 'SR': sr, 'ULP': ulp, 'MLP': mlp, 'LP': lp})
+                data.append({'BV': BV, 'LL': LL, 'SR': sr, 'ULP': ulp, 'MLP': mlp, 'LP': lp})
     
     return pd.DataFrame(data)
 
@@ -57,10 +61,12 @@ def plot_data(df, output_image_path):
     plt.close()
 
 def main():
-    name = '0124D'
+    name = '0127A'
     file_path = f'debug/Debug{name}.txt'  # Replace with your input file path
     output_image_path = f'debug/LaserPower{name}.png'  # Replace with your desired output image file path
+    csv_path = f'debug/LaserPower{name}.csv'
     df = parse_debug_file(file_path)
+    df.to_csv(csv_path, index=False)
     # print(df)
     # Plot the data and save to a PNG file
     plot_data(df, output_image_path)

@@ -10,11 +10,11 @@
 // #define STEP_RATE_MIN 200 //20240724 Arbitrary value
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
-#define HOMING_SPEED 50          // 20240801 Should this be 100.  50 seems better.
-#define TILT_SLOW_STEP_RATE 1500 // 1500
-#define TILT_FAST_STEP_RATE 200  // 1500
-#define PAN_SLOW_STEP_RATE 300   // 400
-#define PAN_FAST_STEP_RATE 50    // 10
+#define HOMING_SPEED 60          // 20240801 Should this be 100.  50 seems better.
+#define TILT_SLOW_STEP_RATE 2600 // 1500
+#define TILT_FAST_STEP_RATE 500  // 1500
+#define PAN_SLOW_STEP_RATE 1     // 400
+#define PAN_FAST_STEP_RATE 180   // 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -32,14 +32,14 @@
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
 
-#define MAX_RANGE 500 // Maximum range from laser to target.
-#define MIN_RANGE 10  // Minimum range from laser to target.
+#define MAX_RANGE 400 // Maximum range from laser to target.
+#define MIN_RANGE 30  // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
-#define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
-#define HIGH_JOG_POS 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
-#define LOW_JOG_POS 18
+#define BUFFER_SIZE 100   // Length of buffer to use for income serial messages.
+#define HIGH_JOG_POS 1000 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 3
 #define MIN_PERIMETER_TILT 2 // Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
 #define FIXED_PAN_DIFF 200   // Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50   // Steps between dense perimeter points on tilt only (ie constant pan) boundary segment
@@ -108,8 +108,8 @@
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
-#define SPEED_SCALE_MIN 100  // 130
-#define SPEED_SCALE_MAX 0    // 30 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MIN 100    // 130
+#define SPEED_SCALE_MAX 0      // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1

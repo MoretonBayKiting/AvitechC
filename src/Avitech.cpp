@@ -1546,7 +1546,7 @@ void setupTimer3()
 
 void StopTimer3()
 {
-    uartPrintFlash(F("In ST3\n"));
+    // uartPrintFlash(F("In ST3\n"));
     TCCR3B &= ~((1 << CS32) | (1 << CS31) | (1 << CS30)); // Clear all clock select bits to stop the timer
 }
 void StopTimer1()
@@ -2322,12 +2322,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
         // uartPrint(debugMsg);
 #ifdef ISOLATED_BOARD
-        printToBT(34, X);
-        printToBT(35, Y);
-#else
+        AbsX = X;
+        AbsY = Y;
+#endif
         printToBT(34, AbsX);
         printToBT(35, AbsY);
-#endif
         LastX = X;
         LastY = Y;
     }
@@ -3007,13 +3006,12 @@ void ProgrammingMode()
 #endif
 #ifdef HOME_AXIS
     uartPrintFlash(F("HomeAxis removed from ProgMode \n"));
-    _delay_ms(1000);
+    _delay_ms(300);
     IsHome = 1;
 #endif
     // #ifdef ISOLATED_BOARD
     //     _delay_ms(1000);
     // #endif
-    // uartPrintFlash(F("ProgMode3 \n")); //This overwhelms <9:1>
     printToBT(9, 1);
 }
 
@@ -3065,24 +3063,6 @@ void DoHouseKeeping()
     ReadAccelerometer();
     DecodeAccelerometer();
 
-#ifdef xISOLATED_BOARD
-    // static uint16_t lastTick;
-    // isolated_board_flag = false;
-    // // if (TJTick >= lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor)) // TJTick increments every 50ms.
-    // {
-    //     lastTick = TJTick;
-    //     X = AbsX;
-    //     Y = AbsY;
-    //     StepCount = 0;
-    //     SteppingStatus = 0;
-    //     isolated_board_flag = true; // Reset to true, so that notional movement occurs, if there has been an interval as defined above
-    // }
-    // Z_AccelFlag = false;
-    // LaserTemperature = 50;
-    // SystemFaultFlag = false;
-#endif
-    // avoidLimits(true); //20240731
-    // avoidLimits(false);
     if (Tick > 4)
     {
         TransmitData();
@@ -3114,17 +3094,12 @@ void DoHouseKeeping()
 #ifdef xISOLATED_BOARD
     wdt_reset();
 #endif
-    // if (SystemFaultFlag == 1) {
+
     if (SystemFaultFlag)
     { // 20241129
         SetLaserVoltage(0);
         StopTimer1();
         SteppingStatus = 0;
-        // if (!(dhkn % 3000))
-        // {
-        //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "DHKerr. ZFlag: %d, ZVal: %d, LaserTemp: %d", Z_AccelFlag, Accel_Z.Z_accel, LaserTemperature);
-        //     uartPrint(debugMsg);
-        // }
         ProcessError();
         return;
     }

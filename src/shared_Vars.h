@@ -8,7 +8,7 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-// #define GHOST
+#define GHOST
 #define WATCHDOG // Use this if watchdog is being tested
 // #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
 
@@ -31,8 +31,10 @@
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT
-#define NEW_APP
-// #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
+// #define NEW_APP // Replace #ifdef NEW_APP with #ifdef xNEW_APP.  Keep #ifndef NEW_APP.  So all will be compiled.
+//   #ifndef xNEW_APP around duplicate or other stuff that needs to be removed.
+#define xNEW_APP
+#define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100

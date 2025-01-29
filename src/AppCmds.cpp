@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#ifdef NEW_APP
+#ifdef xNEW_APP
 #include "FieldDeviceProperty.h"
 #endif
 
@@ -51,7 +51,10 @@ void DecodeCommsData()
 {
     // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
     // uartPrint(debugMsg);
-
+    if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
+    {
+        CmdStorePts(false);
+    }
     switch (Command)
     {
     case 1:
@@ -178,34 +181,29 @@ void DecodeCommsData()
         printPos ^= 1;
         break;
     case 58: // PROPERTY_GET_CHANNEL:
-        // Cmd58();
-        uartPrint("Cmd 58 not available");
+        Cmd58();
         break;
-        // case 59: // PROPERTY_SET_CHANNEL:
-        //     Cmd59();
-        //     break;
+    case 59: // PROPERTY_SET_CHANNEL:
+        Cmd59();
+        break;
 
         // case 60: // Check zones.
         //     GoToMapIndex();
         //     break; //
 
-        // case 61: // ReportVertices and store MapTotalPoints.
-        //     Cmd61();
-        //     break;
+    case 61: // ReportVertices and store MapTotalPoints.
+        Cmd61();
+        break;
 
     case 62:
         printToBT(54, ActiveMapZones);
         printToBT(52, ActivePatterns);
         break;
-
-    case 63:
-        sendStatusData();
-        break;
     }
 }
 #endif
 
-#ifdef NEW_APP
+#ifdef NEW_APP // 20250129 Moved into #ifndef NEW_APP version.
 void DecodeCommsData()
 {
     // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
@@ -258,9 +256,9 @@ void DecodeCommsData()
             Cmd59();
             break;
 
-        case 60: // Check zones.
-            GoToMapIndex();
-            break; //
+            // case 60: // Check zones.
+            //     GoToMapIndex();
+            //     break; //
 
         case 61: // ReportVertices and store MapTotalPoints.
             Cmd61();
@@ -269,10 +267,6 @@ void DecodeCommsData()
         case 62:
             printToBT(54, ActiveMapZones);
             printToBT(52, ActivePatterns);
-            break;
-
-        case 63:
-            sendStatusData();
             break;
         }
 }
@@ -290,13 +284,11 @@ void cmd10_running()
 }
 void cmd10_programming()
 {
-    // uartPrint("cmd10pS \n");
     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 1;
     // printToBT(9, 1); // 20240922 This is called at the end of ProgrammingMode() so shouldn't be needed here. But without it, the old app doesn't go to prog mode.
-    Audio2(2, 2, 2); //,"AC10:1");
-    // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
+    Audio2(2, 2, 2);   //,"AC10:1");
     ProgrammingMode(); // Home machine ready for programming in points
 }
 
@@ -539,8 +531,7 @@ void Cmd9()
 {
     uint16_t OperationZone;
     int16_t ZoneY = Y; // 20240628 ZoneY is Y with zone added. Y populates the 12LSBs and zone is one of the 4MSBs.
-    uartPrint("ST3 C9 \n");
-    StopTimer3(); // 20240628 Don't want interrupt getting in the way of EEPROM write?
+    StopTimer3();      // 20240628 Don't want interrupt getting in the way of EEPROM write?
     // Get the Operation Zone data from the received data
     // OperationZone = Instruction & 0b111100000000; // Get raw Operation Zone from Instruction
     OperationZone = Instruction & 0xF00; // Get raw Operation Zone from Instruction
@@ -833,7 +824,7 @@ void Cmd55()
 }
 // #endif
 
-#ifdef NEW_APP
+#ifdef xNEW_APP
 
 void Cmd58()
 {
@@ -938,16 +929,16 @@ void CmdStorePts(bool test)
     }
 }
 
-void GoToMapIndex()
-{
-    // uint8_t z;
-    uint16_t eepromAddress;
-    // getMapPtCounts(false); // Load zone data (count of vertices by zone) from eeprom to MapCount array
-    X = eeprom_read_word(&EramPositions[Instruction].EramX);
-    Y = eeprom_read_word(&EramPositions[Instruction].EramY) & 0x0FFF;
-    setupTimer1();
-    ProcessCoordinates();
-}
+// void GoToMapIndex()
+// {
+//     // uint8_t z;
+//     uint16_t eepromAddress;
+//     // getMapPtCounts(false); // Load zone data (count of vertices by zone) from eeprom to MapCount array
+//     X = eeprom_read_word(&EramPositions[Instruction].EramX);
+//     Y = eeprom_read_word(&EramPositions[Instruction].EramY) & 0x0FFF;
+//     setupTimer1();
+//     ProcessCoordinates();
+// }
 
 void ReportVertices()
 {
@@ -998,10 +989,11 @@ uint8_t applyRatio(uint8_t minVal, uint8_t maxVal, uint8_t prop)
 {
     long num = 0;
     float r = 0.0;
-    num = prop * maxVal + (APP_SLIDER_MAX - prop) * minVal; //APP_SLIDER_MAX maybe 100 or 255.  Allow for that with this function.
+    num = prop * maxVal + (APP_SLIDER_MAX - prop) * minVal; // APP_SLIDER_MAX maybe 100 or 255.  Allow for that with this function.
     r = static_cast<float>(num) / static_cast<float>(maxVal - minVal);
     return static_cast<uint8_t>(r);
 }
+
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
 {
     uint8_t newValue = 0;
@@ -1110,7 +1102,9 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             break;
         case FieldDeviceMode::programming:
             // case 1:
+            uartPrint("hSPR ProgMode1");
             cmd10_programming();
+            uartPrint("hSPR ProgMode2");
 
             break;
         case FieldDeviceMode::lightSensor:
@@ -1146,4 +1140,4 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         uartPrint(debugMsg);
     }
 }
-#endif // NEW_APP
+#endif // xNEW_APP

@@ -61,9 +61,9 @@ void Cmd55(void);
 void Cmd58(void);
 void Cmd59(void);
 void Cmd61(void);
-#ifdef NEW_APP
+#ifdef xNEW_APP
 void CmdStorePts(bool test);
-void GoToMapIndex();
+// void GoToMapIndex();
 void ReportVertices();
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value);
 #endif // NEW_APP

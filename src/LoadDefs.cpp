@@ -91,6 +91,10 @@ void PrintEramVars()
     uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Gyro address: %p, %02x", (void *)&EramGyroAddress, eeprom_read_byte(&EramGyroAddress));
     uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Laser2BattTrip:  %p, %d", (void *)&EramLaser2BattTrip, eeprom_read_byte(&EramLaser2BattTrip));
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Laser2OperateFlag:  %p, %d", (void *)&EramLaser2OperateFlag, eeprom_read_byte(&EramLaser2OperateFlag));
+    uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "First vertex address: %p", (void *)&EramPositions);
     uartPrint(debugMsg);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);

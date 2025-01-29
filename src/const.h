@@ -10,11 +10,11 @@
 // #define STEP_RATE_MIN 200 //20240724 Arbitrary value
 // #define RHO_MIN 10 //  20240724 Minimum cartesian distance (approx) from laser head.
 // #define RHO_MAX 200 // 20240724 Maximum cartesian distance (approx) from laser head - for speed calc.
-#define HOMING_SPEED 50          // 20240801 Should this be 100.  50 seems better.
-#define TILT_SLOW_STEP_RATE 1500 // 1500
-#define TILT_FAST_STEP_RATE 200  // 1500
-#define PAN_SLOW_STEP_RATE 300   // 400
-#define PAN_FAST_STEP_RATE 50    // 10
+#define HOMING_SPEED 60          // 20240801 Should this be 100.  50 seems better.
+#define TILT_SLOW_STEP_RATE 2600 // 1500
+#define TILT_FAST_STEP_RATE 500  // 1500
+#define PAN_SLOW_STEP_RATE 1     // 400
+#define PAN_FAST_STEP_RATE 180   // 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -32,8 +32,8 @@
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
 
-#define MAX_RANGE 500 // Maximum range from laser to target.
-#define MIN_RANGE 10  // Minimum range from laser to target.
+#define MAX_RANGE 400 // Maximum range from laser to target.
+#define MIN_RANGE 30  // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 

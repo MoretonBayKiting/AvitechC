@@ -3049,11 +3049,10 @@ void OperationModeSetup(int OperationMode)
         strcpy(OpModeTxt, "4:Test-i");
         break;
     }
-    // testLoopUart("OMS: >switch ");
+
     char atCommand[50];
-    sprintf(atCommand, "AT+NAME%s %d\r\n", name, LaserID);
+    sprintf(atCommand, "AT+NAME %s %d\r\n", name, LaserID);
     uartPrint(atCommand);
-    // testLoopUart("OMS: end function ");
 }
 
 void DoHouseKeeping()

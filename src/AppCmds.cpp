@@ -448,7 +448,7 @@ void Cmd1()
     // 20250126.  Slider in old app has android:rotation= "270".  Whether it's this or something else, with the expected call:
     // uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX,0, MaxLaserPower,  true);
     // Behaviour is inverted.  I've fixed it here by reversing the order of MaxLaserPower and 0.
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, MaxLaserPower, 0, true);
+    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
     eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
     UserLaserPower = NewInstruction;
 
@@ -647,13 +647,13 @@ void Cmd16()
 
 void Cmd17()
 { // Previously SpeedZone 2 (with 1st numbered 1)
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
+    uint16_t NewInstruction = ReScale(100 - Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
     eeprom_update_byte(&Eram_Nbr_Rnd_Pts, NewInstruction);
     Nbr_Rnd_Pts = NewInstruction;
 }
 void Cmd18()
 {
-    uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
+    uint16_t NewInstruction = ReScale(100 - Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
     eeprom_update_byte(&Eram_Tilt_Sep, NewInstruction);
     Tilt_Sep = NewInstruction;
 }

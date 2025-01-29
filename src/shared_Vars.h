@@ -11,12 +11,13 @@
 // #define GHOST
 #define WATCHDOG // Use this if watchdog is being tested
 // #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
+
 #define ISOLATED_BOARD
-#ifdef ISOLATED_BOARD
-#define ISOLATED_BOARD_INTERVAL 2
-extern bool isolated_board_flag;
-extern uint16_t isolated_board_factor;
-#endif
+// #ifdef ISOLATED_BOARD
+// #define ISOLATED_BOARD_INTERVAL 2
+// extern bool isolated_board_flag;
+// extern uint16_t isolated_board_factor;
+// #endif
 // #define THROTTLE // 20241205: Use to debug laser temperature and power.
 #define DONT_THROTTLE_WITH_BATT
 // #define TUNE_SPEED
@@ -28,7 +29,7 @@ extern uint16_t isolated_board_factor;
 #define MED_BRIGHT_LASER_PERCENTAGE 90
 #endif
 // #define BASE_PRINT
-// #define LOG_PRINT
+#define LOG_PRINT
 // #define JOG_PRINT
 #define NEW_APP
 // #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.

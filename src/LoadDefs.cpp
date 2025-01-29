@@ -24,10 +24,10 @@ void LoadEramDefaults(void)
     eeprom_update_byte(&EramLaser2OperateFlag, DEF_LASER_2_OPERATE_FLAG);
     // Map Settings
     eeprom_update_byte(&EramMapTotalPoints, DEF_MAP_TOTAL_PTS);
-
     eeprom_update_byte(&EramActiveMapZones, DEF_ACTIVE_MAP_ZONES);
     eeprom_update_byte(&EramActivePatterns, DEF_ACTIVE_PATTERNS);
     eeprom_update_word(&EramLaserID, DEF_LASER_ID);
+    eeprom_update_byte(&Eram_Nbr_Rnd_Pts, DEF_NBR_RND_PTS);
     eeprom_update_word(&EramAccelTripPoint, DEF_ACCEL_TRIP_POINT);
     eeprom_update_word(&EramResetSeconds, DEF_RESET_SECONDS); // NOLINT
     eeprom_update_byte(&EramOperationMode, DEF_OPERATION_MODE);
@@ -44,31 +44,15 @@ void LoadEramDefaults(void)
 
 void ReadEramVars(void)
 { // Transfer EEPROM user data to RAM
-    // If memory is a problem, these RAM variables could be deleted and the EEPROM variables used instead.
     UserLaserPower = eeprom_read_byte(&EramUserLaserPower);
     MaxLaserPower = eeprom_read_byte(&EramMaxLaserPower);
     Laser2TempTrip = eeprom_read_byte(&EramLaser2TempTrip);
     Laser2BattTrip = eeprom_read_byte(&EramLaser2BattTrip);
     Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
     MapTotalPoints = eeprom_read_byte(&EramMapTotalPoints);
-// uartPrint(F("MapTotalPoints address: "));
-// uartPrint((void*)&EramMapTotalPoints);
-// uartPrint(F(" value: "));
-// uartPrint(MapTotalPoints);
-// uartPrint("\n");
-#ifdef DEBUG
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "MapTotalPoints address:  %p value: %d", (void *)&EramMapTotalPoints, MapTotalPoints);
-    uartPrint(debugMsg);
-#endif
     GyroAddress = eeprom_read_byte(&EramGyroAddress);
-#ifdef DEBUG
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Gyro address:  %p value: %02x", (void *)&EramGyroAddress, GyroAddress);
-    uartPrint(debugMsg);
-#endif
-    // for(int i = 0; i < 5; i++) {
-    //     SpeedZone[i] = eeprom_read_byte(&EramSpeedZone[i]);
-    // }
     SpeedScale = eeprom_read_byte(&EramSpeedScale);
+    Nbr_Rnd_Pts = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
     LaserHt = eeprom_read_byte(&EramLaserHt);
     Tilt_Sep = eeprom_read_byte(&Eram_Tilt_Sep);
     ActiveMapZones = eeprom_read_byte(&EramActiveMapZones);

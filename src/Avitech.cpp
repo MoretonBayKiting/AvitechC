@@ -50,10 +50,10 @@ int X = 0;              // X position requested to move EG X=100   .Move X 100 s
 int Y = 0;              // Y position requested to move EG X=100   .Move X 100 steps
 int AbsX = 0;           // X absolute position from home position
 int AbsY = 0;           // Y absolute position from home position
-#ifdef ISOLATED_BOARD
-bool isolated_board_flag = false;
-uint16_t isolated_board_factor = 1;
-#endif
+// #ifdef xISOLATED_BOARD
+// bool isolated_board_flag = false;
+// uint16_t isolated_board_factor = 1;
+// #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
 bool audioOn = true;  //
 int Dy;               // Used to calulate how many steps required on Y axis from last position
@@ -303,7 +303,7 @@ uint8_t Tilt_Sep = 5; // 20241209 Previously 1.  Needs testing.
 uint8_t nbrWigglyPts = 0;
 #endif
 uint8_t EEMEM EramSpeedScale;
-uint8_t SpeedScale = 30; // Low value sets higher interrupt rate so higher speed.  30 seems to be a good fast value. Tune with <16:percentage> message.
+uint8_t SpeedScale = 30; // SpeedScale is used as a percentage (0 - 100) applied to DSS_preload
 uint8_t EEMEM EramLaserHt;
 uint8_t LaserHt = 50; // Units are decimetres.  50 => 5metres
 
@@ -338,6 +338,14 @@ void setupPeripherals()
     // Configure the ADC
     ADMUX = (1 << REFS0);                                              // Use AVCC as the reference voltage
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Enable the ADC and set the prescaler to 128 (auto)
+
+    // #ifdef ISOLATED_BOARD
+    //     // Turn off the enable pins for the stepper motors
+    //     PORTD &= ~((1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN));
+    // #else
+    //     // Ensure the enable pins are on for normal operation
+    //     PORTD |= (1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN);
+    // #endif
 }
 
 void setupWatchdog()
@@ -590,10 +598,7 @@ void ProcessBuffer(char *buffer)
                 *colon = '\0';                 // Replace ':' with '\0' to separate command and instruction
                 Command = atoi(token + 1);     // Convert the command to an integer
                 Instruction = atoi(colon + 1); // Convert the instruction to an integer
-
-                // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Cmd: %d, Inst: %d", Command, Instruction);
-                // uartPrint(debugMsg);
-                DecodeCommsData(); // Process the command and instruction
+                DecodeCommsData();             // Process the command and instruction
                 // uartPrintFlash(F("Finished DecodeCommsData \n"));
             }
             token = strchr(end + 1, '<'); // Find the start of the next command
@@ -1610,6 +1615,8 @@ uint8_t GetZone(uint8_t i)
 
 void getMapPtCounts()
 { // Get the number of vertices (user specified) in each zone. Populate MapCount[2,n] with incremental and cumulative values.
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Entering getMPC. MTP: %d", MapTotalPoints);
+    // uartPrint(debugMsg);
     uint8_t MapIndex;
     uint8_t z = 0, Prev_z = 0; // Prev_i_1;
     for (MapIndex = 1; MapIndex <= MapTotalPoints; MapIndex++)
@@ -2308,20 +2315,19 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     static int LastY = 0;
     if ((X != LastX || Y != LastY) && printPos)
     {
-#ifdef TEST_LASER_POWER
-        if (CmdLaserOnFlag)
-            uartPrintFlash(F("On \n"));
-        else
-            uartPrintFlash(F("Off \n"));
-#endif
 #ifdef GHOST
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
         uartPrint(debugMsg);
 #endif
         // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
         // uartPrint(debugMsg);
+#ifdef ISOLATED_BOARD
+        printToBT(34, X);
+        printToBT(35, Y);
+#else
         printToBT(34, AbsX);
         printToBT(35, AbsY);
+#endif
         LastX = X;
         LastY = Y;
     }
@@ -2340,7 +2346,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
 void ProcessCoordinates()
 {
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
     // if (isolated_board_flag)
     {
         AbsX = X; // Increment position, simulating movement of the stepper motors, at specified period.
@@ -2415,7 +2421,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
     if (waitUntilStop == 1)
     { // So, if waitUntilStop is not 1, execution returns ?  Yes returns to HomeMotor() where there is a (blocking) {while limit switch is low} condition.
 // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
         DoHouseKeeping();
 #endif
         while (SteppingStatus == 1)
@@ -2495,7 +2501,7 @@ void avoidLimits(bool axis)
 }
 
 void JogMotors() // 20250107  Add and explicit stop call
-{                //
+{
     uint8_t axis = 0;
     uint8_t speed = 0;
     uint8_t dir = 0;
@@ -2505,7 +2511,7 @@ void JogMotors() // 20250107  Add and explicit stop call
     int pos = 0;
     avoidLimits(false);
     avoidLimits(true);
-#ifdef NEW_APP
+
 #ifdef LOG_PRINT
     if (X != lastX || Y != lastY)
     {
@@ -2513,7 +2519,7 @@ void JogMotors() // 20250107  Add and explicit stop call
         printToBT(35, AbsY);
     }
 #endif
-#endif
+
     lastX = X;
     lastY = Y;
 
@@ -2541,7 +2547,7 @@ void JogMotors() // 20250107  Add and explicit stop call
         Y = AbsY;
 
     pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
     pos = pos / isolated_board_factor;
 #endif
     pos = pos * (dir ? 1 : -1);       // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
@@ -2566,7 +2572,6 @@ void JogMotors() // 20250107  Add and explicit stop call
         {
             Y = pos;
         }
-#ifdef NEW_APP
 #ifdef LOG_PRINT
         if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
         {
@@ -2575,7 +2580,6 @@ void JogMotors() // 20250107  Add and explicit stop call
             printToBT(34, AbsX);
             printToBT(35, AbsY);
         }
-#endif
 #endif
         ProcessCoordinates();
     }
@@ -2672,7 +2676,7 @@ void MoveLaserMotor()
     ProcessCoordinates();       // Drive motors to the coordinates
     DSS_preload = HOMING_SPEED; // Set speed rate
     SteppingStatus = 1;
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
     SteppingStatus = 0;
 #endif
     setupTimer1();
@@ -2695,12 +2699,12 @@ void NeutralAxis()
     // Tilt motor to neutral position
     Y = 500; // Half way down
     MoveLaserMotor();
-#ifdef ISOLATED_BOARD
-    X = -4000;
-    AbsX = X;
-    Y = 500;
-    AbsY = Y;
-#endif
+    // #ifdef ISOLATED_BOARD
+    //     X = -4000;
+    //     AbsX = X;
+    //     Y = 500;
+    //     AbsY = Y;
+    // #endif
     Audio2(1, 2, 0, "Neut");
 }
 
@@ -2732,6 +2736,8 @@ void HomeAxis()
 #ifdef ISOLATED_BOARD
     X = 0;
     Y = 0;
+    AbsX = 0;
+    AbsY = 0;
     // uartPrintFlash(F("HomeAxis \n"));
 #endif
     // --**Move Tilt into final position**--
@@ -2810,7 +2816,7 @@ void RunSweep(uint8_t zn)
 #endif
             while (((ind <= Nbr_Rnd_Pts) && (ActivePatterns & (1 << (PatType - 1))) && (ActiveMapZones & (1 << zn)))) //// ind is incremented in getXY(), but not for the boundary, only for rungs.
             {
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
                 _delay_ms(ISOLATED_BOARD_DELAY);
 #endif
                 runSweepStartRung = getXY(PatType, zn, ind, newPatt, rhoMin, nbrRungs, minTilt, maxTilt);
@@ -3054,11 +3060,12 @@ void OperationModeSetup(int OperationMode)
 
 void DoHouseKeeping()
 {
+    _delay_ms(400);
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
 
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
     // static uint16_t lastTick;
     // isolated_board_flag = false;
     // // if (TJTick >= lastTick + (ISOLATED_BOARD_INTERVAL * isolated_board_factor)) // TJTick increments every 50ms.
@@ -3089,7 +3096,6 @@ void DoHouseKeeping()
         {
             ThrottleLaser();
         }
-        uartPrintFlash(F("uart alive \n"));
         Tick = 0;
     }
 
@@ -3105,7 +3111,7 @@ void DoHouseKeeping()
             // uartPrintFlash(F("StopTimer3 would have been called.\r"));
         }
     }
-#ifdef ISOLATED_BOARD
+#ifdef xISOLATED_BOARD
     wdt_reset();
 #endif
     // if (SystemFaultFlag == 1) {
@@ -3175,6 +3181,8 @@ void DoHouseKeeping()
 
 uint8_t getTimeMode()
 {
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LTO: %d, a: %d, d: %d, n: %d", LightTriggerOperation, static_cast<uint8_t>(TimeMode::always), static_cast<uint8_t>(TimeMode::day), static_cast<uint8_t>(TimeMode::night));
+    uartPrint(debugMsg);
     switch (LightTriggerOperation)
     {
     case 0:
@@ -3183,12 +3191,13 @@ uint8_t getTimeMode()
         return static_cast<uint8_t>(TimeMode::day);
     case 2:
         return static_cast<uint8_t>(TimeMode::night);
-        // default:
-        //     return TimeMode::always;
+    default:
+        return static_cast<uint8_t>(TimeMode::day);
     }
 }
 uint8_t getBeamMode()
 {
+    return static_cast<uint8_t>(BeamMode::continuous);
     // switch (????)
     // {
     // case 0:
@@ -3199,6 +3208,7 @@ uint8_t getBeamMode()
 }
 uint8_t getLocationMode()
 {
+    return static_cast<uint8_t>(LocationMode::outdoor);
     // switch (????)
     // {
     // case 0:
@@ -3220,14 +3230,8 @@ uint8_t getLocationMode()
 // uint8_t getCurrentLaserPower() { return LaserPower; }
 // uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
 uint8_t getRandomizeSpeed() { return 0; } // TJ: I don't know what this is supposed to do.
-uint8_t getSpeedScale()
-{
-    uint16_t r = ReScale(SpeedScale, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, false);
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Invert SpeedScale %d,  r %d", SpeedScale, r);
-    // uartPrint(debugMsg);
-    return r;
-}
-uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
+// uint8_t getSpeedScale() {return SpeedScale;}
+// uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
 
 // Property send functions
 
@@ -3269,13 +3273,9 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, Nbr_Rnd_Pts);
         break;
     case FieldDeviceProperty::activeMapZones:
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ActZones: %d", ActiveMapZones);
-        uartPrint(debugMsg);
         sendProperty(property, ActiveMapZones);
         break;
     case FieldDeviceProperty::activePatterns:
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ActPats: %d", ActivePatterns);
-        uartPrint(debugMsg);
         sendProperty(property, ActivePatterns);
         break;
     case FieldDeviceProperty::maxLaserPower:
@@ -3291,13 +3291,13 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, LaserTemperature);
         break;
     case FieldDeviceProperty::randomizeSpeed:
-        sendProperty(property, getRandomizeSpeed());
+        sendProperty(property, 0);
         break;
     case FieldDeviceProperty::speedScale:
-        sendProperty(property, getSpeedScale());
+        sendProperty(property, SpeedScale);
         break;
     case FieldDeviceProperty::lightSensorReading:
-        sendProperty(property, getLightSensorReading());
+        sendProperty(property, LightLevel);
         break;
     case FieldDeviceProperty::deviceMode:
         sendProperty(property, SetupModeFlag); // 0 Run  mode, 1 prog mode?
@@ -3374,9 +3374,9 @@ void setup()
     TurnOnGyro();
 #endif
     setupPeripherals();
-    ReadEramVars();                    // Move ReadEramVars() here so that LaserID is available to OperationModeSetup()
-    OperationModeSetup(OperationMode); // Select the operation mode the device will work under before loading data presets
-    Wd_byte = MCUSR;                   // Read the Watchdog flag
+    LaserID = eeprom_read_word(&EramLaserID); // Ensure LaserID is available to OperationModeSetup()
+    OperationModeSetup(OperationMode);        // Select the operation mode the device will work under before loading data presets
+    Wd_byte = MCUSR;                          // Read the Watchdog flag
     if (Wd_byte & (1 << WDRF))
     {                // there was a WD overflow. This flag is cleared of a Watchdog Config
         Wd_flag = 1; // store the flag
@@ -3388,8 +3388,8 @@ void setup()
         return;
     }; // DAC.begin(MCP4725ADD>>1); // Initialize MCP4725 object.  Library uses 7 bit address (ie without R/W)
     // DAC.setMaxVoltage(5.1);  //This may or may not be used.  Important if DAC.setVoltage() is called.
-    firstOn(); // Load defaults to EEPROM if first time on.
-    // ReadEramVars();      // Reads user data from EEPROM to RAM.
+    firstOn();           // Load defaults to EEPROM if first time on.
+    ReadEramVars();      // Reads user data from EEPROM to RAM.
     initMPU();           // 20241231 This was commented out.  It will error if the wrong address for the given board is in EEPROM (and read from preious statement)
     PORTE |= (1 << FAN); // Turn fan on.
     for (int battCount = 0; battCount < 10; battCount++)
@@ -3418,7 +3418,9 @@ void setup()
 int main()
 {
     wdt_disable();
+    uartPrintFlash(F("main1\n"));
     setup();
+    uartPrintFlash(F("main2\n"));
     while (1)
     {
         switch (SetupModeFlag)
@@ -3448,8 +3450,12 @@ int main()
             {
                 for (Zn = 1; Zn <= NBR_ZONES; Zn++)
                 {
+                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MTP: %d, AMZ %d, AP %d", MapTotalPoints, ActiveMapZones, ActivePatterns);
+                    // uartPrint(debugMsg);
                     if ((ActiveMapZones == 0) || (ActivePatterns == 0))
+                    {
                         SetLaserVoltage(0);
+                    }
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
                         if (MapCount[0][Zn - 1] > 4) // MapCount index is zero based for zone - But corresponding index in app is 1 based.
@@ -3464,7 +3470,9 @@ int main()
                 }
             }
             else
+            {
                 SetLaserVoltage(0); // 20240718: Standby mode
+            }
             break;
         }
         case 2:

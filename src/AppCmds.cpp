@@ -51,8 +51,8 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 #ifndef NEW_APP
 void DecodeCommsData()
 {
-    sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
+    // uartPrint(debugMsg);
 
     switch (Command)
     {
@@ -168,8 +168,8 @@ void DecodeCommsData()
         Cmd52();
         break; // Update ActivePatterns (in EEPROM)
     case 53:
-        SendStatusData() break;
-
+        sendStatusData();
+        break;
     case 54:
         Cmd54();
         break; // Update ActiveMapZones (in EEPROM)
@@ -183,17 +183,17 @@ void DecodeCommsData()
         // Cmd58();
         uartPrint("Cmd 58 not available");
         break;
-    case 59: // PROPERTY_SET_CHANNEL:
-        Cmd59();
-        break;
+        // case 59: // PROPERTY_SET_CHANNEL:
+        //     Cmd59();
+        //     break;
 
-    case 60: // Check zones.
-        GoToMapIndex();
-        break; //
+        // case 60: // Check zones.
+        //     GoToMapIndex();
+        //     break; //
 
-    case 61: // ReportVertices and store MapTotalPoints.
-        Cmd61();
-        break;
+        // case 61: // ReportVertices and store MapTotalPoints.
+        //     Cmd61();
+        //     break;
 
     case 62:
         printToBT(54, ActiveMapZones);
@@ -203,11 +203,6 @@ void DecodeCommsData()
     case 63:
         sendStatusData();
         break;
-
-        if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
-        {
-            CmdStorePts(false);
-        }
     }
 }
 #endif
@@ -215,61 +210,89 @@ void DecodeCommsData()
 #ifdef NEW_APP
 void DecodeCommsData()
 {
-    sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
-    uartPrint(debugMsg);
-    switch (Command)
+    // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
+    // uartPrint(debugMsg);
+    if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
     {
-    case 11:
-        Cmd11();
-        break; // Process the Send Diagnostic Data register or Process the full reset flag on next restart
-    case 53:   // PROPERTY_GET_CHANNEL:
-        Cmd53();
-        break;
-    case 58: // PROPERTY_GET_CHANNEL:
-        Cmd58();
-        break;
-    case 59: // PROPERTY_SET_CHANNEL:
-        Cmd59();
-        break;
-
-    case 60: // Check zones.
-        GoToMapIndex();
-        break; //
-
-    case 61: // ReportVertices and store MapTotalPoints.
-        Cmd61();
-        break;
-
-    case 62:
-        printToBT(54, ActiveMapZones);
-        printToBT(52, ActivePatterns);
-        break;
-
-    case 63:
-        sendStatusData();
-        break;
-
-        if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
-        {
-            CmdStorePts(false);
-        }
+        CmdStorePts(false);
     }
+    else
+        switch (Command)
+        {
+        case 1:
+            Cmd1();
+            break; // Update laser power (in EEPROM)
+        case 2:
+            Cmd2();
+            break; // Control pan during setup (stop/start, speed, dir)
+        case 3:
+            Cmd3();
+            break; // Control tilt during setup (stop/start, speed, dir)
+        case 4:
+            Cmd4();
+            break; // Update MaxLaserPower (in EEPROM)
+        case 5:
+            Cmd5();
+            break; // Update LaserID (in EEPROM)
+        case 6:
+            Cmd6();
+            break; // X = Instruction;  Start timer1.
+        case 7:
+            Cmd7();
+            break; // Y = Instruction;  Start timer1.
+        case 8:
+            Cmd8();
+            break; // Print EEPROM values to serial output.
+        case 9:
+            Cmd9();
+            break; // Store way point
+
+        case 11:
+            Cmd11();
+            break; // Process the Send Diagnostic Data register or Process the full reset flag on next restart
+        case 53:   // PROPERTY_GET_CHANNEL:
+            Cmd53();
+            break;
+        case 58: // PROPERTY_GET_CHANNEL:
+            Cmd58();
+            break;
+        case 59: // PROPERTY_SET_CHANNEL:
+            Cmd59();
+            break;
+
+        case 60: // Check zones.
+            GoToMapIndex();
+            break; //
+
+        case 61: // ReportVertices and store MapTotalPoints.
+            Cmd61();
+            break;
+
+        case 62:
+            printToBT(54, ActiveMapZones);
+            printToBT(52, ActivePatterns);
+            break;
+
+        case 63:
+            sendStatusData();
+            break;
+        }
 }
 #endif
 
 void cmd10_running()
 {
-    uartPrint("cmd10rS \n");
+    // uartPrint("cmd10rS \n");
     eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
     WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 0;
     printToBT(9, 0);
-    uartPrint("cmd10rE \n");
+    // uartPrint("cmd10rE \n");
 }
 void cmd10_programming()
 {
-    uartPrint("cmd10pS \n");
+    // uartPrint("cmd10pS \n");
     WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
     PrevSetupModeFlag = SetupModeFlag;
     SetupModeFlag = 1;
@@ -277,8 +300,6 @@ void cmd10_programming()
     Audio2(2, 2, 2); //,"AC10:1");
     // uartPrint("c10_prog. Flag set. Calling ProgrammingMode");
     ProgrammingMode(); // Home machine ready for programming in points
-    // uartPrint("Exiting c10_prog");
-    uartPrint("cmd10pE \n");
 }
 
 void cmd10_restart()
@@ -423,7 +444,7 @@ void Cmd53()
         BT_ConnectedFlag = false;
 }
 
-#ifndef NEW_APP
+// #ifndef NEW_APP
 void Cmd1()
 {
     // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
@@ -456,7 +477,6 @@ void Cmd2()
     // Process Pan Stop/Start Register
     TiltEnableFlag = 0; // 20240620: Added by TJ.
     PanEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-
     // Process Pan Direction Register
     PanDirection = (Instruction & 0b00000010) ? 1 : 0;
     // Process Pan Speed Register
@@ -470,7 +490,6 @@ void Cmd3()
         StopSystem();  // Attempt to stop kink at direction changes    }    // Process Tilt Stop/Start Register
     PanEnableFlag = 0; // 20240620: Added by TJ.
     TiltEnableFlag = (Instruction & 0b00000001) ? 1 : 0;
-
     // Process Tilt Direction Register
     TiltDirection = (Instruction & 0b00000010) ? 0 : 1; // 20240629: Back to 1:0. 20240622 Had the opposite previously as directions seemed to be wrong.
     // 20240629 Back to 0:1.  This saves making asymmetric change in JogMotors to this: pos = pos * (dir ? 1 : -1);
@@ -568,75 +587,6 @@ void Cmd9()
     eeprom_update_word((uint16_t *)eepromAddress, ZoneY);
     Audio2(1, 2, 0); //,"AC9");
     setupTimer3();   // Restart having stopped it at the start of this function.  Really?
-}
-
-// void Cmd10()
-// { // Setup/Run mode selection. Delete all map points. Cold restart
-//     uint8_t A;
-//     A = Instruction;
-
-//     if (A == 0b00000000)
-//     {                                                            // Run mode   <10:0>
-//         eeprom_update_byte(&EramMapTotalPoints, MapTotalPoints); // Setting to run mode indicates completion of setup so store MapTotalPoints.
-//         WarnLaserOnOnce = 1;                                     // Enable laser warning when Run Mode button is pressed
-//         PrevSetupModeFlag = SetupModeFlag;
-//         SetupModeFlag = 0;
-//         printToBT(9, 0); // 20240922
-//         // PORTE |= ~(1 << BUZZER); // Set BUZZER pin to HIGH
-//     }
-
-//     if (A == 0b00000001)
-//     {                        // Program Mode  <10:1>
-//         WarnLaserOnOnce = 1; // Enable laser warning when Program Mode button is pressed
-//         PrevSetupModeFlag = SetupModeFlag;
-//         SetupModeFlag = 1;
-//         // printToBT(9, 1); // 20240922
-//         // Audio2(2,2,2);//,"AC10:1");
-//         ProgrammingMode(); // Home machine ready for programming in points
-//     }
-
-//     if (A == 0b00000100)
-//     {                    // Full cold restart of device <10:4>
-//         Audio2(1, 2, 0); //,"AC10:4");
-//         setupWatchdog();
-//         _delay_ms(1000);
-//     }
-
-//     if (A == 0b00001000)
-//     {                    // Setup light sensor mode    <10:8>
-//         Audio2(1, 2, 0); //,"AC10:8");
-//         SetupModeFlag = 2;
-//         _delay_ms(1000);
-//     }
-//     // --Setup light sensor mode---
-//     if (A == 0b00010000)
-//     { // Store current value to default light trigger value    <10:16>
-//         if (SetupModeFlag == 2 && LightLevel < 100)
-//         {
-//             eeprom_update_byte(&EramFactoryLightTripLevel, LightLevel);
-//             FactoryLightTripLevel = LightLevel;
-//             Audio2(1, 2, 0); //,"AC10:16");
-//             _delay_ms(1);
-//         }
-//     }
-
-//     if (A == 0b00100000)
-//     { // App telling the micro that the bluetooth is connected
-//         BT_ConnectedFlag = 1;
-//         // 20241209.  Why would SendDataFlag be zero, as was set here?  Change it to 1.  It's only used in TransmitData() and that's only called from DoHouseKeeping().
-//         // 20241209.  Put back to zero.  Dom has added refresh button to app.
-//         SendDataFlag = 0; // Output data back to application .1=Send data. 0=Don't send data used for testing only  . There just incase setup engineer forgets to turn the data dump off
-//         Audio2(1, 2, 0);  //,"AC10:32");
-//         PrintAppData();   // 20241209: Add this and TransmitData() here so that they only write to app when requested ("refresh")
-//         TransmitData();
-//         PrintConfigData(); // Send area data back to the app for user to see
-//     }
-
-//     if (A == 0b01000000)
-//     { // App telling the micro that the bluetooth is disconnected
-//         BT_ConnectedFlag = 0;
-//         Audio2(1, 2, 0); //,"AC10:64");
-//     }
 }
 
 void Cmd12()
@@ -883,7 +833,7 @@ void Cmd55()
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "audioOn: %d", audioOn);
     uartPrint(debugMsg);
 }
-#endif
+// #endif
 
 #ifdef NEW_APP
 
@@ -896,8 +846,8 @@ void Cmd59()
     // FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
     uint8_t prop = Instruction >> 8; // Upper 8 bits encode property
     uint8_t value = Instruction & 0x00FF;
-    sprintf(debugMsg, "Cmd59. Inst(04x): %04x, prop %d, value %d ", Instruction, static_cast<uint8_t>(prop), value);
-    uartPrint(debugMsg);
+    // sprintf(debugMsg, "Cmd59. Inst(04x): %04x, prop %d, value %d ", Instruction, static_cast<uint8_t>(prop), value);
+    // uartPrint(debugMsg);
     handleSetPropertyRequest(static_cast<FieldDeviceProperty>(prop), value);
 }
 
@@ -949,6 +899,8 @@ void CmdStorePts(bool test)
             OpZone = 1 << (12 + Instruction);
             eepromAddress = (uint16_t)&EramPositions[index].EramY;
             eeprom_update_word((uint16_t *)eepromAddress, OpZone);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Opzone: %d", OpZone);
+            // uartPrint(debugMsg);
         }
         else if (Command < FST_STORE_PT_INDEX + 2 * MAX_NBR_MAP_PTS) // Instruction is Y
         {
@@ -960,11 +912,15 @@ void CmdStorePts(bool test)
             uint16_t masked_y_value = static_cast<uint16_t>(y_value) & 0x0FFF;
 
             eeprom_update_word((uint16_t *)eepromAddress, (OpZone & 0xF000) | masked_y_value);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Y: %d", masked_y_value);
+            // uartPrint(debugMsg);
         }
         else if (Command < FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS) // Instruction is X
         {
             eepromAddress = (uint16_t)&EramPositions[index].EramX;
             eeprom_update_word((uint16_t *)eepromAddress, Instruction);
+            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d", Instruction);
+            // uartPrint(debugMsg);
         }
         // uint8_t MapPointNumber = static_cast<uint8_t>(index);
         // MapTotalPoints = MapPointNumber + 1;
@@ -1141,8 +1097,8 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::deviceMode:
-        sprintf(debugMsg, "hSPR deviceMode. Val: %d", value);
-        uartPrint(debugMsg);
+        // sprintf(debugMsg, "hSPR deviceMode. Val: %d", value);
+        // uartPrint(debugMsg);
         switch (static_cast<FieldDeviceMode>(value))
         {
         case FieldDeviceMode::running:

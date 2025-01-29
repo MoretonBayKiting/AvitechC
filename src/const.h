@@ -62,6 +62,7 @@
 #define DEF_OP_MODE 0
 #define DEF_FIRST_TIME_ON 1
 #define DEF_LASER_ID 0
+#define DEF_NBR_RND_PTS 50
 #define DEF_TILT_SEP 10 // Initially used directly as steps of tilt between rungs.  But treat it as m for Cartesian version.
 #define DEF_ACCEL_TRIP_POINT 600
 #define DEF_RESET_SECONDS 3600
@@ -108,8 +109,8 @@
 // Various parameters written from old speed zone values to new parameters.  Use these parameters for rescaling.
 #define OLD_SPEED_ZONE_MIN 0
 #define OLD_SPEED_ZONE_MAX 100 // 20250109 255 for new app?
-#define SPEED_SCALE_MIN 100  // 130
-#define SPEED_SCALE_MAX 0    // 30 // Higher speed requires a lower value of SpeedScale
+#define SPEED_SCALE_MIN 100    // 130
+#define SPEED_SCALE_MAX 0      // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 300
 #define TILT_SEP_MIN 1

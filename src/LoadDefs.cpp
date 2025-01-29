@@ -40,6 +40,7 @@ void LoadEramDefaults(void)
     eeprom_update_word(&Eram_Step_Rate_Min, DEF_STEP_RATE_MIN);
     eeprom_update_word(&Eram_Step_Rate_Max, DEF_STEP_RATE_MAX);
     eeprom_update_byte(&EramSpeedScale, DEF_SPEEDSCALE);
+    eeprom_update_byte(&EramLaserHt, DEF_LASER_HT);
 }
 
 void ReadEramVars(void)

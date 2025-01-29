@@ -3181,8 +3181,6 @@ void DoHouseKeeping()
 
 uint8_t getTimeMode()
 {
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LTO: %d, a: %d, d: %d, n: %d", LightTriggerOperation, static_cast<uint8_t>(TimeMode::always), static_cast<uint8_t>(TimeMode::day), static_cast<uint8_t>(TimeMode::night));
-    uartPrint(debugMsg);
     switch (LightTriggerOperation)
     {
     case 0:
@@ -3418,9 +3416,7 @@ void setup()
 int main()
 {
     wdt_disable();
-    uartPrintFlash(F("main1\n"));
     setup();
-    uartPrintFlash(F("main2\n"));
     while (1)
     {
         switch (SetupModeFlag)

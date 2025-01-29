@@ -36,7 +36,7 @@
 #define MIN_RANGE 10  // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
-// #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
+
 #define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
 #define HIGH_JOG_POS 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
 #define LOW_JOG_POS 18
@@ -75,6 +75,7 @@
 #define DEF_STEP_RATE_MIN 2000
 #define DEF_STEP_RATE_MAX 70
 #define DEF_SPEEDSCALE 30
+#define DEF_LASER_HT 50 //
 
 // #define WHO_AM_I_MPU6050 0x75
 // MPU pins.  The BASCOM code used a variable and set these pins to 0xD0 and 0xD1 for board version 6.12.
@@ -112,7 +113,7 @@
 #define SPEED_SCALE_MIN 100    // 130
 #define SPEED_SCALE_MAX 0      // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
-#define NBR_RND_MAX 300
+#define NBR_RND_MAX 255
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30
 // #define MAX_LASER_POWER 255
@@ -135,3 +136,5 @@
 #define WATCHDOG_DELAY 5000
 #define ISOLATED_BOARD_DELAY 250
 #define INTER_RUNG_SPEED 70
+#define APP_SLIDER_MAX 255
+#define AVR_SLIDER_MAX 100

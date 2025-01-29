@@ -43,8 +43,6 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         ratio = (static_cast<float>(compVal) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "val %ld, compVal %ld, r: %u, Min %ld, Max %ld", val, compVal, static_cast<uint16_t>(r), newMin, newMax);
-    uartPrint(debugMsg);
     return static_cast<uint16_t>(r);
 }
 
@@ -996,6 +994,14 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
     }
 }
 
+uint8_t applyRatio(uint8_t minVal, uint8_t maxVal, uint8_t prop)
+{
+    long num = 0;
+    float r = 0.0;
+    num = prop * maxVal + (APP_SLIDER_MAX - prop) * minVal; //APP_SLIDER_MAX maybe 100 or 255.  Allow for that with this function.
+    r = static_cast<float>(num) / static_cast<float>(maxVal - minVal);
+    return static_cast<uint8_t>(r);
+}
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
 {
     uint8_t newValue = 0;
@@ -1066,14 +1072,10 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         ActivePatterns = value;
         break;
     case FieldDeviceProperty::maxLaserPower:
-        setProperty(property, CANT_SET_PROPERTY);
-        // Instruction = value;
-        // Cmd4();
+        MaxLaserPower = applyRatio(0, 255, value);
         break;
     case FieldDeviceProperty::userLaserPower:
-        setProperty(property, CANT_SET_PROPERTY);
-        // Instruction = value;
-        // Cmd19();
+        UserLaserPower = applyRatio(0, MaxLaserPower, value);
         break;
     case FieldDeviceProperty::currentLaserPower:
         setProperty(property, CANT_SET_PROPERTY);
@@ -1085,7 +1087,8 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::speedScale:
-        newValue = ReScale(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
+        newValue = applyRatio(0, 100, value);
+        newValue = ReScale(newValue, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
         currentValue = eeprom_read_byte(&EramSpeedScale);
         if (newValue != currentValue)
         {

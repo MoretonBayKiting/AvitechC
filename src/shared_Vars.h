@@ -8,11 +8,11 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-#define GHOST
+// #define GHOST
 #define WATCHDOG // Use this if watchdog is being tested
 // #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
 
-#define ISOLATED_BOARD
+// #define ISOLATED_BOARD
 // #ifdef ISOLATED_BOARD
 // #define ISOLATED_BOARD_INTERVAL 2
 // extern bool isolated_board_flag;
@@ -39,11 +39,11 @@
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
-#define PAT3GHOST // This takes out the conditional pat == 3 code that was generating ghosts.
+// #define PAT3GHOST // This takes out the conditional pat == 3 code that was generating ghosts.
 // #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
-// #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
+#define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
 // #define TEST_FDP //FieldDeviceProperty
 // #define TEST_CONVEX
 // #define DEBUG

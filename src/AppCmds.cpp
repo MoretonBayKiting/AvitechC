@@ -640,7 +640,7 @@ void Cmd16()
     uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
     eeprom_update_byte(&EramSpeedScale, NewInstruction);
     SpeedScale = NewInstruction;
-    sprintf(debugMsg, "SpeedS: %d, Inst %d", SpeedScale, Instruction);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "SpeedS: %d, Inst %d", SpeedScale, Instruction);
     uartPrint(debugMsg);
     Audio2(1, 2, 0); //,"AC22");
 }
@@ -755,11 +755,10 @@ void Cmd37()
     char Result[5];
 
     SetLaserVoltage(0);
-    _delay_ms(1000);
 
     GetLightLevel();
     HexResult = LightLevel;
-    sprintf(Result, "%X", HexResult);
+    snprintf(Result, DEBUG_MSG_LENGTH, "%X", HexResult);
     printToBT(26, HexResult);
     _delay_ms(50);
     // Clear serial input buffer
@@ -1136,7 +1135,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         MicroMinor = newValue;
         break;
     default:
-        sprintf(debugMsg, "hSPR property not supported. Prop: %d, Val: %d", static_cast<uint8_t>(property), value);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "hSPR property not supported. Prop: %d, Val: %d", static_cast<uint8_t>(property), value);
         uartPrint(debugMsg);
     }
 }

@@ -55,7 +55,7 @@ int AbsY = 0;           // Y absolute position from home position
 // uint16_t isolated_board_factor = 1;
 // #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
-bool audioOn = true;  //
+bool audioOn = false; //
 int Dy;               // Used to calulate how many steps required on Y axis from last position
 int Dx;               // Used to calulate how many steps required on X axis from last position
 
@@ -103,7 +103,7 @@ bool Y_TravelLimitFlag = false; // Over travel flag
 uint8_t JogFlag = 0;
 uint16_t y_maxCount = 500;           // = 1800;
 int y_minCount = 20;                 // -220
-uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[1][i] is incremental; MapCount[2][i] is cumulative of MapCount[1][i]
+uint8_t MapCount[2][NBR_ZONES] = {}; // MapCount[0][i] is incremental; MapCount[1][i] is cumulative of MapCount[0][i]
 uint8_t Zn;
 // uint8_t NoMapsRunningFlag;  //Although this is set (BASCOM), it doesn't appear to be used.
 // uint16_t AppCompatibilityNo;
@@ -227,7 +227,7 @@ int AccelTripPoint;
 uint8_t Zonespeed;
 uint16_t CurrentSpeedZone;
 
-uint16_t MapRunning;
+uint8_t MapRunning;
 uint8_t PatternRunning = 0;
 
 uint8_t Counter50ms;
@@ -633,7 +633,7 @@ void CheckBlueTooth()
 void printToBT(uint8_t cmd, uint16_t inst)
 {
     char printToBTMsg[20];
-    sprintf(printToBTMsg, "<%02d:%04x>", cmd, inst);
+    snprintf(printToBTMsg, DEBUG_MSG_LENGTH, "<%02d:%04x>", cmd, inst);
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
@@ -641,7 +641,7 @@ void printToBT(uint8_t cmd, uint16_t inst)
 void printToBT(uint8_t cmd, int inst) // 20241225 Overload printToBT to allow int as 2nd argument.
 {
     char printToBTMsg[20];
-    sprintf(printToBTMsg, "<%02d:%04x>", cmd, inst);
+    snprintf(printToBTMsg, DEBUG_MSG_LENGTH, "<%02d:%04x>", cmd, inst);
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
@@ -649,7 +649,7 @@ void printToBT(uint8_t cmd, int inst) // 20241225 Overload printToBT to allow in
 void printToBT(uint8_t cmd, long inst) // Overload further to cover the printToBT(25, LightLevel); case.  There's likely a better solution.
 {
     char printToBTMsg[20];
-    sprintf(printToBTMsg, "<%02d:%08lx>", cmd, inst);
+    snprintf(printToBTMsg, DEBUG_MSG_LENGTH, "<%02d:%08lx>", cmd, inst);
     uartPrint(printToBTMsg);
     _delay_ms(20);
 }
@@ -1773,8 +1773,10 @@ int getTiltFromCart(int rho)
 #ifdef GHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "rho %d, 100*b %d, LaserHt %d", rho, static_cast<int>(100 * b), LaserHt);
     uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "tilt:", static_cast<int>(b * TILT_STEPS_PER_RAD + 0.5));
+    uartPrint(debugMsg);
 #endif
-    return (int)(b * TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
+    return static_cast<int>(b * TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
 }
 int getNextTiltVal(int thisTilt, uint8_t dirn)
 { // 20240629: TILT_SEP is target separation in Cartesian space between ladder rungs.
@@ -1821,7 +1823,7 @@ void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
     // Using sprintf for safer string formatting and concatenation
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     uartPrint(debugMsg);
-    _delay_ms(100);
+    _delay_ms(30);
 }
 #endif
 void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
@@ -1841,11 +1843,15 @@ void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
         {
             maxTilt = y;
         }
-        if (minTilt < getTiltFromCart(MAX_RANGE))
-            minTilt = getTiltFromCart(MAX_RANGE);
-        if (maxTilt > getTiltFromCart(MIN_RANGE))
-            maxTilt = getTiltFromCart(MIN_RANGE);
     }
+    // if (minTilt < getTiltFromCart(MAX_RANGE))
+    //     minTilt = getTiltFromCart(MAX_RANGE);
+    // if (maxTilt > getTiltFromCart(MIN_RANGE))
+    //     maxTilt = getTiltFromCart(MIN_RANGE);
+    int temp = getTiltFromCart(MAX_RANGE);
+    minTilt = (minTilt < temp) ? temp : minTilt;
+    temp = getTiltFromCart(MIN_RANGE);
+    maxTilt = (maxTilt > temp) ? temp : maxTilt;
 }
 uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
 { //, int &rhoMax, int &rhoMin){
@@ -2115,6 +2121,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     }
     else // The general autofill case
     {
+#ifdef GHOST
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind : %d,seg: %d, segPt: %d, MC0z-1: %d>", ind, seg, segPt, MapCount[0][zn] - 1);
+        uartPrint(debugMsg);
+#endif
         if (seg == 0 && segPt == 0) // 20250108.  Turn laser off if going to first vertex of a zone.  Should be off as a result of newPatt condition in any case
         {
             SetLaserVoltage(0);
@@ -2130,7 +2140,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         }
         // First traverse the boundary.
         if (seg < MapCount[0][zn]) // This conditional determines if the next point is on the boundary or a rung.
-        {                          // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
+        // if (seg < MapCount[0][zn] - 1) // Subtract 1 from limit.  Ref 20250201 and Debug0201A.txt in Avitech.rtf .
+        { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
             if (segPt == 0)
             { // First point of segment - which must be a zone vertex.  Get the two vertices  which define the segment and the number of interpolated, excluding wiggly, points.
                 pt1[0] = Vertices[0][seg];
@@ -2255,7 +2266,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     // For each boundary segment get the interpolated point in the segment needed for the new rung.
                     midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
                     midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
-                    // if (pat == 3)
+                    // if (pat == 3)  //PAT3GHOST
                     // {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
                     //     int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
                     //     fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt2, 0);          // Get the segment with this pan intercept on side 1.  Although this intercept won't be used, fstSeg needs to be calculated for use in the next calc.
@@ -2487,7 +2498,6 @@ void avoidLimits(bool axis)
         }
         if ((TiltDirection == 1 && JogFlag == 3) || (TiltDirection == 0 && JogFlag == 4))
             TiltEnableFlag = 0;
-        _delay_ms(50);
     }
     if (JogFlag > 0)
     {
@@ -2511,13 +2521,13 @@ void JogMotors() // 20250107  Add and explicit stop call
     avoidLimits(false);
     avoidLimits(true);
 
-#ifdef LOG_PRINT
-    if (X != lastX || Y != lastY)
-    {
-        printToBT(34, AbsX);
-        printToBT(35, AbsY);
-    }
-#endif
+    // #ifdef LOG_PRINT
+    //     if (X != lastX || Y != lastY)
+    //     {
+    //         printToBT(34, AbsX);
+    //         printToBT(35, AbsY);
+    //     }
+    // #endif
 
     lastX = X;
     lastY = Y;
@@ -2805,11 +2815,11 @@ void RunSweep(uint8_t zn)
             printToBT(18, PatternRunning);
 
 #ifdef LOG_PRINT // GHOST
-            // static uint8_t LastPatType;
-            // if (LastPatType != PatType)
+                 // static uint8_t LastPatType;
+                 // if (LastPatType != PatType)
             if (cnt == 0)
             {
-                sprintf(debugMsg, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
                 uartPrint(debugMsg);
             }
 #endif
@@ -3051,13 +3061,12 @@ void OperationModeSetup(int OperationMode)
     }
 
     char atCommand[50];
-    sprintf(atCommand, "AT+NAME %s %d\r\n", name, LaserID);
+    snprintf(atCommand, 50, "AT+NAME %s %d\r\n", name, LaserID);
     uartPrint(atCommand);
 }
 
 void DoHouseKeeping()
 {
-    _delay_ms(400);
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();

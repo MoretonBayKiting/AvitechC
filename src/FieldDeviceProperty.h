@@ -26,8 +26,8 @@ enum FieldDeviceProperty
     currentZoneRunning,    // 17
     currentPatternRunning, // 18
     laserID,               // 19
-    microMajor,            // 20
-    microMinor             // 21
+    laser2On,              // 20 bool
+    lightTripLevel         // 21 [0, 100]
 };
 
 // enum class TimeMode : uint8_t
@@ -57,8 +57,7 @@ enum LocationMode
 enum FieldDeviceMode
 {
     running,
-    programming,
-    lightSensor
+    programming
 };
 
 #endif // FIELD_DEVICE_PROPERTY_H

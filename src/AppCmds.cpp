@@ -1034,7 +1034,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         // Do nothing
         break;
     case FieldDeviceProperty::tripodHeight:
-        newValue = ReScaleNewApp(value, 0, 20, LASER_HT_MIN, LASER_HT_MAX, true);
+        newValue = ReScaleNewApp(value, 0, 100, LASER_HT_MIN, LASER_HT_MAX, true);
         currentValue = eeprom_read_byte(&EramLaserHt);
         if (newValue != currentValue)
         {
@@ -1043,22 +1043,20 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         LaserHt = newValue;
         break;
     case FieldDeviceProperty::lineSeparation:
-        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
         currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
-        if (newValue != currentValue)
+        if (value != currentValue)
         {
             eeprom_update_byte(&Eram_Tilt_Sep, value);
         }
-        Tilt_Sep = newValue;
+        Tilt_Sep = value;
         break;
     case FieldDeviceProperty::linesPerPattern:
-        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
         currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
-        if (newValue != currentValue)
+        if (value != currentValue)
         {
             eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
         }
-        Nbr_Rnd_Pts = newValue;
+        Nbr_Rnd_Pts = value;
         break;
     case FieldDeviceProperty::activeMapZones:
         currentValue = eeprom_read_byte(&EramActiveMapZones);
@@ -1078,16 +1076,21 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         ActivePatterns = value;
         break;
     case FieldDeviceProperty::maxLaserPower:
-        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
+        // newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
         currentValue = eeprom_read_byte(&EramMaxLaserPower);
-        if (newValue != currentValue)
+        if (value != currentValue)
         {
             eeprom_update_byte(&EramMaxLaserPower, value);
         }
-        MaxLaserPower = newValue;
+        MaxLaserPower = value;
         break;
     case FieldDeviceProperty::userLaserPower:
         newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
+        currentValue = eeprom_read_byte(&EramUserLaserPower);
+        if (newValue != currentValue)
+        {
+            eeprom_update_byte(&EramUserLaserPower, newValue);
+        }
         UserLaserPower = newValue;
         break;
     case FieldDeviceProperty::currentLaserPower:
@@ -1127,9 +1130,9 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             uartPrint("hSPR ProgMode2");
 
             break;
-        case FieldDeviceMode::lightSensor:
-            cmd10_lightSensor();
-            break;
+            // case FieldDeviceMode::lightSensor:
+            //     cmd10_lightSensor();
+            //     break;
         }
         sendProperty(FieldDeviceProperty::deviceMode, SetupModeFlag);
         break;
@@ -1147,21 +1150,21 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         }
         LaserID = value;
         break;
-    case FieldDeviceProperty::microMajor:
-        currentValue = eeprom_read_byte(&EramMicroMajor);
-        if (newValue != currentValue)
+    case FieldDeviceProperty::laser2On:
+        currentValue = eeprom_read_byte(&EramLaser2OperateFlag);
+        if (value != currentValue)
         {
-            eeprom_update_byte(&EramMicroMajor, value);
+            eeprom_update_byte(&EramLaser2OperateFlag, value);
         }
-        MicroMajor = newValue;
+        Laser2OperateFlag = value;
         break;
-    case FieldDeviceProperty::microMinor:
-        currentValue = eeprom_read_byte(&EramMicroMinor);
-        if (newValue != currentValue)
+    case FieldDeviceProperty::lightTripLevel:
+        currentValue = eeprom_read_byte(&EramUserLightTripLevel);
+        if (value != currentValue)
         {
-            eeprom_update_byte(&EramMicroMinor, value);
+            eeprom_update_byte(&EramUserLightTripLevel, value);
         }
-        MicroMinor = newValue;
+        UserLightTripLevel = value;
         break;
     default:
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "hSPR property not supported. Prop: %d, Val: %d", static_cast<uint8_t>(property), value);

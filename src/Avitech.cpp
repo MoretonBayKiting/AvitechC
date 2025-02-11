@@ -3232,12 +3232,10 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, prop);
         break;
     case FieldDeviceProperty::lineSeparation:
-        prop = ReScaleNewApp(Tilt_Sep, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, false); // Get proportion from actual line separation.
-        sendProperty(property, prop);                                                                              //
+        sendProperty(property, Tilt_Sep);
         break;
     case FieldDeviceProperty::linesPerPattern:
-        prop = ReScaleNewApp(Nbr_Rnd_Pts, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, false); // Get proportion from actual line separation.
-        sendProperty(property, prop);
+        sendProperty(property, Nbr_Rnd_Pts);
         break;
     case FieldDeviceProperty::activeMapZones:
         sendProperty(property, ActiveMapZones);
@@ -3246,8 +3244,7 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, ActivePatterns);
         break;
     case FieldDeviceProperty::maxLaserPower:
-        prop = ReScaleNewApp(MaxLaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, false);
-        sendProperty(property, prop);
+        sendProperty(property, MaxLaserPower);
         break;
     case FieldDeviceProperty::userLaserPower:
         prop = ReScaleNewApp(UserLaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false);
@@ -3284,13 +3281,13 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, LaserID);
         break;
 
-    case FieldDeviceProperty::microMajor:
-        MicroMajor = eeprom_read_byte(&EramMicroMajor);
-        sendProperty(property, MicroMajor);
+    case FieldDeviceProperty::laser2On:
+        Laser2OperateFlag = eeprom_read_byte(&EramLaser2OperateFlag);
+        sendProperty(property, Laser2OperateFlag);
         break;
-    case FieldDeviceProperty::microMinor:
-        MicroMinor = eeprom_read_byte(&EramMicroMinor);
-        sendProperty(property, MicroMinor);
+    case FieldDeviceProperty::lightTripLevel:
+        UserLightTripLevel = eeprom_read_byte(&EramUserLightTripLevel);
+        sendProperty(property, UserLightTripLevel);
         break;
     }
 }

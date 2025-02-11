@@ -114,15 +114,15 @@
 #define SPEED_SCALE_MAX 0      // 30 // Higher speed requires a lower value of SpeedScale
 #define NBR_RND_MIN 0
 #define NBR_RND_MAX 255
-#define TILT_SEP_MIN 1
-#define TILT_SEP_MAX 30
+#define TILT_SEP_MIN 3
+#define TILT_SEP_MAX 20
 // #define MAX_LASER_POWER 255
 #define PROGMODE_EXTRA_LASERPOWER 20
 #define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
-#define LASER_HT_MIN 40 // Decimetres.  ie 40 decimetres = 4m
-#define LASER_HT_MAX 60
+#define LASER_HT_MIN 0 // Decimetres.  ie 40 decimetres = 4m
+#define LASER_HT_MAX 100
 
 #define FST_STORE_PT_INDEX 128
 #define REPORT_VERTICES_DELAY 20

@@ -1,12 +1,8 @@
 
-#include <Arduino.h>
-// #include <map>
-// #include <type_traits>
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <avr/eeprom.h>
-// #include <EEPROM.h> //Arduino
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
@@ -19,9 +15,6 @@
 #include <string.h>
 #include <MCP4725.h> //20240625 https://github.com/RobTillaart/MCP4725
 #include <Wire.h>
-// #include <wiringPiI2C.h>
-// #include "i2cmaster.h"
-// #include "vars_main.h"
 #include "FieldDeviceProperty.h"
 #include "shared_Vars.h"
 #include "pin_mappings.h"
@@ -191,7 +184,7 @@ uint8_t EEMEM EramFactoryLightTripLevel; // Factory Default light setting value.
 uint8_t FactoryLightTripLevel;
 
 uint8_t EramLightTriggerOperation; // 0=24hr. 1= Day Mode 2= Night Mode
-uint8_t LightTriggerOperation;
+uint8_t LightTriggerOperation;     //
 
 int LightLevel; // Holds the value of the ADC light sensor.  20250109.  This was long, changed to int.
 uint8_t LightSensorModeFlag;
@@ -270,7 +263,7 @@ union
 // uint16_t Frame_size;
 uint16_t ResetSeconds;
 bool received39;
-int Vertices[3][MAX_NBR_VERTICES]; // Columns: X, Y, Slope?
+int Vertices[3][MAX_NBR_VERTICES]; // Columns: X, Y, Slope?  Vertices for a single zone.
 // int Perimeter[2][MAX_NBR_PERIMETER_PTS];
 // uint8_t NbrPerimeterPts;
 int res[2]; // Global variables to be used in cartesian/polar conversions:Input and results.
@@ -1844,10 +1837,6 @@ void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
             maxTilt = y;
         }
     }
-    // if (minTilt < getTiltFromCart(MAX_RANGE))
-    //     minTilt = getTiltFromCart(MAX_RANGE);
-    // if (maxTilt > getTiltFromCart(MIN_RANGE))
-    //     maxTilt = getTiltFromCart(MIN_RANGE);
     int temp = getTiltFromCart(MAX_RANGE);
     minTilt = (minTilt < temp) ? temp : minTilt;
     temp = getTiltFromCart(MIN_RANGE);
@@ -2043,6 +2032,7 @@ uint16_t distance(int pt1[2], int pt2[2])
 #endif
     return dist;
 }
+
 bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, uint16_t nbrRungs, int minTilt, int maxTilt)
 {
 #ifdef WIGGLY_PTS
@@ -2118,11 +2108,13 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             CmdLaserOnFlag = true;
         }
         ind++;
+        if (ind == (MapCount[0][zn] - 1) * PATH_ZONE_LAPS)
+            ind = Nbr_Rnd_Pts; // This will cause the loop to be exited.
     }
-    else // The general autofill case
+    else // The general autofill case (as opposed to path_mode)
     {
 #ifdef GHOST
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind : %d,seg: %d, segPt: %d, MC0z-1: %d>", ind, seg, segPt, MapCount[0][zn] - 1);
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind: %d,seg: %d, segPt: %d, MC0z-1: %d>", ind, seg, segPt, MapCount[0][zn] - 1);
         uartPrint(debugMsg);
 #endif
         if (seg == 0 && segPt == 0) // 20250108.  Turn laser off if going to first vertex of a zone.  Should be off as a result of newPatt condition in any case
@@ -2242,6 +2234,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     if (RndNbr == 0)
                         RndNbr = 1;
                     tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep); // Argument is Cartesian offset from laser.  Get tilt angle for this.
+                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "rho: %d, rhoMin: %d, Tilt_Sep: %d", rhoMin + RndNbr * Tilt_Sep, rhoMin, Tilt_Sep);
+                    // uartPrint(debugMsg);
+                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RndNbr: %d, minTilt %d, tilt %d", RndNbr, minTilt, tilt);
+                    // uartPrint(debugMsg);
+
                     // 20250121
                     if (tilt < minTilt)
                     {
@@ -2330,8 +2327,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
         uartPrint(debugMsg);
 #endif
-        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
-        // uartPrint(debugMsg);
+// snprintf(debugMsg, DEBUG_MSG_LENGTH, "X: %d, Y: %d", X, Y);
+// uartPrint(debugMsg);
 #ifdef ISOLATED_BOARD
         AbsX = X;
         AbsY = Y;
@@ -2814,10 +2811,10 @@ void RunSweep(uint8_t zn)
             PatternRunning = PatType;
             printToBT(18, PatternRunning);
 
-#ifdef LOG_PRINT // GHOST
-                 // static uint8_t LastPatType;
-                 // if (LastPatType != PatType)
-            if (cnt == 0)
+#ifdef LOG_PRINT          // GHOST
+                          // static uint8_t LastPatType;
+                          // if (LastPatType != PatType)
+            if (cnt == 0) // 0th point of pattern
             {
                 snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
                 uartPrint(debugMsg);
@@ -3201,21 +3198,6 @@ uint8_t getLocationMode()
     // }
 }
 
-// uint8_t getTripodHeight() { return LaserHt; }    // LaserHt is stored in decimetres.  Eg LaserHt = 50 is 5.0m.
-// uint8_t getLineSeparation() { return Tilt_Sep; } // Tilt_Sep is metres (in Cartesian space)
-// uint8_t getLinesPerPattern() { return Nbr_Rnd_Pts; }
-// uint8_t getActiveMapZones() { return ActiveMapZones; }
-// uint8_t getActivePatterns() { return ActivePatterns; }
-// uint8_t getMaxLaserPower() { return MaxLaserPower; }
-// uint8_t getUserLaserPower() { return UserLaserPower; }
-// uint8_t getCurrentLaserPower() { return LaserPower; }
-// uint8_t getLaserTemperature() { return LaserTemperature; } // void GetLaserTemperature() assigns a value to global uint8_t LaserTemperature
-uint8_t getRandomizeSpeed() { return 0; } // TJ: I don't know what this is supposed to do.
-// uint8_t getSpeedScale() {return SpeedScale;}
-// uint8_t getLightSensorReading() { return LightLevel; } // LightLevel is a long.  This needs to be investigated further.
-
-// Property send functions
-
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
     // snprintf(debugMsg, DEBUG_MSG_LENGTH, "args to sendProp. Prop: %d, val: %d", property, value);
@@ -3230,6 +3212,7 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
 {
     // snprintf(debugMsg, DEBUG_MSG_LENGTH, "arg to hGPR %d", property);
     // uartPrint(debugMsg);
+    uint8_t prop = 0; // Where the
     switch (property)
     {
     case FieldDeviceProperty::batteryVoltAdc:
@@ -3245,13 +3228,16 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, getLocationMode());
         break;
     case FieldDeviceProperty::tripodHeight:
-        sendProperty(property, LaserHt);
+        prop = ReScaleNewApp(LaserHt, 0, LASER_HT_MAX - LASER_HT_MIN, LASER_HT_MIN, LASER_HT_MAX, false); // Get proportion from actual line separation.
+        sendProperty(property, prop);
         break;
     case FieldDeviceProperty::lineSeparation:
-        sendProperty(property, Tilt_Sep);
+        prop = ReScaleNewApp(Tilt_Sep, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, false); // Get proportion from actual line separation.
+        sendProperty(property, prop);                                                                              //
         break;
     case FieldDeviceProperty::linesPerPattern:
-        sendProperty(property, Nbr_Rnd_Pts);
+        prop = ReScaleNewApp(Nbr_Rnd_Pts, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, false); // Get proportion from actual line separation.
+        sendProperty(property, prop);
         break;
     case FieldDeviceProperty::activeMapZones:
         sendProperty(property, ActiveMapZones);
@@ -3260,10 +3246,12 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, ActivePatterns);
         break;
     case FieldDeviceProperty::maxLaserPower:
-        sendProperty(property, MaxLaserPower);
+        prop = ReScaleNewApp(MaxLaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, false);
+        sendProperty(property, prop);
         break;
     case FieldDeviceProperty::userLaserPower:
-        sendProperty(property, UserLaserPower);
+        prop = ReScaleNewApp(UserLaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false);
+        sendProperty(property, prop);
         break;
     case FieldDeviceProperty::currentLaserPower:
         sendProperty(property, LaserPower);
@@ -3275,7 +3263,9 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, 0);
         break;
     case FieldDeviceProperty::speedScale:
-        sendProperty(property, SpeedScale);
+        // prop = ReScaleNewApp(SpeedScale, NBR_RND_MIN, NBR_RND_MAX, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, false);
+        // SpeedScale is stored as (0:100).
+        sendProperty(property, 100 - SpeedScale);
         break;
     case FieldDeviceProperty::lightSensorReading:
         sendProperty(property, LightLevel);
@@ -3289,6 +3279,11 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
     case FieldDeviceProperty::currentPatternRunning:
         sendProperty(property, PatternRunning);
         break;
+    case FieldDeviceProperty::laserID:
+        LaserID = eeprom_read_word(&EramLaserID);
+        sendProperty(property, LaserID);
+        break;
+
     case FieldDeviceProperty::microMajor:
         MicroMajor = eeprom_read_byte(&EramMicroMajor);
         sendProperty(property, MicroMajor);

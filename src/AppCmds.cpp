@@ -1,4 +1,3 @@
-#include <Arduino.h>
 
 #ifdef xNEW_APP
 #include "FieldDeviceProperty.h"
@@ -8,7 +7,6 @@
 #include "pin_mappings.h"
 #include "AppCmds.h"
 #include "const.h"
-// #include <Arduino.h>
 #include <util/delay.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +42,38 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
     return static_cast<uint16_t>(r);
+}
+
+uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut = true)
+{ // oldMin/oldMax should be the limits in the new app.  newMin/newMax are limits in firmware.  So, for example, for tilt_sep, 1/255 are new limits.
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args1: val %ld, oldMin %ld, oldMax %ld, inOut %u", val, oldMin, oldMax, inOut);
+    uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args2: newMin %ld, newMax %ld", newMin, newMax);
+    uartPrint(debugMsg);
+
+    float ratio = 0.0;
+    float r = 0.0;
+    if (inOut)
+    {
+        if (val < oldMin)
+            val = oldMin;
+        if (val > oldMax)
+            val = oldMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(oldMin)) / (static_cast<float>(oldMax) - static_cast<float>(oldMin));
+        r = ratio * (static_cast<float>(newMax) - static_cast<float>(newMin)) + static_cast<float>(newMin);
+    }
+    else
+    {
+        if (val < newMin)
+            val = newMin;
+        if (val > newMax)
+            val = newMax;
+        ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
+        r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
+    }
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA res: %d", static_cast<uint16_t>(r));
+    uartPrint(debugMsg);
+    return static_cast<uint16_t>(r + 0.5);
 }
 
 #ifndef NEW_APP
@@ -439,15 +469,6 @@ void Cmd1()
 {
     // Incoming value 0-100.. This value is a percentage of how many % the user wants laser dimmer than the max laser power
     uint8_t LP = 0;
-    // if (Instruction > MaxLaserPower)  //20250126. Replace with scaling relative to MaxLaserPower.
-    //     LP = MaxLaserPower;
-    // else
-    //     LP = Instruction;
-    // eeprom_update_byte(&EramUserLaserPower, LP);
-    // UserLaserPower = LP;
-    // 20250126.  Slider in old app has android:rotation= "270".  Whether it's this or something else, with the expected call:
-    // uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX,0, MaxLaserPower,  true);
-    // Behaviour is inverted.  I've fixed it here by reversing the order of MaxLaserPower and 0.
     uint16_t NewInstruction = ReScale(Instruction, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
     eeprom_update_byte(&EramUserLaserPower, static_cast<uint8_t>(NewInstruction));
     UserLaserPower = NewInstruction;
@@ -984,15 +1005,6 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
     }
 }
 
-uint8_t applyRatio(uint8_t minVal, uint8_t maxVal, uint8_t prop)
-{
-    long num = 0;
-    float r = 0.0;
-    num = prop * maxVal + (APP_SLIDER_MAX - prop) * minVal; // APP_SLIDER_MAX maybe 100 or 255.  Allow for that with this function.
-    r = static_cast<float>(num) / static_cast<float>(maxVal - minVal);
-    return static_cast<uint8_t>(r);
-}
-
 void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
 {
     uint8_t newValue = 0;
@@ -1022,28 +1034,31 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         // Do nothing
         break;
     case FieldDeviceProperty::tripodHeight:
+        newValue = ReScaleNewApp(value, 0, 20, LASER_HT_MIN, LASER_HT_MAX, true);
         currentValue = eeprom_read_byte(&EramLaserHt);
-        if (value != currentValue)
+        if (newValue != currentValue)
         {
-            eeprom_update_byte(&EramLaserHt, value);
+            eeprom_update_byte(&EramLaserHt, newValue);
         }
-        LaserHt = value;
+        LaserHt = newValue;
         break;
     case FieldDeviceProperty::lineSeparation:
+        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, TILT_SEP_MIN, TILT_SEP_MAX, true);
         currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
-        if (value != currentValue)
+        if (newValue != currentValue)
         {
             eeprom_update_byte(&Eram_Tilt_Sep, value);
         }
-        LaserHt = value;
+        Tilt_Sep = newValue;
         break;
     case FieldDeviceProperty::linesPerPattern:
+        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, NBR_RND_MIN, NBR_RND_MAX, true);
         currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
-        if (value != currentValue)
+        if (newValue != currentValue)
         {
             eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
         }
-        Nbr_Rnd_Pts = value;
+        Nbr_Rnd_Pts = newValue;
         break;
     case FieldDeviceProperty::activeMapZones:
         currentValue = eeprom_read_byte(&EramActiveMapZones);
@@ -1063,10 +1078,17 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         ActivePatterns = value;
         break;
     case FieldDeviceProperty::maxLaserPower:
-        MaxLaserPower = applyRatio(0, 255, value);
+        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
+        currentValue = eeprom_read_byte(&EramMaxLaserPower);
+        if (newValue != currentValue)
+        {
+            eeprom_update_byte(&EramMaxLaserPower, value);
+        }
+        MaxLaserPower = newValue;
         break;
     case FieldDeviceProperty::userLaserPower:
-        UserLaserPower = applyRatio(0, MaxLaserPower, value);
+        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
+        UserLaserPower = newValue;
         break;
     case FieldDeviceProperty::currentLaserPower:
         setProperty(property, CANT_SET_PROPERTY);
@@ -1078,12 +1100,11 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::speedScale:
-        newValue = applyRatio(0, 100, value);
-        newValue = ReScale(newValue, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, SPEED_SCALE_MIN, SPEED_SCALE_MAX, true);
+        newValue = 100 - value;
         currentValue = eeprom_read_byte(&EramSpeedScale);
         if (newValue != currentValue)
         {
-            eeprom_update_byte(&EramSpeedScale, value);
+            eeprom_update_byte(&EramSpeedScale, newValue);
         }
         SpeedScale = newValue;
         break;
@@ -1117,6 +1138,14 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         break;
     case FieldDeviceProperty::currentPatternRunning:
         setProperty(property, CANT_SET_PROPERTY);
+        break;
+    case FieldDeviceProperty::laserID:
+        currentValue = eeprom_read_word(&EramLaserID);
+        if (value != currentValue)
+        {
+            eeprom_update_word(&EramLaserID, value);
+        }
+        LaserID = value;
         break;
     case FieldDeviceProperty::microMajor:
         currentValue = eeprom_read_byte(&EramMicroMajor);

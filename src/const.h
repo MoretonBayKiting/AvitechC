@@ -37,7 +37,7 @@
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 
-#define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
+// #define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
 #define HIGH_JOG_POS 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
 #define LOW_JOG_POS 18
 #define MIN_PERIMETER_TILT 2 // Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
@@ -92,7 +92,7 @@
 #define BAUD 9600                    // 57600  //Baud rate for HC-05
 #define MYUBRR F_CPU / 16 / BAUD - 1 // The formula for calculating the UBRR value is given in the AVR datasheet:
 #define DEBUG_MSG_LENGTH 60
-#define BUFFER_SIZE 24 // 20240924
+#define BUFFER_SIZE 24 // 20240924 // 20250211 - this is defined, to be 100, earlier in this file.  Surely 24 is enough for <Command:Instruction>?
 // 20240624 Constants to be used for i2c (MCP4725 DAC)
 #define TW_START_TRANSMITTED 0x08
 #define TW_REP_START_TRANSMITTED 0x10
@@ -136,6 +136,6 @@
 #define WATCHDOG_DELAY 5000
 #define ISOLATED_BOARD_DELAY 250
 #define INTER_RUNG_SPEED 70
-#define APP_SLIDER_MAX 255
+#define APP_SLIDER_MAX 100
 #define AVR_SLIDER_MAX 100
-#define PATH_ZONE_REPEATS 4
+#define PATH_ZONE_LAPS 4

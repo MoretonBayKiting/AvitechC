@@ -3,6 +3,7 @@
 // be better to simply get rid of AppCmds.c.  But the BASCOM structure has been maintained.
 #include "FieldDeviceProperty.h"
 #include "const.h"
+#include <Arduino.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <avr/eeprom.h>
@@ -34,7 +35,7 @@
 // #define NEW_APP // Replace #ifdef NEW_APP with #ifdef xNEW_APP.  Keep #ifndef NEW_APP.  So all will be compiled.
 //   #ifndef xNEW_APP around duplicate or other stuff that needs to be removed.
 #define xNEW_APP
-#define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
+// #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
@@ -44,6 +45,7 @@
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
 #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
+// 20250211. PrintEramVars() refactored to use PROGMEM.  Flash not at >90% but RAM is fine (64.5%).
 // #define TEST_FDP //FieldDeviceProperty
 // #define TEST_CONVEX
 // #define DEBUG
@@ -212,4 +214,5 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 uint8_t GetZVal(uint8_t i);
 int GetXVal(uint8_t i);
 int GetYVal(uint8_t i);
+uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut = true);
 #endif // SHARED_VARS_H

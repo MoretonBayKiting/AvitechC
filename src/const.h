@@ -33,13 +33,13 @@
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
 
 #define MAX_RANGE 400 // Maximum range from laser to target.
-#define MIN_RANGE 30  // Minimum range from laser to target.
+#define MIN_RANGE 20  // 20250212: 30   // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 
 // #define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
-#define HIGH_JOG_POS 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
-#define LOW_JOG_POS 18
+#define HIGH_JOG_POS 1000    // 20250212: 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 3        // 20250212: 18
 #define MIN_PERIMETER_TILT 2 // Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
 #define FIXED_PAN_DIFF 200   // Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50   // Steps between dense perimeter points on tilt only (ie constant pan) boundary segment
@@ -50,8 +50,8 @@
 // #define NBR_RND_PTS 30 // Some arbitrary number of randomly selected perimeter points to traverse before the next pattern.
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
-#define DEF_MAX_LASER_POWER 120
-#define MAX_LASER_VALUE 4095 // 20240625: Use this for testing - may not be used after that.
+#define DEF_MAX_LASER_POWER 140 // 20250212: 120
+#define MAX_LASER_VALUE 4095    // 20240625: Use this for testing - may not be used after that.
 #define DEF_LASER_2_TEMP_TRIP 50
 #define DEF_LASER_2_BATT_TRIP 102
 #define DEF_LASER_2_OPERATE_FLAG 0
@@ -117,8 +117,8 @@
 #define TILT_SEP_MIN 3
 #define TILT_SEP_MAX 20
 // #define MAX_LASER_POWER 255
-#define PROGMODE_EXTRA_LASERPOWER 20
-#define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
+#define PROGMODE_EXTRA_LASERPOWER 25 // 20250212: 20
+#define PAN_SEP 100                  // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
 #define LASER_HT_MIN 0 // Decimetres.  ie 40 decimetres = 4m

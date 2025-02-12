@@ -48,7 +48,7 @@ int AbsY = 0;           // Y absolute position from home position
 // uint16_t isolated_board_factor = 1;
 // #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
-bool audioOn = false; //
+bool audioOn = true;  //
 int Dy;               // Used to calulate how many steps required on Y axis from last position
 int Dx;               // Used to calulate how many steps required on X axis from last position
 
@@ -320,7 +320,7 @@ void Audio2(uint8_t cnt, uint8_t OnPd, uint8_t OffPd, const char *debugInfo); //
 void Audio3();
 void uartPrintFlash(const __FlashStringHelper *message);
 #ifndef SAVE_RAM
-void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c = 0, uint8_t d = 0);
+void printPerimeterStuff(const char *prefix, int a, int b); //, uint8_t c = 0, uint8_t d = 0);
 #endif
 void StopSystem();
 #ifdef WATCHDOG
@@ -1855,10 +1855,11 @@ int GetPanPolar(int TiltPolar, int PanCart)
     return PAN_STEPS_PER_RAD * PanCart / rho;
 }
 #ifndef SAVE_RAM
-void printPerimeterStuff(const char *prefix, int a, int b, uint8_t c, uint8_t d)
+void printPerimeterStuff(const char *prefix, int a, int b) //, uint8_t c, uint8_t d)
 {
     // Using sprintf for safer string formatting and concatenation
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d)", prefix, a, b);
     uartPrint(debugMsg);
     _delay_ms(30);
 }

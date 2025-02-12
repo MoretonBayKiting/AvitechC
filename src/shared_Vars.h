@@ -24,25 +24,25 @@
 // #define TUNE_SPEED
 #define ADAPTIVELY_BRIGHT // If set, laser brightness responds to ambient light levels
 #ifdef ADAPTIVELY_BRIGHT
-#define LOW_BRIGHT 100
+#define LOW_BRIGHT 150 // 20250212: 100
 #define MED_BRIGHT 240
-#define LOW_BRIGHT_LASER_PERCENTAGE 62
-#define MED_BRIGHT_LASER_PERCENTAGE 88
+#define LOW_BRIGHT_LASER_PERCENTAGE 60 // 20250212: 62
+#define MED_BRIGHT_LASER_PERCENTAGE 87 // 20250212: 88
 #endif
 
 #define PULSING
 #ifdef PULSING
-#define PULSING_CONTINUOUS_PROPORTION 25 // 75 indicates 75% of the time is continuous
-#define PULSING_CONTINUOUS_PERIOD 120    // In tick units (50ms) continuous operation.  So 120 ticks is 6 seconds.
-#define PULSING_ON_PERIOD 10             // in tick units
+#define PULSING_CONTINUOUS_PROPORTION 67 // 20250212: 25 // 75 indicates 75% of the time is continuous
+#define PULSING_CONTINUOUS_PERIOD 800    // 20250212: 120  // In tick units (50ms) continuous operation.  So 120 ticks is 6 seconds.
+#define PULSING_ON_PERIOD 12             // 20250212: 10 // in tick units
 #define PULSING_OFF_PERIOD 5             // in tick units
 #endif
 
 #define RANDOMIZE_SPEED
 #ifdef RANDOMIZE_SPEED
-#define RANDOMIZE_SPEED_PERIOD 20 // Number of ticks for each random period
-#define RANDOMIZE_SPEED_MIN_PERC 50
-#define RANDOMIZE_SPEED_MAX_PERC 150
+#define RANDOMIZE_SPEED_PERIOD 60    // 20250212: 20 // Number of ticks for each random period
+#define RANDOMIZE_SPEED_MIN_PERC 40  // 20250212: 50
+#define RANDOMIZE_SPEED_MAX_PERC 140 // 20250212: 150
 #endif
 // #define BASE_PRINT
 #define LOG_PRINT

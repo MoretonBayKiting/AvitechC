@@ -195,6 +195,14 @@ void DecodeCommsData()
     case 49:
         Cmd49();
         break; // Rho_Max;
+    case 50:
+        AdaptivelyBright = Instruction;
+        if (Instruction != eeprom_read_byte(&EramAdaptivelyBright))
+            ;
+        {
+            eeprom_update_byte(&EramAdaptivelyBright, Instruction);
+        }
+        break; // AdaptivelyBright;
     case 52:
         Cmd52();
         break; // Update ActivePatterns (in EEPROM)
@@ -1028,7 +1036,12 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         LightTriggerOperation = value;
         break;
     case FieldDeviceProperty::beamMode:
-        // Do nothing
+        currentValue = eeprom_read_byte(&EramBeamMode);
+        if (value != currentValue)
+        {
+            eeprom_update_byte(&EramBeamMode, value);
+        }
+        BeamMode = value;
         break;
     case FieldDeviceProperty::locationMode:
         // Do nothing

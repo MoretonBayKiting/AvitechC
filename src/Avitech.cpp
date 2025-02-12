@@ -77,12 +77,12 @@ uint8_t OnTicks = 0;
 uint8_t OffTicks = 0;
 uint8_t AudioLength = 0;
 uint8_t PrevAudioLength = 0; // For testing
-uint16_t TJTick;
-uint8_t Tick;       // Tick flag. 2Hz update time
-uint8_t AccelTick;  // Tick flag. 2Hz update time
-uint32_t Tod_tick;  // Tick for system time of day
-uint8_t BuzzerTick; // Tick flag. 2Hz update time
-uint8_t LaserTick;  // Tick flag. 20Hz update time
+uint16_t TJTick;             // 50ms update frequency. Never reset (uint16_t =>
+uint8_t Tick;                // Tick flag. 2Hz update time, resets every 2 seconds (4 cycles)
+uint8_t AccelTick;           // Tick flag. 2Hz update time
+uint32_t Tod_tick;           // Tick for system time of day
+uint8_t BuzzerTick;          // Tick flag. 2Hz update time
+uint8_t LaserTick;           // Tick flag. 20Hz update time
 
 uint8_t Command;      // Holds the Command value fron the RS232 comms string.See documentation on the Comms data string build
 uint16_t Instruction; // Holds the data value fron the RS232 comms string.See documentation on the Comms data string build
@@ -180,11 +180,17 @@ uint8_t LaserTemperature;
 uint8_t EEMEM EramUserLightTripLevel;
 uint8_t UserLightTripLevel;
 
+uint8_t EEMEM EramAdaptivelyBright;
+uint8_t AdaptivelyBright;
+
 uint8_t EEMEM EramFactoryLightTripLevel; // Factory Default light setting value. Laser need to go into Lightbox
 uint8_t FactoryLightTripLevel;
 
 uint8_t EramLightTriggerOperation; // 0=24hr. 1= Day Mode 2= Night Mode
 uint8_t LightTriggerOperation;     //
+
+uint8_t EramBeamMode; // 0=continuous; 1 = Pulsing (ref enum BeamMode)
+uint8_t BeamMode;     //
 
 int LightLevel; // Holds the value of the ADC light sensor.  20250109.  This was long, changed to int.
 uint8_t LightSensorModeFlag;
@@ -934,6 +940,34 @@ void GetBatteryVoltage()
     }
 }
 
+#ifdef PULSING
+bool shouldLaserBeOn()
+{
+    // Calculate the total pulsing period (on + off)
+    uint16_t pulsingPeriodTicks = PULSING_ON_PERIOD + PULSING_OFF_PERIOD;
+    // Calculate the total cycle period (continuous + pulsing)
+    uint16_t totalCyclePeriodTicks = (PULSING_CONTINUOUS_PERIOD * 100) / PULSING_CONTINUOUS_PROPORTION;
+    // Determine the current position within the cycle
+    uint16_t currentTickInCycle = TJTick % totalCyclePeriodTicks;
+    // Determine if we are in the continuous period
+    if (currentTickInCycle < PULSING_CONTINUOUS_PERIOD)
+    {
+        return true; // Laser should be on during the continuous period
+    }
+    // Determine the current position within the pulsing period
+    uint16_t currentTickInPulsingPeriod = currentTickInCycle - PULSING_CONTINUOUS_PERIOD;
+    // Determine the current position within the pulse cycle (on + off)
+    uint16_t currentTickInPulseCycle = currentTickInPulsingPeriod % pulsingPeriodTicks;
+    // Determine if we are in the pulsing on period
+    if (currentTickInPulseCycle < PULSING_ON_PERIOD)
+    {
+        return true; // Laser should be on during the pulsing on period
+    }
+    // Laser should be off during the pulsing off period
+    return false;
+}
+#endif
+
 void SetLaserVoltage(uint16_t voltage)
 {
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);
@@ -956,6 +990,13 @@ void SetLaserVoltage(uint16_t voltage)
         GetBatteryVoltage();
         BatteryTick = 0;
     }
+#ifdef PULSING
+    if (BeamMode)
+    {
+        if (!shouldLaserBeOn())
+            thisVoltage = 0;
+    }
+#endif
     DAC.setValue(thisVoltage);
     prevVoltage = thisVoltage;
 }
@@ -1251,12 +1292,15 @@ void GetLightLevel()
 uint8_t adaptiveLaserPower()
 {
 #ifdef ADAPTIVELY_BRIGHT
-    if (LightLevel < LOW_BRIGHT)
-        return LOW_BRIGHT_LASER_PERCENTAGE;
-    else if (LightLevel < MED_BRIGHT)
-        return MED_BRIGHT_LASER_PERCENTAGE;
-    else
-        return 100;
+    if (AdaptivelyBright)
+    {
+        if (LightLevel < LOW_BRIGHT)
+            return LOW_BRIGHT_LASER_PERCENTAGE;
+        else if (LightLevel < MED_BRIGHT)
+            return MED_BRIGHT_LASER_PERCENTAGE;
+        else
+            return 100;
+    }
 #endif
 #ifndef ADAPTIVELY_BRIGHT
     return 100;
@@ -3175,14 +3219,13 @@ uint8_t getTimeMode()
 }
 uint8_t getBeamMode()
 {
-    return static_cast<uint8_t>(BeamMode::continuous);
-    // switch (????)
-    // {
-    // case 0:
-    //     return static_cast<uint8_t>(BeamMode::continuous);
-    // case 1:
-    //     return static_cast<uint8_t>(BeamMode::continuousPulsing);
-    // }
+    switch (BeamMode)
+    {
+    case 0:
+        return static_cast<uint8_t>(BeamMode::continuous);
+    case 1:
+        return static_cast<uint8_t>(BeamMode::continuousPulsing);
+    }
 }
 uint8_t getLocationMode()
 {
@@ -3325,6 +3368,7 @@ void testWatchDog(uint8_t indicator)
     }
 }
 #endif
+
 void setup()
 {
     // wdt_disable();  //Moved to main().

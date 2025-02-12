@@ -29,6 +29,14 @@
 #define LOW_BRIGHT_LASER_PERCENTAGE 62
 #define MED_BRIGHT_LASER_PERCENTAGE 88
 #endif
+
+#define PULSING
+#ifdef PULSING
+#define PULSING_CONTINUOUS_PROPORTION 25 // 75 indicates 75% of the time is continuous
+#define PULSING_CONTINUOUS_PERIOD 120    // In tick units (50ms) continuous operation.  So 120 ticks is 6 seconds.
+#define PULSING_ON_PERIOD 10             // in tick units
+#define PULSING_OFF_PERIOD 5             // in tick units
+#endif
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT
@@ -112,6 +120,8 @@ extern uint8_t EramUserLightTripLevel;
 extern uint8_t UserLightTripLevel;
 extern uint8_t EramLightTriggerOperation;
 extern uint8_t LightTriggerOperation;
+extern uint8_t EramBeamMode;
+extern uint8_t BeamMode;
 extern uint8_t EramFactoryLightTripLevel;
 extern uint8_t FactoryLightTripLevel;
 extern float VoltPerStep;
@@ -125,6 +135,8 @@ extern uint8_t MicroMinor;
 extern uint8_t EEMEM EramMicroMinor;
 extern uint32_t JM_n;
 extern uint32_t MM_n;
+extern uint8_t AdaptivelyBright;
+extern uint8_t EramAdaptivelyBright;
 
 // Declare the EramPos struct
 

@@ -2635,6 +2635,23 @@ void JogMotors() // 20250107  Add and explicit stop call
     }
     JogFlag = 0;
 }
+
+#ifdef RANDOMIZE_SPEED
+uint8_t getRandomPercentage()
+{
+    static uint16_t lastRandomizeTick = 0;
+    static uint8_t randomPercentage = 100; // Initialize with 100% (no change)
+
+    // Check if it's time to generate a new random percentage
+    if ((TJTick - lastRandomizeTick) >= RANDOMIZE_SPEED_PERIOD)
+    {
+        lastRandomizeTick = TJTick;
+        randomPercentage = RANDOMIZE_SPEED_MIN_PERC + rand() % (RANDOMIZE_SPEED_MAX_PERC - RANDOMIZE_SPEED_MIN_PERC + 1);
+    }
+
+    return randomPercentage;
+}
+#endif
 uint16_t CalcSpeed(bool fst)
 {
     uint16_t s = 0;
@@ -2659,6 +2676,11 @@ uint16_t CalcSpeed(bool fst)
             // uartPrint(debugMsg);
         }
         s = static_cast<uint16_t>((static_cast<float>(s) * SpeedScale) / 100.0);
+#ifdef RANDOMIZE_SPEED
+        // Apply randomization
+        uint8_t randomPercentage = getRandomPercentage();
+        s = static_cast<uint16_t>((static_cast<float>(s) * randomPercentage) / 100.0);
+#endif
         if (s < Step_Rate_Max)
             s = Step_Rate_Max; // 20241204: Ensure that the speed is not too high.
         if (s > Step_Rate_Min)

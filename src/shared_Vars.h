@@ -37,6 +37,13 @@
 #define PULSING_ON_PERIOD 10             // in tick units
 #define PULSING_OFF_PERIOD 5             // in tick units
 #endif
+
+#define RANDOMIZE_SPEED
+#ifdef RANDOMIZE_SPEED
+#define RANDOMIZE_SPEED_PERIOD 20 // Number of ticks for each random period
+#define RANDOMIZE_SPEED_MIN_PERC 50
+#define RANDOMIZE_SPEED_MAX_PERC 150
+#endif
 // #define BASE_PRINT
 #define LOG_PRINT
 // #define JOG_PRINT

@@ -2455,6 +2455,29 @@ void ProcessCoordinates()
     }
 }
 
+void testLimitSwitch(uint8_t cnter, bool doPrint = false, int8_t axis = -1)
+{
+#ifdef TEST_LIMIT_SWITCH
+    static bool panS = false;
+    static bool tiltS = false;
+    static uint8_t lastCnter = 0;
+    bool currentPanS = (PINB & (1 << PAN_STOP));
+    bool currentTiltS = (PINB & (1 << TILT_STOP));
+
+    if ((tiltS != currentTiltS) || (panS != currentPanS) || (lastCnter != cnter) || doPrint)
+    {
+        panS = currentPanS;
+        tiltS = currentTiltS;
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "Ps: %d, Ts: %d, id: %u, ax: %d, AX: %d, AY: %d", currentPanS, currentTiltS, cnter, axis, AbsX, AbsY);
+        uartPrint(debugMsg);
+    }
+    lastCnter = cnter;
+#endif
+#ifndef TEST_LIMIT_SWITCH
+    return;
+#endif
+}
+
 void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
 {
     if (axis == 0)
@@ -2475,6 +2498,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
 // MoveMotor() is only called with waitUntilStop = 0 by HomeMotor() - ie when unit searching for limit switch (both pan & tilt separately)
 #ifdef xISOLATED_BOARD
         DoHouseKeeping();
+
 #endif
         while (SteppingStatus == 1)
         {
@@ -2494,6 +2518,7 @@ void MoveMotor(uint8_t axis, int steps, uint8_t waitUntilStop)
             cnt++;
 #endif
             DoHouseKeeping();
+            testLimitSwitch(2, false, axis);
             // do nothing while motor moves.  SteppingStatus is set to 0 at end of stepper ISR when StepCount !>0 (==0).
         }
     }
@@ -2698,22 +2723,23 @@ uint16_t CalcSpeed(bool fst)
 
 void HomeMotor(uint8_t axis, int steps)
 { // Move specified motor until it reaches the relevant limit switch.
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "HM. axis:  %d,steps:  %d", axis, steps);
-    // uartPrint(debugMsg);
-
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "HM. axis:  %d,steps:  %d", axis, steps);
+    uartPrint(debugMsg);
+    testLimitSwitch(6, true, axis);
     MoveMotor(axis, steps, 0);
     setupTimer1(); // 20240614 This added.  Shouldn't be necessary.
 
     // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
-    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LSs: P: %d, T: %d", (PINB & (1 << PAN_STOP)), (PINB & (1 << TILT_STOP)));
+    uartPrint(debugMsg);
 #ifndef ISOLATED_BOARD
     if (axis == 0)
     {
         while (!(PINB & (1 << PAN_STOP)))
         { // While pan_stop pin is low do nothing while motor moves.
             // CheckTimer1(1, 10);
-            // uartPrintFlash(F("HM3\n"));
             DoHouseKeeping();
+            testLimitSwitch(4, false, 0);
         }
     }
     else
@@ -2721,7 +2747,7 @@ void HomeMotor(uint8_t axis, int steps)
         while (!(PINB & (1 << TILT_STOP)))
         { // While tilt_stop pin is low do nothing while motor moves.
             // CheckTimer1(2, 20);
-            // uartPrintFlash(F("HM4\n"));
+            testLimitSwitch(4, false, 1);
             DoHouseKeeping();
         }
     }
@@ -2784,21 +2810,28 @@ void NeutralAxis()
 void HomeAxis()
 {
     int Correctionstepping;
+    uartPrintFlash(F("Entering HomeAxis\n"));
+    testLimitSwitch(1, true, -1);
     setupTimer1();      // Probably not necessary.
     SetLaserVoltage(0); // Turn off laser
                         // *********PAN AXIS HOME****************
 #ifndef ISOLATED_BOARD
+    testLimitSwitch(9, true, 0);
     if ((PINB & (1 << PAN_STOP)))
     { // If pan_stop pin is high... "Move blade out of stop sensor at power up"
         // uartPrintFlash(F("Move from pan stop \n"));
+        testLimitSwitch(10, true, 0);
         MoveMotor(0, -300, 1);
     }
+    testLimitSwitch(3, true, -1);
 
     HomeMotor(0, 17000); // Pan motor to limit switch and set X and AbsX to 0 .
     // *********TILT AXIS HOME****************
+    testLimitSwitch(8, true, 0);
     if ((PINB & (1 << TILT_STOP)))
     { // If tilt_stop pin is high (ie at limit). "Move blade out of stop sensor at power up"
         // uartPrintFlash(F("Move from tilt stop \n"));
+        testLimitSwitch(11, true, 1);
         MoveMotor(1, 300, 1);
     }
 

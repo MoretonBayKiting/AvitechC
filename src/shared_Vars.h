@@ -51,6 +51,7 @@
 //   #ifndef xNEW_APP around duplicate or other stuff that needs to be removed.
 #define xNEW_APP
 // #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
+#define TEST_LIMIT_SWITCH
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100

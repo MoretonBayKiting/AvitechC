@@ -33,7 +33,7 @@
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
 
 #define MAX_RANGE 400 // Maximum range from laser to target.
-#define MIN_RANGE 30  // Minimum range from laser to target.
+#define MIN_RANGE 20  // 20250213 Was 30// Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 // #define  LASER_HT5.0 //Height of laser in metres.  Used for polar:cartesian conversions.
@@ -50,8 +50,8 @@
 // #define NBR_RND_PTS 30 // Some arbitrary number of randomly selected perimeter points to traverse before the next pattern.
 // Default values to put in EEPROM (written by LoadDefs.c)
 #define DEF_USER_LASER_POWER 100
-#define DEF_MAX_LASER_POWER 120
-#define MAX_LASER_VALUE 4095 // 20240625: Use this for testing - may not be used after that.
+#define DEF_MAX_LASER_POWER 140 // 20250213 Was 120
+#define MAX_LASER_VALUE 4095    // 20240625: Use this for testing - may not be used after that.
 #define DEF_LASER_2_TEMP_TRIP 50
 #define DEF_LASER_2_BATT_TRIP 102
 #define DEF_LASER_2_OPERATE_FLAG 0
@@ -115,8 +115,8 @@
 #define TILT_SEP_MIN 1
 #define TILT_SEP_MAX 30
 // #define MAX_LASER_POWER 255
-#define PROGMODE_EXTRA_LASERPOWER 20
-#define PAN_SEP 100 // 20241219: Pan separation (steps) between interpolated points on rungs.
+#define PROGMODE_EXTRA_LASERPOWER 25 // 20250213 Was 20
+#define PAN_SEP 100                  // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
 #define LASER_HT_MIN 40 // Decimetres.  ie 40 decimetres = 4m

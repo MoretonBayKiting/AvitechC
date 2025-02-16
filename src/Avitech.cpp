@@ -998,6 +998,10 @@ void SetLaserVoltage(uint16_t voltage)
     }
 #endif
     DAC.setValue(thisVoltage);
+
+    if (prevVoltage != thisVoltage)
+        sendProperty(currentLaserPower, thisVoltage);
+
     prevVoltage = thisVoltage;
 }
 
@@ -1807,10 +1811,10 @@ int getTiltFromCart(int rho)
     // float a = (float)LaserHt/((float)rho*10.0); //10.0 due to LaserHt being in decimetres, not metres.
     // float b = atan2(LaserHt,rho*10);
     float b = atan2(static_cast<float>(LaserHt), static_cast<float>(rho) * 10.0f); // 20241205 Arguments were reverse ordered.  Arguments also now cast to float.
-#ifdef GHOST
+#ifdef xGHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "rho %d, 100*b %d, LaserHt %d", rho, static_cast<int>(100 * b), LaserHt);
     uartPrint(debugMsg);
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "tilt:", static_cast<int>(b * TILT_STEPS_PER_RAD + 0.5));
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "tilt: %d", static_cast<int>(b * TILT_STEPS_PER_RAD + 0.5));
     uartPrint(debugMsg);
 #endif
     return static_cast<int>(b * TILT_STEPS_PER_RAD + 0.5); // rounding to the nearest integer before casting
@@ -1832,33 +1836,23 @@ int getNextTiltVal(int thisTilt, uint8_t dirn)
 void getCart(int p, int t, int (&thisres)[2])
 { // Take pan(t) and tilt(t) for a polar point and return the cartesian equivalent (thisres)
     int r = getCartFromTilt(t);
-    thisres[0] = r * cos(p / PAN_STEPS_PER_RAD); // 1st coord (x) is r at pan = 0 and 2nd coord (y) is zero.
-    thisres[1] = r * sin(p / PAN_STEPS_PER_RAD);
+    thisres[0] = r * cos((p - PAN_NEUTRAL) / PAN_STEPS_PER_RAD); // 20250214 - Allow for PAN_NEUTRAL // 1st coord (x) is r at pan = 0 and 2nd coord (y) is zero.
+    thisres[1] = r * sin((p - PAN_NEUTRAL) / PAN_STEPS_PER_RAD);
 }
 void getPolars(int c1, int c2, int thisRes[2])
 { // Take cartesian coordinates as input, return, via thisRes[2], polars.
     // 20241205 Change r from long to double.
     double r = sqrt(static_cast<double>(c1) * c1 + static_cast<double>(c2) * c2); // Get the distance from the laser to the point by Pythagoras.
-#ifdef xGHOST
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "c1 %d, c2 %d, r %d", c1, c2, static_cast<int>(r));
-    uartPrint(debugMsg);
-#endif
     // First argument of atan2 is opp, second is adj.  Ref https://cplusplus.com/reference/cmath/atan2/.
     double angle = atan2(static_cast<double>(c2), static_cast<double>(c1)); // Pan is atan(c2/c1).  atan2 assumes arguments are doubles.
     int temp = static_cast<int>(angle * PAN_STEPS_PER_RAD);                 // pan
-    thisRes[0] = temp;
-    thisRes[1] = getTiltFromCart(static_cast<int>(r)); // tilt.
+    thisRes[0] = temp + PAN_NEUTRAL;                                        // 20250214 - Allow for PAN_NEUTRAL
+    thisRes[1] = getTiltFromCart(static_cast<int>(r));                      // tilt.
 }
-int GetPanPolar(int TiltPolar, int PanCart)
-{ // Get the number of pan steps for a specified tilt angle (steps) and cartesian pan distance.
-    int rho = getCartFromTilt(TiltPolar);
-    return PAN_STEPS_PER_RAD * PanCart / rho;
-}
+
 #ifndef SAVE_RAM
 void printPerimeterStuff(const char *prefix, int a, int b) //, uint8_t c, uint8_t d)
 {
-    // Using sprintf for safer string formatting and concatenation
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d) :(%d,%d)", prefix, a, b, c, d);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "%s(%d, %d)", prefix, a, b);
     uartPrint(debugMsg);
     _delay_ms(30);
@@ -1919,7 +1913,7 @@ uint8_t getInterceptSegment(uint8_t nbrZnPts, int tilt, uint8_t fstInd)
             break;
         }
     }
-#ifdef GHOST
+#ifdef xGHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Tilt %d, i %d, fstInd %d, V1i %d, V1i+1 %d", tilt, i, fstInd, Vertices[1][i], Vertices[1][i + 1]);
     uartPrint(debugMsg);
 #endif
@@ -1951,8 +1945,10 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     int c1[2], c2[2];              // The cartesian end points.
     getCart(last[0], last[1], c1); // Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-#ifdef xGHOST
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d, c10: %d, c20: %d, c11: %d, c21: %d", num, den, last[0], last[1], nxt[0], nxt[1], c1[0], c2[0], c1[1], c2[1]);
+#ifdef GHOST
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d", num, den, last[0], last[1], nxt[0], nxt[1]);
+    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "c10: %d, c20: %d, c11: %d, c21: %d", c1[0], c2[0], c1[1], c2[1]);
     uartPrint(debugMsg);
 #endif
     uint32_t temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[0] - c1[0])); // 20241204: Changed to uint32_t from int. Though note sign() used below.
@@ -1960,12 +1956,12 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[1] - c1[1]));
     res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
 // Use the cartesian values stored in res and write the corresponding polar values to the same variable.
-#ifdef xGHOST
+#ifdef GHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
     getPolars(res[0], res[1], res);
-#ifdef xGHOST
+#ifdef GHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
@@ -1976,8 +1972,6 @@ void midPt(int tilt, uint8_t seg, int (&res)[2])
     // uint8_t ratio = 0;
     int den = 0;
     int num = abs(tilt - Vertices[1][seg]);
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH,"S0 %d, S1 %d, diff %d", Vertices[1][seg], Vertices[1][seg+1],abs(Vertices[1][seg]-Vertices[1][seg+1]));
-    // uartPrint(debugMsg);
     den = abs(Vertices[1][seg] - Vertices[1][seg + 1]);
     if (den > 0)
     {
@@ -2158,8 +2152,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     }
     else // The general autofill case (as opposed to path_mode)
     {
-#ifdef GHOST
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind: %d,seg: %d, segPt: %d, MC0z-1: %d>", ind, seg, segPt, MapCount[0][zn] - 1);
+#ifdef xGHOST
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind: %d,seg: %d, segPt: %d, MC0z-1: %d", ind, seg, segPt, MapCount[0][zn] - 1);
         uartPrint(debugMsg);
 #endif
         if (seg == 0 && segPt == 0) // 20250108.  Turn laser off if going to first vertex of a zone.  Should be off as a result of newPatt condition in any case
@@ -2225,6 +2219,11 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                         CartesianInterpolate(pt1, pt2, segPt, (nbrSegPts + 1), res);
                         X = res[0];
                         Y = res[1];
+                        // 20250214 Need to restrict Y (tilt). Using minTilt and maxTilt effectively restricts to polar boundaries!!!!
+                        if (Y < minTilt)
+                            Y = minTilt;
+                        if (Y > maxTilt)
+                            Y = maxTilt;
                     }
                     else
                     { // 20250109 May need to do something but not sure yet.
@@ -2287,21 +2286,21 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     // 20250121
                     if (tilt < minTilt)
                     {
-#ifdef GHOST
+#ifdef xGHOST
                         uartPrintFlash(F("minTilt err\n"));
 #endif
                         tilt = minTilt;
                     }
                     if (tilt > maxTilt)
                     {
-#ifdef GHOST
+#ifdef xGHOST
                         uartPrintFlash(F("maxTilt err\n"));
 #endif
                         tilt = maxTilt;
                     }
                     fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
                     sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
-#ifdef GHOST
+#ifdef xGHOST
                     snprintf(debugMsg, DEBUG_MSG_LENGTH, "rhoMin: %d, Rnd: %d, Tilt_Sep: %d>", rhoMin, RndNbr, Tilt_Sep);
                     uartPrint(debugMsg);
 #endif
@@ -2890,6 +2889,7 @@ void RunSweep(uint8_t zn)
     SetLaserVoltage(0); // 20240727.  Off while GetPerimeter() is being calculated.
     LoadZoneMap(zn);
     printToBT(17, zn + 1); // zn passed to RunSweep is zero based.  App needs 1 based.  0 will indicate that no zone is running.
+    sendProperty(currentZoneRunning, zn + 1);
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
 #ifdef GHOST
@@ -2910,13 +2910,14 @@ void RunSweep(uint8_t zn)
         {
             PatternRunning = PatType;
             printToBT(18, PatternRunning);
+            sendProperty(currentPatternRunning, PatternRunning);
 
 #ifdef LOG_PRINT          // GHOST
                           // static uint8_t LastPatType;
                           // if (LastPatType != PatType)
             if (cnt == 0) // 0th point of pattern
             {
-                snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Zone: %d Pattern: %d SpeedScale: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Z: %d P: %d SpeedS: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
                 uartPrint(debugMsg);
             }
 #endif
@@ -2981,7 +2982,8 @@ void RunSweep(uint8_t zn)
             cnt = 0;
             ind = 0;
         }
-        printToBT(18, 0);   // Set current pattern to zero
+        printToBT(18, 0); // Set current pattern to zero
+        sendProperty(currentPatternRunning, 0);
         SetLaserVoltage(0); // 20250108
         CmdLaserOnFlag = false;
     }
@@ -3299,11 +3301,7 @@ uint8_t getLocationMode()
 
 void sendProperty(FieldDeviceProperty property, uint8_t value)
 {
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "args to sendProp. Prop: %d, val: %d", property, value);
-    // uartPrint(debugMsg);
     uint16_t result = (static_cast<uint8_t>(property) << 8) | value;
-    // sprintf(debugMsg, "Result: %d", result);
-    // uartPrint(debugMsg);
     printToBT(PROPERTY_GET_CHANNEL, result);
 }
 
@@ -3350,7 +3348,8 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, prop);
         break;
     case FieldDeviceProperty::currentLaserPower:
-        sendProperty(property, LaserPower);
+        prop = ReScaleNewApp(LaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false);
+        sendProperty(property, prop);
         break;
     case FieldDeviceProperty::laserTemperature:
         sendProperty(property, LaserTemperature);
@@ -3534,7 +3533,8 @@ int main()
                         {
                             MapRunning = Zn;
                             RunSweep(Zn - 1);
-                            printToBT(17, 0);   // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
+                            printToBT(17, 0); // Set MapRunning to zero after RunSweep.  It will be reset in RunSweep if that is called again.
+                            sendProperty(currentZoneRunning, 0);
                             SetLaserVoltage(0); // Laser needs to be off between zones.
                         }
                     }

@@ -79,8 +79,6 @@ uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newM
 #ifndef NEW_APP
 void DecodeCommsData()
 {
-    // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
-    // uartPrint(debugMsg);
     if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
     {
         CmdStorePts(false);
@@ -244,8 +242,6 @@ void DecodeCommsData()
 #ifdef NEW_APP // 20250129 Moved into #ifndef NEW_APP version.
 void DecodeCommsData()
 {
-    // sprintf(debugMsg, "DCD Cmd: %d, inst: %d", Command, Instruction);
-    // uartPrint(debugMsg);
     if ((Command >= FST_STORE_PT_INDEX) && Command <= (FST_STORE_PT_INDEX + 3 * MAX_NBR_MAP_PTS))
     {
         CmdStorePts(false);
@@ -863,8 +859,6 @@ void Cmd59()
     // FieldDeviceProperty prop = static_cast<FieldDeviceProperty>(Instruction >> 8); // Upper 8 bits encode property
     uint8_t prop = Instruction >> 8; // Upper 8 bits encode property
     uint8_t value = Instruction & 0x00FF;
-    // sprintf(debugMsg, "Cmd59. Inst(04x): %04x, prop %d, value %d ", Instruction, static_cast<uint8_t>(prop), value);
-    // uartPrint(debugMsg);
     handleSetPropertyRequest(static_cast<FieldDeviceProperty>(prop), value);
 }
 
@@ -1128,8 +1122,6 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::deviceMode:
-        // sprintf(debugMsg, "hSPR deviceMode. Val: %d", value);
-        // uartPrint(debugMsg);
         switch (static_cast<FieldDeviceMode>(value))
         {
         case FieldDeviceMode::running:

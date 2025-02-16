@@ -31,7 +31,7 @@
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
-
+#define PAN_NEUTRAL -4000
 #define MAX_RANGE 400 // Maximum range from laser to target.
 #define MIN_RANGE 20  // 20250212: 30   // Minimum range from laser to target.
 

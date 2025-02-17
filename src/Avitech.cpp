@@ -2170,7 +2170,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             }
         }
         // First traverse the boundary.
-        if (seg < MapCount[0][zn]) // This conditional determines if the next point is on the boundary or a rung.
+        if (seg < MapCount[0][zn]) // This conditional determines if the next point is on the boundary or a rung. 20250217 - or indeed if there are any points in the zone?
         // if (seg < MapCount[0][zn] - 1) // Subtract 1 from limit.  Ref 20250201 and Debug0201A.txt in Avitech.rtf .
         { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
             if (segPt == 0)
@@ -2885,9 +2885,31 @@ void HomeAxis()
     IsHome = 1;
 }
 
+uint8_t maxZone() // Determine
+{
+    if (ActiveMapZones == 0)
+    {
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "maxZone: 0");
+        uartPrint(debugMsg);
+        return 0; // No active zones
+    }
+
+    for (int8_t zone = 3; zone >= 0; --zone)
+    {
+        if (ActiveMapZones & (1 << zone) && (MapCount[0][zone] > MIN_ZONE_PTS))
+        {
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "maxZone: %d", zone);
+            uartPrint(debugMsg);
+            return zone; // Return the highest active zone (0-based index)
+        }
+    }
+
+    return 0; // This should never be reached if ActiveMapZones is not zero
+}
 void RunSweep(uint8_t zn)
 {
-    uint8_t PatType, ind = 0; // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
+    static uint8_t PatType = 1; // 20250217 Make PatType static
+    uint8_t ind = 0;            // ind is incremented in getXY(), but only for rungs. So ind == 0 indicates being on the boundary.  It's used to count the number of rungs (and compare with Nbr_Rnd_Pts)
     int minTilt = 0, cnt = 0;
     int maxTilt = 0;
     int rhoMin = 0;
@@ -2905,7 +2927,7 @@ void RunSweep(uint8_t zn)
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "minTilt: %d, maxTilt: %d, rhoMin: %d", minTilt, maxTilt, rhoMin);
     uartPrint(debugMsg);
 #endif
-    for (PatType = 1; PatType <= 4; PatType++)
+    // for (PatType = 1; PatType <= 4; PatType++) // 20250217 loop differently.
     {
         if ((lastPatt != PatType) || (zn != lastZn)) // If the zone changes but only one pattern is selected, we want the next pass to be treated as a new pattern.
             newPatt = true;
@@ -2926,7 +2948,7 @@ void RunSweep(uint8_t zn)
                           // if (LastPatType != PatType)
             if (cnt == 0) // 0th point of pattern
             {
-                snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Z: %d P: %d SpeedS: %d Rungs: %d, X: %d, Y: %d", zn, PatType, SpeedScale, nbrRungs, X, Y);
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "RS. Z: %d, P: %d, Rungs: %d", zn, PatType, nbrRungs);
                 uartPrint(debugMsg);
             }
 #endif
@@ -2996,6 +3018,10 @@ void RunSweep(uint8_t zn)
         SetLaserVoltage(0); // 20250108
         CmdLaserOnFlag = false;
     }
+    if (zn == maxZone())
+        PatType++; // Reset PatType for next pass, which will be with first active zone.
+    if (PatType > 4)
+        PatType = 1;
     ResetTiming();
 }
 
@@ -3537,7 +3563,7 @@ int main()
                     }
                     if ((ActiveMapZones & (1 << (Zn - 1))) != 0)
                     {
-                        if (MapCount[0][Zn - 1] > 4) // MapCount index is zero based for zone - But corresponding index in app is 1 based.
+                        if (MapCount[0][Zn - 1] > MIN_ZONE_PTS) // MapCount index is zero based for zone - But corresponding index in app is 1 based.
                         // 20250120 Previously if (MapCount[0][Zn - 1] > 0).  But although zero based, MC[0][z] adds a repeated first point - so MC[0][z] is 1 when there are zero points.
                         {
                             MapRunning = Zn;

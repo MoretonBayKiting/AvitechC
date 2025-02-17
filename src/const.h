@@ -28,6 +28,7 @@
 #define NBR_ZONES 4
 #define MAX_NBR_VERTICES 15 // This is the maximum number of vertices per zone/map
 #define MAX_NBR_MAP_PTS 32  // This is the maximum overall number of vertices
+#define MIN_ZONE_PTS 4
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°

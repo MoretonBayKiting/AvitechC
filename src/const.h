@@ -13,8 +13,8 @@
 #define HOMING_SPEED 60          // 20240801 Should this be 100.  50 seems better.
 #define TILT_SLOW_STEP_RATE 2600 // 1500
 #define TILT_FAST_STEP_RATE 500  // 1500
-#define PAN_SLOW_STEP_RATE 1     // 400
-#define PAN_FAST_STEP_RATE 180   // 10
+#define PAN_SLOW_STEP_RATE 1500  // 400
+#define PAN_FAST_STEP_RATE 50    // 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -31,15 +31,18 @@
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.
 #define TILT_STEPS_PER_RAD 2052.0 // 36 * 57 (36 steps per degree and 57 radians per degree?)
 #define PAN_STEPS_PER_RAD 2546.0  // 20240803: 4000 steps for 90°
-#define PAN_NEUTRAL -4000
+#define PAN_STEPS_PER_360 16000   // Pan steps per 180°
+#define PAN_NEUTRAL -4000         // Could be -4000 to move bad spot to 270° which is the pole.
+#define PAN_MAX 3750
+#define PAN_MIN -11750
 #define MAX_RANGE 400 // Maximum range from laser to target.
 #define MIN_RANGE 20  // 20250212: 30   // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 
 // #define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
-#define HIGH_JOG_POS 1000    // 20250212: 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
-#define LOW_JOG_POS 3        // 20250212: 18
+#define HIGH_JOG_POS 100     // 1000    // 20250212: 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 10       // 3        // 20250212: 18
 #define MIN_PERIMETER_TILT 2 // Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
 #define FIXED_PAN_DIFF 200   // Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50   // Steps between dense perimeter points on tilt only (ie constant pan) boundary segment

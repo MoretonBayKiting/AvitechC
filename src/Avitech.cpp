@@ -2411,7 +2411,17 @@ void ProcessCoordinates()
 
     Dx = X - AbsX; // Distance to move
     Dy = Y - AbsY; // Distance to move
-
+    // Handle wrap-around for pan angle (Dx)
+    // if (Dx > 3 * PAN_STEPS_PER_RAD) // Disallow more than 180°  (more like 172°)
+    // {
+    //     X -= PAN_STEPS_PER_180;
+    //     Dx = X - AbsX;
+    // }
+    // else if (Dx < -3 * PAN_STEPS_PER_RAD)
+    // {
+    //     X += PAN_STEPS_PER_180;
+    //     Dx = X - AbsX;
+    // }
     if ((Dx == 0) && (Dy == 0))
     { // 20240623: Explicitly exclude this case.
         StepCount = 0;
@@ -2642,6 +2652,10 @@ void JogMotors() // 20250107  Add and explicit stop call
         if (axis == 0)
         {
             X = pos;
+            if (X > PAN_MAX)
+                X = PAN_MAX;
+            if (X < PAN_MIN)
+                X = PAN_MIN;
         }
         else
         {
@@ -2722,15 +2736,10 @@ uint16_t CalcSpeed(bool fst)
 
 void HomeMotor(uint8_t axis, int steps)
 { // Move specified motor until it reaches the relevant limit switch.
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "HM. axis:  %d,steps:  %d", axis, steps);
-    uartPrint(debugMsg);
     testLimitSwitch(6, true, axis);
     MoveMotor(axis, steps, 0);
     setupTimer1(); // 20240614 This added.  Shouldn't be necessary.
 
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Limit switches: P: %d, T: %d", (PINB & (1 << PAN_STOP)) != 0, (PINB & (1 << TILT_STOP)) != 0);
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "LSs: P: %d, T: %d", (PINB & (1 << PAN_STOP)), (PINB & (1 << TILT_STOP)));
-    uartPrint(debugMsg);
 #ifndef ISOLATED_BOARD
     if (axis == 0)
     {

@@ -30,6 +30,7 @@
 #define MED_BRIGHT_LASER_PERCENTAGE 87 // 20250212: 88
 #endif
 
+#define SMOOTH_SPEED
 #define PULSING
 #ifdef PULSING
 #define PULSING_CONTINUOUS_PROPORTION 67 // 20250212: 25 // 75 indicates 75% of the time is continuous
@@ -45,6 +46,7 @@
 #define RANDOMIZE_SPEED_MAX_PERC 140 // 20250212: 150
 #endif
 // #define BASE_PRINT
+#define FULLY_RESET_CONFIG
 #define LOG_PRINT
 // #define JOG_PRINT
 // #define NEW_APP // Replace #ifdef NEW_APP with #ifdef xNEW_APP.  Keep #ifndef NEW_APP.  So all will be compiled.
@@ -102,6 +104,7 @@ extern uint8_t BT_ConnectedFlag;
 extern uint8_t SendDataFlag;
 extern uint8_t SendSetupDataFlag;
 extern uint8_t EramFirstTimeOn;
+extern uint8_t FirstTimeOn;
 extern uint8_t SetupModeFlag;
 extern int LightLevel;
 extern uint8_t SendSetupDataFlag;
@@ -235,4 +238,6 @@ uint8_t GetZVal(uint8_t i);
 int GetXVal(uint8_t i);
 int GetYVal(uint8_t i);
 uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut = true);
+void clearEEPROM();
+void firstOn();
 #endif // SHARED_VARS_H

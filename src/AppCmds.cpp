@@ -418,6 +418,13 @@ void Cmd11()
     if (Instruction == 0b00000010)
     {
         eeprom_update_byte(&EramFirstTimeOn, 0xFF);
+        FirstTimeOn = 0xFF;
+#ifdef FULLY_RESET_CONFIG
+        uartPrint("Clear EEPROM");
+        clearEEPROM();
+        firstOn();
+        sendStatusData();
+#endif
         Audio2(1, 2, 0); //,"AC11:2");
     }
 

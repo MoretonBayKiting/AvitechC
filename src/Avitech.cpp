@@ -337,14 +337,7 @@ void setupPeripherals()
     // Configure the ADC
     ADMUX = (1 << REFS0);                                              // Use AVCC as the reference voltage
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Enable the ADC and set the prescaler to 128 (auto)
-
-    // #ifdef ISOLATED_BOARD
-    //     // Turn off the enable pins for the stepper motors
-    //     PORTD &= ~((1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN));
-    // #else
-    //     // Ensure the enable pins are on for normal operation
-    //     PORTD |= (1 << X_ENABLEPIN) | (1 << Y_ENABLEPIN);
-    // #endif
+    pinMode(LASER2, OUTPUT);
 }
 
 void setupWatchdog()
@@ -973,6 +966,7 @@ void SetLaserVoltage(uint16_t voltage)
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);
     static uint16_t prevVoltage = 0;
     uint16_t thisVoltage = voltage;
+    // LASER2 = Laser2OperateFlag;
     if ((voltage < 256) && (voltage > 2))
     { // If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
         thisVoltage = (voltage << 4);
@@ -997,6 +991,7 @@ void SetLaserVoltage(uint16_t voltage)
             thisVoltage = 0;
     }
 #endif
+    digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
     DAC.setValue(thisVoltage);
 
     if (prevVoltage != thisVoltage)
@@ -1005,6 +1000,16 @@ void SetLaserVoltage(uint16_t voltage)
     prevVoltage = thisVoltage;
 }
 
+void clearEEPROM()
+{
+    // Get the size of the EEPROM
+    uint16_t eepromSize = E2END + 1;
+    // Iterate through each address in the EEPROM
+    for (uint16_t i = 0; i < eepromSize; i++)
+    {
+        eeprom_update_byte((uint8_t *)i, 0xFF);
+    }
+}
 void firstOn()
 {
     uint8_t firstTimeOn = eeprom_read_byte(&EramFirstTimeOn);
@@ -1250,7 +1255,6 @@ void GetLightLevel()
 {
     // long X;
     long Ylocal;
-    // uartPrintFlash(F("Read ADC 2 "));
     LightLevel = readADC(2);
     // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SR2: %d", LightLevel);
     // uartPrint(debugMsg);
@@ -1291,6 +1295,10 @@ void GetLightLevel()
             LightSensorModeFlag = 1;
         }
     }
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "GLL1: LL: %d, ULTL: %d, LTO: %u, LSMF: %u", LightLevel, UserLightTripLevel, LightTriggerOperation, LightSensorModeFlag);
+    // uartPrint(debugMsg);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "GLL2: BTCF: %d, ToD: %d", BT_ConnectedFlag, Tod_tick);
+    // uartPrint(debugMsg);
 }
 
 uint8_t adaptiveLaserPower()
@@ -1418,7 +1426,7 @@ void ThrottleLaser()
             Laser2TempTripFlag = 0;
 
         if (Laser2TempTripFlag == 0 && Laser2BattTripFlag == 0)
-            Laser2StateFlag = 1;
+            Laser2StateFlag = 1; // 20250220: Laser2StateFlag is not used anywhere.
         else
             Laser2StateFlag = 0;
     }
@@ -2927,7 +2935,7 @@ void RunSweep(uint8_t zn)
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "minTilt: %d, maxTilt: %d, rhoMin: %d", minTilt, maxTilt, rhoMin);
     uartPrint(debugMsg);
 #endif
-    // for (PatType = 1; PatType <= 4; PatType++) // 20250217 loop differently.
+    // for (PatType = 1; PatType <= 4; PatType++) // 20250217 loop differently.  Change PatType outside what was inside this for block.
     {
         if ((lastPatt != PatType) || (zn != lastZn)) // If the zone changes but only one pattern is selected, we want the next pass to be treated as a new pattern.
             newPatt = true;
@@ -2935,8 +2943,9 @@ void RunSweep(uint8_t zn)
         {
             newPatt = false;
             lastPatt = PatType;
-            lastZn = zn;
+            // lastZn = zn;
         }
+        lastZn = zn;                             // 20250220 Move this outside the conditional to deal with different nesting of loops.
         if (ActivePatterns & (1 << PatType - 1)) // PatType runs from 1 to 4.  ActivePatterns stored in 4 least significant bits.
         {
             PatternRunning = PatType;
@@ -3038,7 +3047,7 @@ void TransmitData()
     Variables[5] = AbsX;            // 34
     Variables[6] = AbsY;            // 35
     Variables[7] = Accel_Z.Z_accel; // 36
-    Variables[8] = Tod_tick / 2;    // 37 Tod_tick increments every 500ms.  Should this be *2 rather than /2 to get seconds?
+    Variables[8] = Tod_tick / 2;    // 37 Tod_tick increments every 500ms.
     Variables[9] = BattVoltAvg;     // 38
     // Variables[10] = Hw_stack;
     // Variables[11] = Sw_stack;
@@ -3207,8 +3216,10 @@ void DoHouseKeeping()
 
     if (Tick > 4)
     {
+#ifndef SMOOTH_SPEED
         TransmitData();
         PrintAppData(); // 20241209.  Too much data in log.  Send on refresh.
+#endif
         GetLaserTemperature();
         GetLightLevel(); // 20250109.  Add this here for testing.
                          // #ifdef THROTTLE

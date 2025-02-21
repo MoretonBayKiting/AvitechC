@@ -190,7 +190,7 @@ uint8_t EramLightTriggerOperation; // 0=24hr. 1= Day Mode 2= Night Mode
 uint8_t LightTriggerOperation;     //
 
 uint8_t EramBeamMode; // 0=continuous; 1 = Pulsing (ref enum BeamMode)
-uint8_t BeamMode;     //
+uint8_t BeamMode = 0; //
 
 int LightLevel; // Holds the value of the ADC light sensor.  20250109.  This was long, changed to int.
 uint8_t LightSensorModeFlag;
@@ -290,6 +290,7 @@ uint16_t EEMEM Eram_Step_Rate_Min;
 uint16_t Step_Rate_Min = 2000;
 uint16_t EEMEM Eram_Step_Rate_Max;
 uint16_t Step_Rate_Max = STEP_RATE_MAX;
+// bool SpeedQuadraticFlag = false;
 uint8_t EEMEM Eram_Rho_Min;
 uint8_t Rho_Min = 10;
 uint8_t EEMEM Eram_Rho_Max;
@@ -337,7 +338,7 @@ void setupPeripherals()
     // Configure the ADC
     ADMUX = (1 << REFS0);                                              // Use AVCC as the reference voltage
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Enable the ADC and set the prescaler to 128 (auto)
-    pinMode(LASER2, OUTPUT);
+    // pinMode(LASER2, OUTPUT);
 }
 
 void setupWatchdog()
@@ -370,17 +371,17 @@ char WaitKey()
         ;        // Wait for data to be received
     return UDR0; // Get and return received data from buffer
 }
-void StartBuzzerInProgMode()
-{
-    if (BuzzerTick == 0)
-    {
-        PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
-    }
-    else if (BuzzerTick >= 1)
-    {
-        PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
-    }
-}
+// void StartBuzzerInProgMode()
+// {
+//     if (BuzzerTick == 0)
+//     {
+//         PORTE |= (1 << BUZZER); // Set BUZZER pin to HIGH
+//     }
+//     else if (BuzzerTick >= 1)
+//     {
+//         PORTE &= ~(1 << BUZZER); // Set BUZZER pin to LOW
+//     }
+// }
 
 void TickCounter_50ms_isr()
 {
@@ -936,28 +937,31 @@ void GetBatteryVoltage()
 #ifdef PULSING
 bool shouldLaserBeOn()
 {
+    // static bool lastRes = false;
+    bool res = true;
+    static uint32_t cnt = 0;
     // Calculate the total pulsing period (on + off)
-    uint16_t pulsingPeriodTicks = PULSING_ON_PERIOD + PULSING_OFF_PERIOD;
+    uint16_t pulsingPeriodTicks = PULSING_ON_PERIOD + PULSING_OFF_PERIOD; // 12 + 5 = 17 ticks
     // Calculate the total cycle period (continuous + pulsing)
-    uint16_t totalCyclePeriodTicks = (PULSING_CONTINUOUS_PERIOD * 100) / PULSING_CONTINUOUS_PROPORTION;
+    uint16_t totalCyclePeriodTicks = (static_cast<uint32_t>(PULSING_CONTINUOUS_PERIOD) + static_cast<uint32_t>(PULSING_PULSING_PERIOD)) * 20; // 20 converts seconds to ticks (50ms)
     // Determine the current position within the cycle
-    uint16_t currentTickInCycle = TJTick % totalCyclePeriodTicks;
+    uint16_t currentTickInCycle = TJTick % static_cast<uint16_t>(totalCyclePeriodTicks);
     // Determine if we are in the continuous period
-    if (currentTickInCycle < PULSING_CONTINUOUS_PERIOD)
+    if (currentTickInCycle >= PULSING_CONTINUOUS_PERIOD * 20) // In general pulsing period.  20 converts seconds to ticks (50ms)
     {
-        return true; // Laser should be on during the continuous period
+        if ((currentTickInCycle - static_cast<uint16_t>(PULSING_CONTINUOUS_PERIOD)) % pulsingPeriodTicks >= static_cast<uint16_t>(PULSING_ON_PERIOD)) // In off part of cycle within pulsing period
+            res = false;
     }
-    // Determine the current position within the pulsing period
-    uint16_t currentTickInPulsingPeriod = currentTickInCycle - PULSING_CONTINUOUS_PERIOD;
-    // Determine the current position within the pulse cycle (on + off)
-    uint16_t currentTickInPulseCycle = currentTickInPulsingPeriod % pulsingPeriodTicks;
-    // Determine if we are in the pulsing on period
-    if (currentTickInPulseCycle < PULSING_ON_PERIOD)
-    {
-        return true; // Laser should be on during the pulsing on period
-    }
-    // Laser should be off during the pulsing off period
-    return false;
+    // if (lastRes != res)
+    // {
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "CTiC: %u, res: %u", currentTickInCycle, res);
+    //     uartPrint(debugMsg);
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "TJ: %u", TJTick);
+    //     uartPrint(debugMsg);
+    // }
+    // lastRes = res;
+    cnt++;
+    return res;
 }
 #endif
 
@@ -966,6 +970,7 @@ void SetLaserVoltage(uint16_t voltage)
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);
     static uint16_t prevVoltage = 0;
     uint16_t thisVoltage = voltage;
+    // static uint8_t lastLaser2OperateFlag = 0;
     // LASER2 = Laser2OperateFlag;
     if ((voltage < 256) && (voltage > 2))
     { // If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
@@ -984,20 +989,21 @@ void SetLaserVoltage(uint16_t voltage)
         GetBatteryVoltage();
         BatteryTick = 0;
     }
-#ifdef PULSING
-    if (BeamMode)
-    {
-        if (!shouldLaserBeOn())
-            thisVoltage = 0;
-    }
-#endif
-    digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
+
     DAC.setValue(thisVoltage);
+    // if (lastLaser2OperateFlag != Laser2OperateFlag)
+    // {
+    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "L2O: %u, pin value: %d", Laser2OperateFlag, digitalRead(LASER2));
+    //     uartPrint(debugMsg);
+    //     lastLaser2OperateFlag = Laser2OperateFlag;
+    //     digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
+    // }
 
     if (prevVoltage != thisVoltage)
+    {
         sendProperty(currentLaserPower, thisVoltage);
-
-    prevVoltage = thisVoltage;
+        prevVoltage = thisVoltage;
+    }
 }
 
 void clearEEPROM()
@@ -1350,10 +1356,11 @@ void MrSleepyTime()
         }
 
         // if (Tick > 10) //Tick is not reset other than in DoHouseKeeping() and that is not called if this while loop is running.
-        if (TJTick % 40 == 0)
+        if (TJTick % 200 == 0) // TJTick increments every 50ms so % 40 gives 2 second period.  Change this to % 200. 1 brief beep every 10 seconds
         {
-            Audio2(1, 1, 1); // Brief beep before restarting while loop.
+            Audio2(1, 1, 1); // Brief beep every 10 seconds while asleep.
         }
+        DoHouseKeeping(); // 20250220 Add DoHouseKeeping(). If this while loop is running without DoHouseKeeping() there is no way for a user to interact with the laser.
     }
 
     uartPrintFlash(F("ST3 MrST \n"));
@@ -1733,7 +1740,7 @@ void LoadZoneMap(uint8_t zn)
     uint8_t MapIndex, MI, zn_1;
     float res = 0.0;
     zn_1 = zn; // 20240701: Had used zn-1.  But (zn-1) now passed as argument to this function from .
-    // int temp;
+               // int temp;
 
 #ifdef BASE_PRINT
     if (MapTotalPoints == 0)
@@ -1959,6 +1966,7 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "c10: %d, c20: %d, c11: %d, c21: %d", c1[0], c2[0], c1[1], c2[1]);
     uartPrint(debugMsg);
 #endif
+    // Interpolate in Cartesian space
     uint32_t temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[0] - c1[0])); // 20241204: Changed to uint32_t from int. Though note sign() used below.
     res[0] = c1[0] + static_cast<int32_t>(temp / den) * sign(c2[0] - c1[0]);
     temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[1] - c1[1]));
@@ -2124,24 +2132,6 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
 
     if (zn == PATH_ZONE)
     {
-        if (seg < MapCount[0][zn] - 1) //  If there are n vertices, then MC[0][z] = n + 1. But seg is zero based.
-        {
-#ifdef TEST_PATH_MODE
-            snprintf(debugMsg, DEBUG_MSG_LENGTH, "Loading V0i: %d, V1i: %d, for seg: %d", Vertices[0][seg], Vertices[1][seg], seg);
-            uartPrint(debugMsg);
-#endif
-            seg++;
-        }
-        else
-        {
-#ifdef TEST_PATH_MODE
-            snprintf(debugMsg, DEBUG_MSG_LENGTH, "Seg >=MC[0] so put X: %d, and Y: %d to AbsX: %d, and AbsY: %d. MC: %d, seg: %d", X, Y, AbsX, AbsY, MapCount[0][zn], seg);
-            uartPrint(debugMsg);
-#endif
-            seg = 0;
-            // X = AbsX; //20250121 Why was (X,Y) set to (AbsX,AbsY)?
-            // Y = AbsY;
-        }
         X = Vertices[0][seg];
         Y = Vertices[1][seg];
         if (seg == 0)
@@ -2155,7 +2145,10 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             CmdLaserOnFlag = true;
         }
         ind++;
-        if (ind == (MapCount[0][zn] - 1) * PATH_ZONE_LAPS)
+        seg++;
+        if (seg >= MapCount[0][zn] - 1)
+            seg = 0;
+        if (ind == (MapCount[0][zn]) * PATH_ZONE_LAPS)
             ind = Nbr_Rnd_Pts; // This will cause the loop to be exited.
     }
     else // The general autofill case (as opposed to path_mode)
@@ -2702,19 +2695,21 @@ uint8_t getRandomPercentage()
 uint16_t CalcSpeed(bool fst)
 {
     uint16_t s = 0;
+    int res = 0;
     // uint8_t res = getCartFromTilt(AbsY);
     if (!fst)
     {
-        int res = getCartFromTilt(AbsY);
-        if (res < Rho_Min)
-        {
-            s = Step_Rate_Max;
-        }
-        else if (res > Rho_Max)
-        {
-            s = Step_Rate_Min;
-        }
-        else
+        res = getCartFromTilt(AbsY);
+        // 20250221: Step_Rate_Max and Step_Rate_Min constraints are applied after tilt calculation so don't do so before that.
+        // if (res < Rho_Min)
+        // {
+        //     s = Step_Rate_Max;
+        // }
+        // else if (res > Rho_Max)
+        // {
+        //     s = Step_Rate_Min;
+        // }
+        // else
         {
             long num = (long)(Rho_Max - res) * Step_Rate_Max + (long)(res - Rho_Min) * Step_Rate_Min;
             long den = (long)(Rho_Max - Rho_Min);
@@ -2737,7 +2732,7 @@ uint16_t CalcSpeed(bool fst)
     {
         s = INTER_RUNG_SPEED;
     }
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "Speed: %d, AbsY: %d", s, Y);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SpeedScale: %u, r %d, s %u, AbsY: %d", SpeedScale, res, s, AbsY);
     // uartPrint(debugMsg);
     return s;
 }
@@ -2897,8 +2892,8 @@ uint8_t maxZone() // Determine
 {
     if (ActiveMapZones == 0)
     {
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "maxZone: 0");
-        uartPrint(debugMsg);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "maxZone: 0");
+        // uartPrint(debugMsg);
         return 0; // No active zones
     }
 
@@ -2985,17 +2980,17 @@ void RunSweep(uint8_t zn)
                     }
                     else
                     {
-                        if (!SystemFaultFlag)
+                        if ((!SystemFaultFlag) && (zn != PATH_ZONE)) // Laser on or off for PATH_ZONE set in getXY().
                         {
                             CmdLaserOnFlag = true;
                             SetLaserVoltage(LaserPower);
                         }
+                        // if (zn == PATH_ZONE)
+                        //     DSS_preload = PATH_ZONE_SPEED;
+                        // else
                         DSS_preload = CalcSpeed(false); // Passing false makes the speed depend on tilt angle.
                     }
                 }
-                // if (testInternal(zn,[X,Y]) > 0) // Test that autofill point is internal to zone.  Not necessary for boundary?
-                // {
-                // }
                 ProcessCoordinates();
                 SteppingStatus = 1;
                 if (!SystemFaultFlag)
@@ -3272,6 +3267,7 @@ void DoHouseKeeping()
 
     if (SetupModeFlag == 0)
     {
+        bool laserOn = true;
         IsHome = 0;
         WaitAfterPowerUp();
         if (CmdLaserOnFlag && MapTotalPoints >= 2)
@@ -3280,8 +3276,17 @@ void DoHouseKeeping()
             WarnLaserOn();
             if (!SystemFaultFlag)
             {
-                SetLaserVoltage(LaserPower);
-                CmdLaserOnFlag = true;
+#ifdef PULSING
+                if (BeamMode == 1)
+                    laserOn = shouldLaserBeOn();
+#endif
+                if (laserOn)
+                {
+                    SetLaserVoltage(LaserPower);
+                    CmdLaserOnFlag = true;
+                }
+                else
+                    SetLaserVoltage(0);
             }
             else
             {

@@ -46,10 +46,10 @@ uint16_t ReScale(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, in
 
 uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newMin, int32_t newMax, bool inOut = true)
 { // oldMin/oldMax should be the limits in the new app.  newMin/newMax are limits in firmware.  So, for example, for tilt_sep, 1/255 are new limits.
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args1: val %ld, oldMin %ld, oldMax %ld, inOut %u", val, oldMin, oldMax, inOut);
-    uartPrint(debugMsg);
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args2: newMin %ld, newMax %ld", newMin, newMax);
-    uartPrint(debugMsg);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args1: val %ld, oldMin %ld, oldMax %ld, inOut %u", val, oldMin, oldMax, inOut);
+    // uartPrint(debugMsg);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA args2: newMin %ld, newMax %ld", newMin, newMax);
+    // uartPrint(debugMsg);
 
     float ratio = 0.0;
     float r = 0.0;
@@ -71,8 +71,8 @@ uint16_t ReScaleNewApp(int32_t val, int32_t oldMin, int32_t oldMax, int32_t newM
         ratio = (static_cast<float>(val) - static_cast<float>(newMin)) / (static_cast<float>(newMax) - static_cast<float>(newMin));
         r = ratio * (static_cast<float>(oldMax) - static_cast<float>(oldMin)) + static_cast<float>(oldMin);
     }
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA res: %d", static_cast<uint16_t>(r));
-    uartPrint(debugMsg);
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RSNA res: %d", static_cast<uint16_t>(r));
+    // uartPrint(debugMsg);
     return static_cast<uint16_t>(r + 0.5);
 }
 
@@ -750,6 +750,7 @@ void Cmd32()
 {
     eeprom_update_byte(&EramLaser2OperateFlag, Instruction);
     Laser2OperateFlag = Instruction;
+    digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
     Audio2(1, 2, 0); //,"AC32");
 }
 
@@ -829,6 +830,10 @@ void Cmd49()
     eeprom_update_byte(&Eram_Rho_Max, Instruction);
     Rho_Max = Instruction;
 }
+// void Cmd50()
+// { //
+//     SpeedQuadraticFlag = Instruction;
+// }
 void Cmd52()
 {
     if ((Instruction < 0x10) && (Instruction >= 0))
@@ -1169,6 +1174,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramLaser2OperateFlag, value);
         }
         Laser2OperateFlag = value;
+        digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
         break;
     case FieldDeviceProperty::lightTripLevel:
         currentValue = eeprom_read_byte(&EramUserLightTripLevel);

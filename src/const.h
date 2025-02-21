@@ -13,8 +13,8 @@
 #define HOMING_SPEED 60          // 20240801 Should this be 100.  50 seems better.
 #define TILT_SLOW_STEP_RATE 2600 // 1500
 #define TILT_FAST_STEP_RATE 500  // 1500
-#define PAN_SLOW_STEP_RATE 1500  // 400
-#define PAN_FAST_STEP_RATE 50    // 10
+#define PAN_SLOW_STEP_RATE 1     // 400
+#define PAN_FAST_STEP_RATE 70    // 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -42,8 +42,8 @@
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 
 // #define BUFFER_SIZE 100  // Length of buffer to use for income serial messages.
-#define HIGH_JOG_POS 100     // 1000    // 20250212: 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
-#define LOW_JOG_POS 10       // 3        // 20250212: 18
+#define HIGH_JOG_POS 1000    // 1000    // 20250212: 200 // These were, more or less, 4 & 1 in BASCOM.  But that provided very jerky motion.
+#define LOW_JOG_POS 3        // 3        // 20250212: 18
 #define MIN_PERIMETER_TILT 2 // Minimum tilt offset between vertices to allow for.  If less, assume "slope" is zero.
 #define FIXED_PAN_DIFF 200   // Steps between dense perimeter points on pan only (ie constant tilt) boundary segment
 #define FIXED_TILT_DIFF 50   // Steps between dense perimeter points on tilt only (ie constant pan) boundary segment

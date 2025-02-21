@@ -33,10 +33,10 @@
 #define SMOOTH_SPEED
 #define PULSING
 #ifdef PULSING
-#define PULSING_CONTINUOUS_PROPORTION 67 // 20250212: 25 // 75 indicates 75% of the time is continuous
-#define PULSING_CONTINUOUS_PERIOD 800    // 20250212: 120  // In tick units (50ms) continuous operation.  So 120 ticks is 6 seconds.
-#define PULSING_ON_PERIOD 12             // 20250212: 10 // in tick units
-#define PULSING_OFF_PERIOD 5             // in tick units
+#define PULSING_PULSING_PERIOD 18    // Seconds
+#define PULSING_CONTINUOUS_PERIOD 40 // Seconds
+#define PULSING_ON_PERIOD 12         //  ticks (50ms) units
+#define PULSING_OFF_PERIOD 5         // ticks (50ms) units
 #endif
 
 #define RANDOMIZE_SPEED

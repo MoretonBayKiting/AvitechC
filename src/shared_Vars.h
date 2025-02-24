@@ -33,10 +33,10 @@
 #define SMOOTH_SPEED
 #define PULSING
 #ifdef PULSING
-#define PULSING_PULSING_PERIOD 18    // Seconds
+#define PULSING_PULSING_PERIOD 20    // Seconds
 #define PULSING_CONTINUOUS_PERIOD 40 // Seconds
-#define PULSING_ON_PERIOD 12         //  ticks (50ms) units
-#define PULSING_OFF_PERIOD 5         // ticks (50ms) units
+#define PULSING_ON_PERIOD 1          //  ticks (50ms) units
+#define PULSING_OFF_PERIOD 1         // ticks (50ms) units
 #endif
 
 #define RANDOMIZE_SPEED

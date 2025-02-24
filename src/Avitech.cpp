@@ -1360,7 +1360,7 @@ void MrSleepyTime()
         {
             Audio2(1, 1, 1); // Brief beep every 10 seconds while asleep.
         }
-        DoHouseKeeping(); // 20250220 Add DoHouseKeeping(). If this while loop is running without DoHouseKeeping() there is no way for a user to interact with the laser.
+        // DoHouseKeeping(); // 20250220 Add DoHouseKeeping(). If this while loop is running without DoHouseKeeping() there is no way for a user to interact with the laser.
     }
 
     uartPrintFlash(F("ST3 MrST \n"));

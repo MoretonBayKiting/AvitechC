@@ -14,7 +14,7 @@
 #define TILT_SLOW_STEP_RATE 2600 // 1500
 #define TILT_FAST_STEP_RATE 500  // 1500
 #define PAN_SLOW_STEP_RATE 1     // 400
-#define PAN_FAST_STEP_RATE 70    // 10
+#define PAN_FAST_STEP_RATE 90    // 10
 #define LINE_VOLTAGE 5.00
 #define X_MAXCOUNT 16000
 #define X_MINCOUNT -16000
@@ -77,7 +77,7 @@
 #define DEF_OPERATION_MODE 0
 
 #define DEF_STEP_RATE_MIN 2000
-#define DEF_STEP_RATE_MAX 70
+#define DEF_STEP_RATE_MAX 50
 #define DEF_SPEEDSCALE 30
 #define DEF_LASER_HT 50 //
 
@@ -139,7 +139,7 @@
 #define PATH_ZONE 3 // 3 if paths are indexed from 0 to 3.
 #define WATCHDOG_DELAY 5000
 #define ISOLATED_BOARD_DELAY 250
-#define INTER_RUNG_SPEED 70
+#define INTER_RUNG_SPEED 60
 #define APP_SLIDER_MAX 100
 #define AVR_SLIDER_MAX 100
 #define PATH_ZONE_LAPS 4

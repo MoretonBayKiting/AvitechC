@@ -17,7 +17,7 @@ enum FieldDeviceProperty
     activePatterns,        // 8 [0, 8) compressed bit array
     maxLaserPower,         // 9 uint
     userLaserPower,        // 10 [0, 100] percent
-    currentLaserPower,     // 11 uint ? percent ?
+    currentLaserPower,     // 11 uint ? Report as % MaxLaserPower.
     laserTemperature,      // 12 uint
     randomizeSpeed,        // 13 [0, 100] percent
     speedScale,            // 14 [0, 100] percent

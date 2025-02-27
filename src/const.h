@@ -26,7 +26,7 @@
 // #define BT_TICKMAX 3600
 #define ONE_SECOND 20
 #define NBR_ZONES 4
-#define MAX_NBR_VERTICES 15 // This is the maximum number of vertices per zone/map
+#define MAX_NBR_VERTICES 32 // 20250227.  Change 15 to 32. This is the maximum number of vertices per zone/map
 #define MAX_NBR_MAP_PTS 32  // This is the maximum overall number of vertices
 #define MIN_ZONE_PTS 4
 // #define MAX_NBR_PERIMETER_PTS 120 //Maximum number of perimeter points for a zone.  This could probably be higher.

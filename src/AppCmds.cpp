@@ -777,6 +777,8 @@ void Cmd35()
 
 void Cmd36()
 {
+    if (Instruction == 0xFF) // 20250225. This should not be necessary.  Somehow 255 is coming through as default notwithstanding DEF_LIGHT_TRIGGER_OPERATION 1
+        Instruction = 1;
     eeprom_update_byte(&EramLightTriggerOperation, Instruction);
     LightTriggerOperation = Instruction;
     Audio2(1, 2, 0); //,"AC36");
@@ -1040,6 +1042,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramLightTriggerOperation, value);
         }
         LightTriggerOperation = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::beamMode:
         currentValue = eeprom_read_byte(&EramBeamMode);
@@ -1048,6 +1051,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramBeamMode, value);
         }
         BeamMode = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::locationMode:
         // Do nothing
@@ -1060,6 +1064,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramLaserHt, newValue);
         }
         LaserHt = newValue;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::lineSeparation:
         currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
@@ -1068,6 +1073,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&Eram_Tilt_Sep, value);
         }
         Tilt_Sep = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::linesPerPattern:
         currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
@@ -1076,6 +1082,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
         }
         Nbr_Rnd_Pts = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::activeMapZones:
         currentValue = eeprom_read_byte(&EramActiveMapZones);
@@ -1084,6 +1091,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramActiveMapZones, value);
         }
         ActiveMapZones = value;
+        Audio2(1, 1, 1);
         break;
 
     case FieldDeviceProperty::activePatterns:
@@ -1093,6 +1101,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramActivePatterns, value);
         }
         ActivePatterns = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::maxLaserPower:
         // newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
@@ -1102,15 +1111,17 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramMaxLaserPower, value);
         }
         MaxLaserPower = value;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::userLaserPower:
-        newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, true);
+        newValue = ReScaleNewApp(value, 0, 100, 0, MaxLaserPower, true); //Value from slider is a percentage.  
         currentValue = eeprom_read_byte(&EramUserLaserPower);
         if (newValue != currentValue)
         {
             eeprom_update_byte(&EramUserLaserPower, newValue);
         }
         UserLaserPower = newValue;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::currentLaserPower:
         setProperty(property, CANT_SET_PROPERTY);
@@ -1129,6 +1140,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
             eeprom_update_byte(&EramSpeedScale, newValue);
         }
         SpeedScale = newValue;
+        Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::lightSensorReading:
         setProperty(property, CANT_SET_PROPERTY);
@@ -1139,12 +1151,13 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         case FieldDeviceMode::running:
             // case 0:
             cmd10_running();
+            Audio2(1, 1, 1);
             break;
         case FieldDeviceMode::programming:
             // case 1:
-            uartPrint("hSPR ProgMode1");
+            // uartPrint("hSPR ProgMode1");
             cmd10_programming();
-            uartPrint("hSPR ProgMode2");
+            // uartPrint("hSPR ProgMode2");
 
             break;
             // case FieldDeviceMode::lightSensor:

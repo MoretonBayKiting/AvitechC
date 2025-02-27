@@ -186,8 +186,8 @@ uint8_t AdaptivelyBright;
 uint8_t EEMEM EramFactoryLightTripLevel; // Factory Default light setting value. Laser need to go into Lightbox
 uint8_t FactoryLightTripLevel;
 
-uint8_t EramLightTriggerOperation; // 0=24hr. 1= Day Mode 2= Night Mode
-uint8_t LightTriggerOperation;     //
+uint8_t EramLightTriggerOperation;                           // 0=24hr. 1= Day Mode 2= Night Mode
+uint8_t LightTriggerOperation = DEF_LIGHT_TRIGGER_OPERATION; //
 
 uint8_t EramBeamMode; // 0=continuous; 1 = Pulsing (ref enum BeamMode)
 uint8_t BeamMode = 0; //
@@ -1001,7 +1001,7 @@ void SetLaserVoltage(uint16_t voltage)
 
     if (prevVoltage != thisVoltage)
     {
-        sendProperty(currentLaserPower, thisVoltage);
+        sendProperty(currentLaserPower, ReScaleNewApp(thisVoltage, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false));
         prevVoltage = thisVoltage;
     }
 }
@@ -3395,7 +3395,7 @@ void handleGetPropertyRequest(FieldDeviceProperty property)
         sendProperty(property, MaxLaserPower);
         break;
     case FieldDeviceProperty::userLaserPower:
-        prop = ReScaleNewApp(UserLaserPower, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false);
+        prop = ReScaleNewApp(UserLaserPower, 0, 100, 0, MaxLaserPower, false);
         sendProperty(property, prop);
         break;
     case FieldDeviceProperty::currentLaserPower:

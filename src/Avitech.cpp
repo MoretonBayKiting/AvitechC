@@ -48,9 +48,10 @@ int AbsY = 0;           // Y absolute position from home position
 // uint16_t isolated_board_factor = 1;
 // #endif
 bool printPos = true; // Use this to determine whether or not to print series of X and Y values while in run mode - mostly (?only) for testing
-bool audioOn = true;  //
-int Dy;               // Used to calulate how many steps required on Y axis from last position
-int Dx;               // Used to calulate how many steps required on X axis from last position
+bool audioOn = false; //
+bool timer1Running = false;
+int Dy; // Used to calulate how many steps required on Y axis from last position
+int Dx; // Used to calulate how many steps required on X axis from last position
 
 bool rndLadBit; // 0 or 1 to indicate if last pass was for a new rung on one side or the next side is needed
 uint8_t minYind;
@@ -123,14 +124,18 @@ uint8_t EEMEM EramUserLaserPower;
 
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
-uint8_t LaserPower = 0; // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
-
+uint8_t LaserPower = 0;                  // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
+uint8_t LaserPowerRamp = 0;              // 20250531
+volatile uint16_t LaserPowerIssued = 0;  // 20250531
+volatile uint16_t RampingLaserPower = 0; // 20250701
+volatile uint16_t PrevLaserPower = 0;    // 20250619
+uint8_t LaserPowerRampStep = 0;
 float VoltPerStep = LINE_VOLTAGE / 4095; // Laser power per step. Could be macro constant.
 // Input voltage ie 5 volts /12bit (4095) MCP4725 DAC = Voltage step per or 0.0012210012210012 Volt per step
 
 uint8_t LaserOverTempFlag; // Laser over temp error flag
 // uint8_t FlashTheLaserFlag; // Setup laser flash flag bit
-bool CmdLaserOnFlag = false;
+volatile bool CmdLaserOnFlag = false;
 
 uint8_t SetupModeFlag = 0;      // Should this be set to 1 (setup mode - 0 is run mode) as default? 0 in BASCOM version.
 uint8_t PrevSetupModeFlag = 10; // Initialise with silly high number so that first run will be different.
@@ -287,7 +292,7 @@ volatile uint8_t CommandLength = 0;
 
 // 20240726 Tuning parameters - possibly not required in production version
 uint16_t EEMEM Eram_Step_Rate_Min;
-uint16_t Step_Rate_Min = 2000;
+uint16_t Step_Rate_Min = 3000;
 uint16_t EEMEM Eram_Step_Rate_Max;
 uint16_t Step_Rate_Max = STEP_RATE_MAX;
 // bool SpeedQuadraticFlag = false;
@@ -327,6 +332,7 @@ void StopSystem();
 #ifdef WATCHDOG
 void testWatchDog(uint8_t indicator);
 #endif
+void LaserVoltageRamp();
 
 void setupPeripherals()
 {
@@ -464,13 +470,14 @@ void uartPutChar(char c)
 }
 void uartPrint(const char *message)
 {
-    while (*message)
-    {
-        uartPutChar(*message++);
+    if (message && *message)
+    { // Only print if not empty
+        while (*message)
+            uartPutChar(*message++);
+        uartPutChar('\r');
+        uartPutChar('\n');
     }
-    uartPutChar('\r');
-    uartPutChar('\n');
-    debugMsg[0] = '\0'; // Clear the global buffer
+    debugMsg[0] = '\0';
 }
 void uartPrintFlash(const __FlashStringHelper *message)
 {
@@ -965,44 +972,61 @@ bool shouldLaserBeOn()
 }
 #endif
 
-void SetLaserVoltage(uint16_t voltage)
+void LaserVoltageRamp() // Called from ISR
 {
+    // if (LaserPowerRampStep >= LASER_POWER_RAMP_STEPS)
+    //     return;
+    // LaserPowerRampStep++;
+
+    // //    Integer linear interpolation:
+    // int16_t delta = (int16_t)LaserPowerIssued - (int16_t)PrevLaserPower;
+    // RampingLaserPower = (int16_t)PrevLaserPower + (delta * LaserPowerRampStep + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
+    // CmdLaserOnFlag = RampingLaserPower;
+}
+void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
+{
+    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SLV: %u, RampStep: %u", voltage, LaserPowerRampStep);
+    // uartPrint(debugMsg);
     // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);
+#ifdef TEST_LASER_POWER_RAMP_ISR
+    LaserPowerRampStep = 0;
+#endif
     static uint16_t prevVoltage = 0;
     uint16_t thisVoltage = voltage;
-    // static uint8_t lastLaser2OperateFlag = 0;
-    // LASER2 = Laser2OperateFlag;
+    static uint8_t lastLaser2OperateFlag = 0;
+
     if ((voltage < 256) && (voltage > 2))
-    { // If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero.
+    { // If a uint8_t value has been assigned rather than 12bit, make it 12 bit.  But not if it's zero .
         thisVoltage = (voltage << 4);
     }
-#ifdef BASE_PRINT
-    if (prevVoltage != thisVoltage)
-    {
-        snprintf(debugMsg, DEBUG_MSG_LENGTH, "In SetLV.  voltage: %u, prevVoltage: %u", thisVoltage, prevVoltage);
-        uartPrint(debugMsg);
-    }
+#ifdef TEST_LASER_POWER_RAMP_ISR
+    PrevLaserPower = DAC.getValue(); // Need previous value to ramp down
+    LaserPowerIssued = voltage;      // Save the power argument so that it can be used in the ISR until another direct call to SetLaserVoltage() is made.
 #endif
-    // 20241205 Imported from BASCOM version, previously not here.
     if (voltage > 0 and BatteryTick > 4)
     { // Laser on and sample every 2 sec's
         GetBatteryVoltage();
         BatteryTick = 0;
     }
 
-    DAC.setValue(thisVoltage);
-    // if (lastLaser2OperateFlag != Laser2OperateFlag)
-    // {
-    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "L2O: %u, pin value: %d", Laser2OperateFlag, digitalRead(LASER2));
-    //     uartPrint(debugMsg);
-    //     lastLaser2OperateFlag = Laser2OperateFlag;
-    //     digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
-    // }
+    // DAC.setValue(thisVoltage); // 202050619: Should be set in LaserVoltageRamp() called by ISR on timer2....but couldn't get that to work.
 
-    if (prevVoltage != thisVoltage)
+    for (int i = 0; i <= LASER_POWER_RAMP_STEPS; i++)
     {
-        sendProperty(currentLaserPower, ReScaleNewApp(thisVoltage, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, MaxLaserPower, false));
-        prevVoltage = thisVoltage;
+        int16_t delta = (int16_t)thisVoltage - (int16_t)PrevLaserPower;
+        RampingLaserPower = (int16_t)PrevLaserPower + (delta * i + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
+        DAC.setValue(RampingLaserPower);
+        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RLP: %u, i: %u, PLP: %u, TV: %u", RampingLaserPower, i, PrevLaserPower, thisVoltage);
+        // uartPrint(debugMsg);
+        _delay_ms(20);
+    }
+
+    if (lastLaser2OperateFlag != Laser2OperateFlag)
+    {
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "L2O: %u, pin value: %d", Laser2OperateFlag, digitalRead(LASER2));
+        uartPrint(debugMsg);
+        lastLaser2OperateFlag = Laser2OperateFlag;
+        digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
     }
 }
 
@@ -1586,6 +1610,42 @@ void initMPU()
         // uartPrintFlash(F("Full scale set \n"));
     }
 }
+// 20250619: Timer 2 for laser ramping.
+// void setupTimer2()
+// {
+//     cli(); // Disable interrupts during setup
+
+//     TCCR2A = 0; // Clear control register A
+//     TCCR2B = 0; // Clear control register B
+//     TCNT2 = 0;  // Initialize counter value to 0
+
+//     // Set CTC mode (Clear Timer on Compare Match)
+//     TCCR2A |= (1 << WGM21);
+
+//     // Set compare match register for 20ms increments
+//     // For 16MHz clock and prescaler 1024:
+//     // 16,000,000 / 1024 ~ 16,000 ticks/sec
+//     // 20ms = 300 ticks.  But 8 bit timer.  So ~150 ticks (use 155) and take action on every 2nd one.
+//     OCR2A = 155;
+//     // Set prescaler to 1024 and start the timer
+//     TCCR2B = (1 << CS22) | (1 << CS21) | (1 << CS20); // Prescaler 1024
+//     // Enable Timer2 compare interrupt
+//     TIMSK2 |= (1 << OCIE2A);
+
+//     sei(); // Enable interrupts
+// }
+
+// --- Timer2 Compare Match ISR ---
+// ISR(TIMER2_COMPA_vect)
+// {
+//     static uint8_t rampDiv = 0;
+//     rampDiv++;
+//     if (rampDiv >= 2)
+//     { // 2 × 10ms = 20ms
+//         rampDiv = 0;
+//         LaserVoltageRamp();
+//     }
+// }
 
 void setupTimer3()
 {
@@ -1612,6 +1672,7 @@ void StopTimer1()
     TCCR1B &= ~(1 << CS12);
     TCCR1B &= ~(1 << CS11);
     TCCR1B &= ~(1 << CS10);
+    timer1Running = false;
 }
 void setupTimer1()
 {
@@ -1620,6 +1681,7 @@ void setupTimer1()
     OCR1A = DSS_preload;    // Set the compare value to desired value.  DSS_preload is order 100.  2*7812 for testing - 1 second period
     // With a prescalar of 256 and compare value of 100, frequency: 16MHz/256 ~ 64kHz/100 ~ 640Hz which is a period of about 1.6ms.
     TIMSK1 |= (1 << OCIE1A); // Enable the compare match interrupt
+    timer1Running = true;
 }
 
 void TurnOnGyro()
@@ -2429,6 +2491,9 @@ void ProcessCoordinates()
     } // Do nothing
     else
     {
+        // Reset direction pins
+        PORTD &= ~(1 << X_DIR);
+        PORTD &= ~(1 << Y_DIR);
         if (Dx > 0)
         {
             PORTD |= (1 << X_DIR); // Set X_DIR pin high
@@ -2542,6 +2607,7 @@ void StopSystem()
     Y = AbsY;
     Dx = 0;
     Dy = 0;
+    _delay_ms(10); // Add a small delay to ensure the motor is completely stopped
 }
 
 void avoidLimits(bool axis)
@@ -2585,7 +2651,6 @@ void avoidLimits(bool axis)
         }
     }
 }
-
 void JogMotors() // 20250107  Add and explicit stop call
 {
     uint8_t axis = 0;
@@ -2598,14 +2663,6 @@ void JogMotors() // 20250107  Add and explicit stop call
     avoidLimits(false);
     avoidLimits(true);
 
-    // #ifdef LOG_PRINT
-    //     if (X != lastX || Y != lastY)
-    //     {
-    //         printToBT(34, AbsX);
-    //         printToBT(35, AbsY);
-    //     }
-    // #endif
-
     lastX = X;
     lastY = Y;
 
@@ -2616,11 +2673,19 @@ void JogMotors() // 20250107  Add and explicit stop call
         speed = PanSpeed;
         dir = PanDirection;
         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
+        pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS;
+        pos = pos * (dir ? 1 : -1);
+        X = AbsX + pos;
+        if (X > PAN_MAX)
+            X = PAN_MAX;
+        if (X < PAN_MIN)
+            X = PAN_MIN;
     }
     else
-        X = AbsX;
     {
+        X = AbsX;
     }
+
     if (TiltEnableFlag == 1)
     {
         SteppingStatus = 1;
@@ -2628,45 +2693,31 @@ void JogMotors() // 20250107  Add and explicit stop call
         speed = TiltSpeed;
         dir = TiltDirection;
         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
+        pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS;
+        pos = pos * (dir ? 1 : -1);
+        Y = AbsY + pos;
+        // if (Y > TILT_MAX) Y = TILT_MAX;
+        // if (Y < TILT_MIN) Y = TILT_MIN;
     }
     else
+    {
         Y = AbsY;
-
-    pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
-#ifdef xISOLATED_BOARD
-    pos = pos / isolated_board_factor;
-#endif
-    pos = pos * (dir ? 1 : -1);       // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
-    pos += (axis == 0) ? AbsX : AbsY; // 2024620: Add an amount, pos, to AbsX.  This becomes X (or Y) when MoveMotor is called. So (X - AbsX) is the increment.  When that is reached,
-    // JogMotors would be called again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments
-    // AbsX (which would have been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is HIGH_JOG_POS, MoveMotor() should, given
-    // the while loop, increment AbsX by HIGH_JOG_POS before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
+    }
 
     if (PanEnableFlag == 0 && TiltEnableFlag == 0)
-    { // If both pan and tilt are disabled, stop the motors.
+    {
         StopSystem();
     }
     else
     {
-        setupTimer1(); // 20240620.  Could be only if necessary?
+        if (!timer1Running)
+        {
+            setupTimer1();
+        }
 
-        if (axis == 0)
-        {
-            X = pos;
-            if (X > PAN_MAX)
-                X = PAN_MAX;
-            if (X < PAN_MIN)
-                X = PAN_MIN;
-        }
-        else
-        {
-            Y = pos;
-        }
 #ifdef LOG_PRINT
-        if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
+        if (X != lastX || Y != lastY)
         {
-            // snprintf(debugMsg, DEBUG_MSG_LENGTH, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
-            // uartPrint(debugMsg);
             printToBT(34, AbsX);
             printToBT(35, AbsY);
         }
@@ -2675,6 +2726,95 @@ void JogMotors() // 20250107  Add and explicit stop call
     }
     JogFlag = 0;
 }
+// void JogMotors() // 20250107  Add and explicit stop call
+// {
+//     uint8_t axis = 0;
+//     uint8_t speed = 0;
+//     uint8_t dir = 0;
+//     static int lastX = 0;
+//     static int lastY = 0;
+//     JogFlag = 0;
+//     int pos = 0;
+//     avoidLimits(false);
+//     avoidLimits(true);
+
+//     // #ifdef LOG_PRINT
+//     //     if (X != lastX || Y != lastY)
+//     //     {
+//     //         printToBT(34, AbsX);
+//     //         printToBT(35, AbsY);
+//     //     }
+//     // #endif
+
+//     lastX = X;
+//     lastY = Y;
+
+//     if (PanEnableFlag == 1)
+//     {
+//         SteppingStatus = 1;
+//         axis = 0;
+//         speed = PanSpeed;
+//         dir = PanDirection;
+//         DSS_preload = (speed == 1) ? PAN_FAST_STEP_RATE : PAN_SLOW_STEP_RATE;
+//     }
+//     else
+//         X = AbsX;
+//     {
+//     }
+//     if (TiltEnableFlag == 1)
+//     {
+//         SteppingStatus = 1;
+//         axis = 1;
+//         speed = TiltSpeed;
+//         dir = TiltDirection;
+//         DSS_preload = (speed == 1) ? TILT_FAST_STEP_RATE : TILT_SLOW_STEP_RATE;
+//     }
+//     else
+//         Y = AbsY;
+
+//     pos = (speed == 1) ? HIGH_JOG_POS : LOW_JOG_POS; // Up to HIGH_JOG_POS steps per cycle through main loop or LOW_JOG_POS for slow.  Needs calibration. 20240629: Testing with 40:10.
+// #ifdef xISOLATED_BOARD
+//     pos = pos / isolated_board_factor;
+// #endif
+//     pos = pos * (dir ? 1 : -1);       // 20240629: See review in Avitech.rtf on this date.  Search on "Proposal to fix directions:"
+//     pos += (axis == 0) ? AbsX : AbsY; // 2024620: Add an amount, pos, to AbsX.  This becomes X (or Y) when MoveMotor is called. So (X - AbsX) is the increment.  When that is reached,
+//     // JogMotors would be called again. If the instruction (eg from <2:3>) has not been changed (eg by receipt of <2:0>) then the values set in cmd2() remain.  Accordingly pos increments
+//     // AbsX (which would have been incremented in previous calls to MoveMotor()) again.  So for the high speed case in which the increment passed is HIGH_JOG_POS, MoveMotor() should, given
+//     // the while loop, increment AbsX by HIGH_JOG_POS before returning to JogMotors then doing the same thing.  Need some debug statements to test this.
+
+//     if (PanEnableFlag == 0 && TiltEnableFlag == 0)
+//     { // If both pan and tilt are disabled, stop the motors.
+//         StopSystem();
+//     }
+//     else
+//     {
+//         setupTimer1(); // 20240620.  Could be only if necessary?
+
+//         if (axis == 0)
+//         {
+//             X = pos;
+//             if (X > PAN_MAX)
+//                 X = PAN_MAX;
+//             if (X < PAN_MIN)
+//                 X = PAN_MIN;
+//         }
+//         else
+//         {
+//             Y = pos;
+//         }
+// #ifdef LOG_PRINT
+//         if (X != lastX || Y != lastY) // Move this print here, before ProcessCoordinates() but after X or Y has been set relative to AbsX/AbsY.
+//         {
+//             // snprintf(debugMsg, DEBUG_MSG_LENGTH, "After SetupTimer1. AbsX: %d, AbsY: %d, X: %d, Y: %d", AbsX, AbsY, X, Y);
+//             // uartPrint(debugMsg);
+//             printToBT(34, AbsX);
+//             printToBT(35, AbsY);
+//         }
+// #endif
+//         ProcessCoordinates();
+//     }
+//     JogFlag = 0;
+// }
 
 #ifdef RANDOMIZE_SPEED
 uint8_t getRandomPercentage()
@@ -3208,7 +3348,6 @@ void DoHouseKeeping()
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();
-
     if (Tick > 4)
     {
 #ifndef SMOOTH_SPEED
@@ -3492,6 +3631,7 @@ void setup()
     uartPrint(debugMsg);
 
     setupTimer1();
+    // setupTimer2();
     setupTimer3();
 #ifndef ISOLATED_BOARD
     TurnOnGyro();

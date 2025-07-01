@@ -54,12 +54,14 @@
 #define xNEW_APP
 #define HOME_AXIS // 20250114. There is a problem with HomeAxis(). Use this while that's being sorted.
 // #define TEST_LIMIT_SWITCH
+// #define TEST_LASER_POWER_RAMP
+#define TEST_LASER_POWER_RAMP_ISR
 // #define DEBUG61 // Used to debug ReportVertices failure when <62:0> is being received too frequently.
 #ifdef DEBUG61
 #define DEBUG61_INTERVAL 100
 #endif
 // #define PAT3GHOST // This takes out the conditional pat == 3 code that was generating ghosts.
-#define TEST_MAPCOUNT
+// #define TEST_MAPCOUNT
 // #define WIGGLY_PTS
 // #define TEST_PATH_MODE
 #define INCLUDE_PRINT_EEPROM // Including PrintEramVars() adds order 18% to RAM use!
@@ -205,7 +207,7 @@ void PrintConfigData();
 // void CalcSpeedZone();
 uint16_t CalcSpeed();
 // void SetLaserVoltage(uint8_t voltage);
-void SetLaserVoltage(uint16_t voltage);
+void SetLaserVoltage(uint16_t voltage, bool resetRamp = true);
 void testLaserPower();
 void GetLightLevel();
 void DecodeCommsData();
@@ -224,6 +226,9 @@ void setupTimer3();
 void initMPU();
 void eeprom_update_word(uint16_t *eepromAddress, uint16_t newValue);
 void PrintEramVars();
+void WriteEramMirrorVars();
+void WriteEepromConfigCRC();
+bool VerifyEepromConfigCRC();
 void LoadZoneMap(uint8_t zn);
 uint8_t GetZone(uint8_t i);
 // void TraceBoundary(uint8_t zone);

@@ -556,7 +556,18 @@ void Cmd7()
 }
 void Cmd8()
 {
-    PrintEramVars();
+    switch (Instruction)
+    {
+    case 0:
+        PrintEramVars();
+    case 1:
+        WriteEramMirrorVars();
+    case 2:
+        WriteEepromConfigCRC();
+    case 3:  //Verify
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "CRC test: %u", VerifyEepromConfigCRC());
+        uartPrint(debugMsg);
+    }
 }
 
 void Cmd9()
@@ -1021,10 +1032,193 @@ void setProperty(FieldDeviceProperty property, uint8_t value)
     }
 }
 
-void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
+// void handleSetPropertyRequest(FieldDeviceProperty property, uint16_t value) //20250318.  Change value to uint16_t rather than 8.
+// {
+//     uint8_t newValue = 0;
+//     uint8_t currentValue = 0;
+// #ifdef TEST_FDP
+//     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Received by hSPR. Prop: %d, val: %d", property, value);
+//     uartPrint(debugMsg);
+// #endif
+
+//     switch (property)
+//     {
+//     case FieldDeviceProperty::batteryVoltAdc:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::timeMode:
+//         currentValue = eeprom_read_byte(&EramLightTriggerOperation);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramLightTriggerOperation, value);
+//         }
+//         LightTriggerOperation = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::beamMode:
+//         currentValue = eeprom_read_byte(&EramBeamMode);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramBeamMode, value);
+//         }
+//         BeamMode = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::locationMode:
+//         // Do nothing
+//         break;
+//     case FieldDeviceProperty::tripodHeight:
+//         newValue = ReScaleNewApp(value, 0, 100, LASER_HT_MIN, LASER_HT_MAX, true);
+//         currentValue = eeprom_read_byte(&EramLaserHt);
+//         if (newValue != currentValue)
+//         {
+//             eeprom_update_byte(&EramLaserHt, newValue);
+//         }
+//         LaserHt = newValue;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::lineSeparation:
+//         currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&Eram_Tilt_Sep, value);
+//         }
+//         Tilt_Sep = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::linesPerPattern:
+//         currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
+//         }
+//         Nbr_Rnd_Pts = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::activeMapZones:
+//         currentValue = eeprom_read_byte(&EramActiveMapZones);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramActiveMapZones, value);
+//         }
+//         ActiveMapZones = value;
+//         Audio2(1, 1, 1);
+//         break;
+
+//     case FieldDeviceProperty::activePatterns:
+//         currentValue = eeprom_read_byte(&EramActivePatterns);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramActivePatterns, value);
+//         }
+//         ActivePatterns = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::maxLaserPower:
+//         // newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
+//         currentValue = eeprom_read_byte(&EramMaxLaserPower);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramMaxLaserPower, value);
+//         }
+//         MaxLaserPower = value;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::userLaserPower:
+//         newValue = ReScaleNewApp(value, 0, 100, 0, MaxLaserPower, true); //Value from slider is a percentage.
+//         currentValue = eeprom_read_byte(&EramUserLaserPower);
+//         if (newValue != currentValue)
+//         {
+//             eeprom_update_byte(&EramUserLaserPower, newValue);
+//         }
+//         UserLaserPower = newValue;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::currentLaserPower:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::laserTemperature:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::randomizeSpeed:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::speedScale:
+//         newValue = 100 - value;
+//         currentValue = eeprom_read_byte(&EramSpeedScale);
+//         if (newValue != currentValue)
+//         {
+//             eeprom_update_byte(&EramSpeedScale, newValue);
+//         }
+//         SpeedScale = newValue;
+//         Audio2(1, 1, 1);
+//         break;
+//     case FieldDeviceProperty::lightSensorReading:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::deviceMode:
+//         switch (static_cast<FieldDeviceMode>(value))
+//         {
+//         case FieldDeviceMode::running:
+//             // case 0:
+//             cmd10_running();
+//             Audio2(1, 1, 1);
+//             break;
+//         case FieldDeviceMode::programming:
+//             // case 1:
+//             // uartPrint("hSPR ProgMode1");
+//             cmd10_programming();
+//             // uartPrint("hSPR ProgMode2");
+
+//             break;
+//             // case FieldDeviceMode::lightSensor:
+//             //     cmd10_lightSensor();
+//             //     break;
+//         }
+//         sendProperty(FieldDeviceProperty::deviceMode, SetupModeFlag);
+//         break;
+//     case FieldDeviceProperty::currentZoneRunning:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::currentPatternRunning:
+//         setProperty(property, CANT_SET_PROPERTY);
+//         break;
+//     case FieldDeviceProperty::laserID:
+//         currentValue = eeprom_read_word(&EramLaserID);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_word(&EramLaserID, value);
+//         }
+//         LaserID = value;
+//         break;
+//     case FieldDeviceProperty::laser2On:
+//         currentValue = eeprom_read_byte(&EramLaser2OperateFlag);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramLaser2OperateFlag, value);
+//         }
+//         Laser2OperateFlag = value;
+//         digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
+//         break;
+//     case FieldDeviceProperty::lightTripLevel:
+//         currentValue = eeprom_read_byte(&EramUserLightTripLevel);
+//         if (value != currentValue)
+//         {
+//             eeprom_update_byte(&EramUserLightTripLevel, value);
+//         }
+//         UserLightTripLevel = value;
+//         break;
+//     default:
+//         snprintf(debugMsg, DEBUG_MSG_LENGTH, "hSPR property not supported. Prop: %d, Val: %d", static_cast<uint8_t>(property), value);
+//         uartPrint(debugMsg);
+//     }
+// }
+void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value) // 20250318.  Change value to uint16_t rather than 8.
 {
     uint8_t newValue = 0;
     uint8_t currentValue = 0;
+    uint8_t value8 = static_cast<uint8_t>(value); // Cast value to uint8_t
+
 #ifdef TEST_FDP
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "Received by hSPR. Prop: %d, val: %d", property, value);
     uartPrint(debugMsg);
@@ -1037,20 +1231,20 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         break;
     case FieldDeviceProperty::timeMode:
         currentValue = eeprom_read_byte(&EramLightTriggerOperation);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramLightTriggerOperation, value);
+            eeprom_update_byte(&EramLightTriggerOperation, value8);
         }
-        LightTriggerOperation = value;
+        LightTriggerOperation = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::beamMode:
         currentValue = eeprom_read_byte(&EramBeamMode);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramBeamMode, value);
+            eeprom_update_byte(&EramBeamMode, value8);
         }
-        BeamMode = value;
+        BeamMode = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::locationMode:
@@ -1068,53 +1262,52 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         break;
     case FieldDeviceProperty::lineSeparation:
         currentValue = eeprom_read_byte(&Eram_Tilt_Sep);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&Eram_Tilt_Sep, value);
+            eeprom_update_byte(&Eram_Tilt_Sep, value8);
         }
-        Tilt_Sep = value;
+        Tilt_Sep = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::linesPerPattern:
         currentValue = eeprom_read_byte(&Eram_Nbr_Rnd_Pts);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value);
+            eeprom_update_byte(&Eram_Nbr_Rnd_Pts, value8);
         }
-        Nbr_Rnd_Pts = value;
+        Nbr_Rnd_Pts = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::activeMapZones:
         currentValue = eeprom_read_byte(&EramActiveMapZones);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramActiveMapZones, value);
+            eeprom_update_byte(&EramActiveMapZones, value8);
         }
-        ActiveMapZones = value;
+        ActiveMapZones = value8;
         Audio2(1, 1, 1);
         break;
 
     case FieldDeviceProperty::activePatterns:
         currentValue = eeprom_read_byte(&EramActivePatterns);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramActivePatterns, value);
+            eeprom_update_byte(&EramActivePatterns, value8);
         }
-        ActivePatterns = value;
+        ActivePatterns = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::maxLaserPower:
-        // newValue = ReScaleNewApp(value, OLD_SPEED_ZONE_MIN, OLD_SPEED_ZONE_MAX, 0, 255, true);
         currentValue = eeprom_read_byte(&EramMaxLaserPower);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramMaxLaserPower, value);
+            eeprom_update_byte(&EramMaxLaserPower, value8);
         }
-        MaxLaserPower = value;
+        MaxLaserPower = value8;
         Audio2(1, 1, 1);
         break;
     case FieldDeviceProperty::userLaserPower:
-        newValue = ReScaleNewApp(value, 0, 100, 0, MaxLaserPower, true); //Value from slider is a percentage.  
+        newValue = ReScaleNewApp(value, 0, 100, 0, MaxLaserPower, true); // Value from slider is a percentage.
         currentValue = eeprom_read_byte(&EramUserLaserPower);
         if (newValue != currentValue)
         {
@@ -1133,7 +1326,7 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::speedScale:
-        newValue = 100 - value;
+        newValue = 100 - value8;
         currentValue = eeprom_read_byte(&EramSpeedScale);
         if (newValue != currentValue)
         {
@@ -1146,23 +1339,15 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         setProperty(property, CANT_SET_PROPERTY);
         break;
     case FieldDeviceProperty::deviceMode:
-        switch (static_cast<FieldDeviceMode>(value))
+        switch (static_cast<FieldDeviceMode>(value8))
         {
         case FieldDeviceMode::running:
-            // case 0:
             cmd10_running();
             Audio2(1, 1, 1);
             break;
         case FieldDeviceMode::programming:
-            // case 1:
-            // uartPrint("hSPR ProgMode1");
             cmd10_programming();
-            // uartPrint("hSPR ProgMode2");
-
             break;
-            // case FieldDeviceMode::lightSensor:
-            //     cmd10_lightSensor();
-            //     break;
         }
         sendProperty(FieldDeviceProperty::deviceMode, SetupModeFlag);
         break;
@@ -1182,20 +1367,20 @@ void handleSetPropertyRequest(FieldDeviceProperty property, uint8_t value)
         break;
     case FieldDeviceProperty::laser2On:
         currentValue = eeprom_read_byte(&EramLaser2OperateFlag);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramLaser2OperateFlag, value);
+            eeprom_update_byte(&EramLaser2OperateFlag, value8);
         }
-        Laser2OperateFlag = value;
+        Laser2OperateFlag = value8;
         digitalWrite(LASER2, Laser2OperateFlag ? HIGH : LOW);
         break;
     case FieldDeviceProperty::lightTripLevel:
         currentValue = eeprom_read_byte(&EramUserLightTripLevel);
-        if (value != currentValue)
+        if (value8 != currentValue)
         {
-            eeprom_update_byte(&EramUserLightTripLevel, value);
+            eeprom_update_byte(&EramUserLightTripLevel, value8);
         }
-        UserLightTripLevel = value;
+        UserLightTripLevel = value8;
         break;
     default:
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "hSPR property not supported. Prop: %d, Val: %d", static_cast<uint8_t>(property), value);

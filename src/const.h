@@ -143,5 +143,7 @@
 #define APP_SLIDER_MAX 100
 #define AVR_SLIDER_MAX 100
 #define PATH_ZONE_LAPS 4
-#define LASER_POWER_RAMP_STEPS 5 // 20250531
-#define TEST_LASER_POWER_RAMP    // 20250619
+#define LASER_POWER_RAMP_STEPS 5    // 20250531
+#define LASER_POWER_RAMP_PERIOD 20  // Number of ms between ramp steps.  So full ramp period is LASER_POWER_RAMP_STEPS * #define LASER_POWER_RAMP_PERIOD
+#define TEST_LASER_POWER_RAMP       // 20250619
+#define EEPROM_TEST_TICK_COUNT 1000 // Compared with TJTick which is 20Hz.  So 6000 gives 5 minute testing.

@@ -560,16 +560,24 @@ void Cmd8()
     {
     case 0:
         PrintEramVars();
+        break;
     case 1:
         WriteEramMirrorVars();
+        break;
     case 2:
         WriteEepromConfigCRC();
-    case 3:  //Verify
+        break;
+    case 3: // Verify
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "CRC test: %u", VerifyEepromConfigCRC());
         uartPrint(debugMsg);
+        break;
+    case 4: // Toggle position reporting - don't want it for EEPROM testing.
+        printPos = !printPos;
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "printPos: %d", printPos);
+        uartPrint(debugMsg);
+        break;
     }
 }
-
 void Cmd9()
 {
     uint16_t OperationZone;

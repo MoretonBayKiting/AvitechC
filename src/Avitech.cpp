@@ -1010,7 +1010,6 @@ void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
     }
 
     // DAC.setValue(thisVoltage); // 202050619: Should be set in LaserVoltageRamp() called by ISR on timer2....but couldn't get that to work.
-
     for (int i = 0; i <= LASER_POWER_RAMP_STEPS; i++)
     {
         int16_t delta = (int16_t)thisVoltage - (int16_t)PrevLaserPower;
@@ -1018,7 +1017,7 @@ void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
         DAC.setValue(RampingLaserPower);
         // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RLP: %u, i: %u, PLP: %u, TV: %u", RampingLaserPower, i, PrevLaserPower, thisVoltage);
         // uartPrint(debugMsg);
-        _delay_ms(20);
+        _delay_ms(LASER_POWER_RAMP_PERIOD);
     }
 
     if (lastLaser2OperateFlag != Laser2OperateFlag)
@@ -2449,7 +2448,8 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     int pt[2] = {X, Y};                         // Create an array with X and Y values to pass to testConvex()
     if (!testConvex(zn, pt) && zn != PATH_ZONE) // Test that autofill point is internal to zone.  Not necessary for boundary?
     {
-        uartPrintFlash(F("fail convex \n"));
+        if (printPos)
+            uartPrintFlash(F("fail convex \n"));
     }
     // lastZn = zn;
     if (zn == PATH_ZONE)
@@ -3441,6 +3441,14 @@ void DoHouseKeeping()
             {
                 MrSleepyTime();
             }
+        }
+        // 20250702: Periodically test and report EEPROM.
+        static uint16_t TJTickSet;
+        if (TJTick > TJTickSet)
+        {
+            TJTickSet = TJTick + EEPROM_TEST_TICK_COUNT;
+            snprintf(debugMsg, DEBUG_MSG_LENGTH, "CRC test: %u", VerifyEepromConfigCRC());
+            uartPrint(debugMsg);
         }
     }
 }

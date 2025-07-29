@@ -999,8 +999,8 @@ void ReportVertices()
 {
     // uartPrint("Enter RV");
     getMapPtCounts();
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "MTP: %d", MapTotalPoints);
-    // uartPrint(debugMsg);
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "MTP: %d", MapTotalPoints);
+    uartPrint(debugMsg);
     for (uint8_t i = 0; i < MapTotalPoints; i++)
     {
         uint8_t n = 0;

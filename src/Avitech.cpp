@@ -124,9 +124,12 @@ uint8_t EEMEM EramUserLaserPower;
 
 uint8_t MaxLaserPower;
 uint8_t EEMEM EramMaxLaserPower;
-uint8_t LaserPower = 0;                  // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
-uint8_t LaserPowerRamp = 0;              // 20250531
-volatile uint16_t LaserPowerIssued = 0;  // 20250531
+uint8_t LaserPower = 0;     // Final calculated value send to the DAC laser driver.  20241202 Initialise to 100.
+uint8_t LaserPowerRamp = 0; // 20250531
+volatile bool LaserRampActive = false;
+volatile uint16_t LaserTargetPower = 0;
+volatile bool LaserRampTick = false;
+volatile uint8_t LaserRampCounter = 0;   // Counter for timing
 volatile uint16_t RampingLaserPower = 0; // 20250701
 volatile uint16_t PrevLaserPower = 0;    // 20250619
 uint8_t LaserPowerRampStep = 0;
@@ -332,7 +335,8 @@ void StopSystem();
 #ifdef WATCHDOG
 void testWatchDog(uint8_t indicator);
 #endif
-void LaserVoltageRamp();
+void ProcessLaserRamp();
+// void LaserVoltageRamp();
 
 void setupPeripherals()
 {
@@ -393,11 +397,16 @@ void TickCounter_50ms_isr()
 {
     Counter50ms++;
     TJTick++;
-    // if (TJTick % 40 == 0)
-    // {
-    //     snprintf(debugMsg, DEBUG_MSG_LENGTH, "About to call Audio3. TJTick %d", TJTick);
-    //     uartPrint(debugMsg);
-    // }
+    // Add laser ramping timing (every 20ms = every 2nd call of 50ms ISR, approximately)
+    if (LaserRampActive)
+    {
+        LaserRampCounter++;
+        if (LaserRampCounter >= (LASER_POWER_RAMP_PERIOD / 50))
+        { // 20ms / 50ms = 0.4, so every call for closer to 20ms
+            LaserRampCounter = 0;
+            LaserRampTick = true;
+        }
+    }
     Audio3();
     if (SetupModeFlag == 1 && IsHome == 1 && WarnLaserOnOnce == 0)
     {
@@ -972,25 +981,41 @@ bool shouldLaserBeOn()
 }
 #endif
 
-void LaserVoltageRamp() // Called from ISR
+// Safe laser ramping function (not in ISR)
+void ProcessLaserRamp()
 {
-    // if (LaserPowerRampStep >= LASER_POWER_RAMP_STEPS)
-    //     return;
-    // LaserPowerRampStep++;
+    if (LaserPowerRampStep >= LASER_POWER_RAMP_STEPS)
+    {
+        LaserRampActive = false;
+        LaserPowerRampStep = 0;
+        LaserRampCounter = 0;
+        return;
+    }
 
-    // //    Integer linear interpolation:
-    // int16_t delta = (int16_t)LaserPowerIssued - (int16_t)PrevLaserPower;
-    // RampingLaserPower = (int16_t)PrevLaserPower + (delta * LaserPowerRampStep + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
-    // CmdLaserOnFlag = RampingLaserPower;
+    LaserPowerRampStep++;
+    int16_t delta = (int16_t)LaserTargetPower - (int16_t)PrevLaserPower;
+    RampingLaserPower = (int16_t)PrevLaserPower + (delta * LaserPowerRampStep + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
+    DAC.setValue(RampingLaserPower);
 }
+// void LaserVoltageRamp() // Called from ISR
+// {
+//     if (LaserPowerRampStep >= LASER_POWER_RAMP_STEPS)
+//     { // Ramping complete
+//         LaserRampActive = false;
+//         LaserPowerRampStep = 0;
+//         return;
+//     }
+//     LaserPowerRampStep++;
+
+//     //    Integer linear interpolation:
+//     int16_t delta = (int16_t)LaserTargetPower - (int16_t)PrevLaserPower;
+//     RampingLaserPower = (int16_t)PrevLaserPower + (delta * LaserPowerRampStep + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
+//     CmdLaserOnFlag = RampingLaserPower;
+//     // Set the DAC value
+//     DAC.setValue(RampingLaserPower);
+// }
 void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
 {
-    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "SLV: %u, RampStep: %u", voltage, LaserPowerRampStep);
-    // uartPrint(debugMsg);
-    // DAC.setVoltage(4.8); // For a 12-bit DAC, 2048 is mid-scale.  Use DAC.setMaxVoltage(5.1);
-#ifdef TEST_LASER_POWER_RAMP_ISR
-    LaserPowerRampStep = 0;
-#endif
     static uint16_t prevVoltage = 0;
     uint16_t thisVoltage = voltage;
     static uint8_t lastLaser2OperateFlag = 0;
@@ -1001,7 +1026,7 @@ void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
     }
 #ifdef TEST_LASER_POWER_RAMP_ISR
     PrevLaserPower = DAC.getValue(); // Need previous value to ramp down
-    LaserPowerIssued = voltage;      // Save the power argument so that it can be used in the ISR until another direct call to SetLaserVoltage() is made.
+    LaserTargetPower = voltage;      // Save the power argument so that it can be used in the ISR until another direct call to SetLaserVoltage() is made.
 #endif
     if (voltage > 0 and BatteryTick > 4)
     { // Laser on and sample every 2 sec's
@@ -1009,15 +1034,16 @@ void SetLaserVoltage(uint16_t voltage, bool resetRamp = true)
         BatteryTick = 0;
     }
 
-    // DAC.setValue(thisVoltage); // 202050619: Should be set in LaserVoltageRamp() called by ISR on timer2....but couldn't get that to work.
-    for (int i = 0; i <= LASER_POWER_RAMP_STEPS; i++)
+    // Start non-blocking ramp
+    PrevLaserPower = DAC.getValue(); // Get current DAC value
+    LaserTargetPower = thisVoltage;  // Set target
+    LaserPowerRampStep = 0;          // Reset step counter
+    LaserRampActive = true;          // Start ramping
+    // Handle immediate case (no ramping needed)
+    if (PrevLaserPower == thisVoltage)
     {
-        int16_t delta = (int16_t)thisVoltage - (int16_t)PrevLaserPower;
-        RampingLaserPower = (int16_t)PrevLaserPower + (delta * i + (LASER_POWER_RAMP_STEPS / 2)) / LASER_POWER_RAMP_STEPS;
-        DAC.setValue(RampingLaserPower);
-        // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RLP: %u, i: %u, PLP: %u, TV: %u", RampingLaserPower, i, PrevLaserPower, thisVoltage);
-        // uartPrint(debugMsg);
-        _delay_ms(LASER_POWER_RAMP_PERIOD);
+        LaserRampActive = false;
+        DAC.setValue(thisVoltage);
     }
 
     if (lastLaser2OperateFlag != Laser2OperateFlag)
@@ -1625,7 +1651,8 @@ void initMPU()
 //     // For 16MHz clock and prescaler 1024:
 //     // 16,000,000 / 1024 ~ 16,000 ticks/sec
 //     // 20ms = 300 ticks.  But 8 bit timer.  So ~150 ticks (use 155) and take action on every 2nd one.
-//     OCR2A = 155;
+//     // OCR2A = 155;
+//     OCR2A = (F_CPU / 1024 * LASER_POWER_RAMP_PERIOD / 1000) - 1;
 //     // Set prescaler to 1024 and start the timer
 //     TCCR2B = (1 << CS22) | (1 << CS21) | (1 << CS20); // Prescaler 1024
 //     // Enable Timer2 compare interrupt
@@ -1633,15 +1660,11 @@ void initMPU()
 
 //     sei(); // Enable interrupts
 // }
-
-// --- Timer2 Compare Match ISR ---
+// // Timer2 ISR - called every LASER_POWER_RAMP_PERIOD milliseconds
 // ISR(TIMER2_COMPA_vect)
 // {
-//     static uint8_t rampDiv = 0;
-//     rampDiv++;
-//     if (rampDiv >= 2)
-//     { // 2 × 10ms = 20ms
-//         rampDiv = 0;
+//     if (LaserRampActive)
+//     {
 //         LaserVoltageRamp();
 //     }
 // }
@@ -1952,21 +1975,20 @@ void getExtremeTilt(uint8_t nbrZnPts, int &minTilt, int &maxTilt)
             maxTilt = y;
         }
     }
+#ifdef USE_RANGE_LIMITS
     int temp = getTiltFromCart(MAX_RANGE);
     minTilt = (minTilt < temp) ? temp : minTilt;
     temp = getTiltFromCart(MIN_RANGE);
     maxTilt = (maxTilt > temp) ? temp : maxTilt;
+#endif
 }
 uint16_t getNbrRungs(int maxTilt, int minTilt, int &rhoMin)
 { //, int &rhoMax, int &rhoMin){
     rhoMin = getCartFromTilt(maxTilt);
     int rhoMax = getCartFromTilt(minTilt);
     int temp = static_cast<uint16_t>((static_cast<int>(rhoMax) - static_cast<int>(rhoMin)) / static_cast<int>(Tilt_Sep));
-#ifdef xGHOST
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "Ints: rhoMax: %d rhoMin: %d tilt_sep: %d nbrRungs: %d ", static_cast<int>(rhoMax), static_cast<int>(rhoMin), static_cast<int>(Tilt_Sep));
-    uartPrint(debugMsg);
-
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
+#ifdef GHOST
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "GET; rhoMax: %d rhoMin: %d minTilt: %d maxTilt: %d tilt_sep: %d nbrRungs: %d ", rhoMax, rhoMin, minTilt, maxTilt, Tilt_Sep, temp);
     uartPrint(debugMsg);
 #endif
     return (uint16_t)temp;
@@ -2021,7 +2043,7 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     int c1[2], c2[2];              // The cartesian end points.
     getCart(last[0], last[1], c1); // Puts Cartesian coords in c1 from pan (last[0]) and tilt (last[1])
     getCart(nxt[0], nxt[1], c2);
-#ifdef GHOST
+#ifdef xGHOST
     // snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: num: %d, den: %d, l0: %d, l1: %d, n0: %d, n1: %d", num, den, last[0], last[1], nxt[0], nxt[1]);
     // uartPrint(debugMsg);
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "c10: %d, c20: %d, c11: %d, c21: %d", c1[0], c2[0], c1[1], c2[1]);
@@ -2033,12 +2055,12 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
     temp = static_cast<uint32_t>(num) * static_cast<uint32_t>(abs(c2[1] - c1[1]));
     res[1] = c1[1] + static_cast<int32_t>(temp / den) * sign(c2[1] - c1[1]);
 // Use the cartesian values stored in res and write the corresponding polar values to the same variable.
-#ifdef GHOST
+#ifdef xGHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
     getPolars(res[0], res[1], res);
-#ifdef GHOST
+#ifdef xGHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "CI Polars: res0 %d, res1 %d", res[0], res[1]);
     uartPrint(debugMsg);
 #endif
@@ -2046,25 +2068,32 @@ void CartesianInterpolate(int last[2], int nxt[2], int num, int den, int (&res)[
 
 void midPt(int tilt, uint8_t seg, int (&res)[2])
 {
-    // uint8_t ratio = 0;
-    int den = 0;
     int num = abs(tilt - Vertices[1][seg]);
-    den = abs(Vertices[1][seg] - Vertices[1][seg + 1]);
+    int den = abs(Vertices[1][seg] - Vertices[1][seg + 1]);
+    if (num > den)
+    {
+        snprintf(debugMsg, DEBUG_MSG_LENGTH, "seg:%d,num%d,den%dy1%d,y2%d", seg, num, den, Vertices[1][seg], Vertices[1][seg + 1]);
+        uartPrint(debugMsg);
+    }
     if (den > 0)
     {
+        // Clamp num to valid range [0, den] to prevent extrapolation. It's calculated with abs so can't be negative.
+        if (num > den)
+            num = den;
+
         int last[2] = {Vertices[0][seg], Vertices[1][seg]};
         int nxt[2] = {Vertices[0][seg + 1], Vertices[1][seg + 1]};
-        // PolarInterpolate(last, nxt, num, den, res);
-        CartesianInterpolate(last, nxt, num, den, res); // Calculates res[2] from last[2], nxt[2], num and den.
+        CartesianInterpolate(last, nxt, num, den, res);
     }
     else
     {
+        // Segment has zero tilt range - use first vertex
         res[0] = Vertices[0][seg];
         res[1] = Vertices[1][seg];
     }
-// snprintf(debugMsg, DEBUG_MSG_LENGTH,"S0 %d, S1 %d, Tilt %d, den %d, seg %d, ratio %d%%, X %d, Y %d",Vertices[1][seg], Vertices[1][seg+1], tilt,den, seg,ratio, res[0],res[1]);
-#ifdef xGHOST
-    snprintf(debugMsg, DEBUG_MSG_LENGTH, "midPt: S0 %d, S1 %d, Tilt %d, num %d, den %d, seg %d, X %d, Y %d", Vertices[1][seg], Vertices[1][seg + 1], tilt, num, den, seg, res[0], res[1]);
+
+#ifdef GHOST
+    snprintf(debugMsg, DEBUG_MSG_LENGTH, "midPt:S0%d,S1%d,Tilt%d,num%d,den%d,seg%d,X%d,Y%d", Vertices[1][seg], Vertices[1][seg + 1], tilt, num, den, seg, res[0], res[1]);
     uartPrint(debugMsg);
 #endif
 }
@@ -2234,14 +2263,14 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         // First traverse the boundary.
         if (seg < MapCount[0][zn]) // This conditional determines if the next point is on the boundary or a rung. 20250217 - or indeed if there are any points in the zone?
         // if (seg < MapCount[0][zn] - 1) // Subtract 1 from limit.  Ref 20250201 and Debug0201A.txt in Avitech.rtf .
-        { // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
-            if (segPt == 0)
-            { // First point of segment - which must be a zone vertex.  Get the two vertices  which define the segment and the number of interpolated, excluding wiggly, points.
+        {                   // Use seg to count segments.  Use segPt to count intermediate points in a segment.  This does the boundary, perhaps with wiggly points.
+            if (segPt == 0) //
+            {               // First point of segment - which must be a zone vertex.  Get the two vertices  which define the segment and the number of interpolated, excluding wiggly, points.
                 pt1[0] = Vertices[0][seg];
                 pt1[1] = Vertices[1][seg];
                 // if ((seg == MapCount[0][zn] - 1) && Nbr_Rnd_Pts >= 0) // Vertices[i][MapCount[0][zn]] should be the first point again. Explicitly place that.
                 // 2nd condition deals with path mode where first point should not be repeated.
-                if (seg == MapCount[0][zn] - 1)
+                if (seg == MapCount[0][zn] - 1) // Indexed from 0, if seg is last point, then end point of segment starting there is first vertex of zone (repeated).
                 {
                     pt2[0] = Vertices[0][0];
                     pt2[1] = Vertices[1][0];
@@ -2330,32 +2359,33 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
             {
                 if (startRung)
                 {
-                    RndNbr = rand() % nbrRungs; //
+                    RndNbr = (rand() % nbrRungs) + 1; //
                     if (pat == 4)
                     { // Sequentially cross the zone with rungs, not randomly
                         RndNbr = rung++;
                         if (RndNbr == nbrRungs)
                             rung = 0;
                     }
-                    if (RndNbr == 0)
-                        RndNbr = 1;
+                    // if (RndNbr == 0)  //20250728: Calc of RndNbr changed so that it is in range {1,nbrRungs}
+                    //     RndNbr = 1;
                     tilt = getTiltFromCart(rhoMin + RndNbr * Tilt_Sep); // Argument is Cartesian offset from laser.  Get tilt angle for this.
-                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "rho: %d, rhoMin: %d, Tilt_Sep: %d", rhoMin + RndNbr * Tilt_Sep, rhoMin, Tilt_Sep);
-                    // uartPrint(debugMsg);
-                    // snprintf(debugMsg, DEBUG_MSG_LENGTH, "RndNbr: %d, minTilt %d, tilt %d", RndNbr, minTilt, tilt);
-                    // uartPrint(debugMsg);
-
+#ifdef GHOST
+                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "RndNbr: %d, CalcRho: %d, tilt", RndNbr, rhoMin + RndNbr * Tilt_Sep, tilt);
+                    uartPrint(debugMsg);
+                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "minTilt %d, rhoMin: %d, Tilt_Sep: %d", minTilt, rhoMin, Tilt_Sep);
+                    uartPrint(debugMsg);
+#endif
                     // 20250121
                     if (tilt < minTilt)
                     {
-#ifdef xGHOST
+#ifdef GHOST
                         uartPrintFlash(F("minTilt err\n"));
 #endif
                         tilt = minTilt;
                     }
                     if (tilt > maxTilt)
                     {
-#ifdef xGHOST
+#ifdef GHOST
                         uartPrintFlash(F("maxTilt err\n"));
 #endif
                         tilt = maxTilt;
@@ -2363,12 +2393,20 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     fstSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, 0);          // First segment which includes specified/chosen tilt
                     sndSeg = getInterceptSegment(MapCount[0][zn] - 1, tilt, fstSeg + 1); // Opposite segment which includes specified/chosen tilt (relies on zone being convex)
 #ifdef xGHOST
-                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "rhoMin: %d, Rnd: %d, Tilt_Sep: %d>", rhoMin, RndNbr, Tilt_Sep);
+                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "tilt: %d, fstSeg: %d, sndSeg: %d", tilt, fstSeg, sndSeg);
                     uartPrint(debugMsg);
 #endif
                     // For each boundary segment get the interpolated point in the segment needed for the new rung.
                     midPt(tilt, fstSeg, thisRes); // Intercept of pan for given tilt with fstSeg
                     midPt(tilt, sndSeg, nextRes); // Intercept of pan for given tilt with sndSeg
+                    // 20250729 Replace interpolated tilt values with the starting tilt values.
+                    thisRes[1] = tilt;
+                    nextRes[1] = tilt;
+#ifdef GHOST
+                    snprintf(debugMsg, DEBUG_MSG_LENGTH, "tilt:%d,tr2:%d,nr2:%d", tilt, thisRes[1], nextRes[1]);
+                    uartPrint(debugMsg);
+#endif
+
                     // if (pat == 3)  //PAT3GHOST
                     // {                                                                         // For pat 3, "rungs" are not horizontal.  Just randomly chosen points from each side of the zone.  So get a different value for nextRes[].
                     //     int tilt2 = getTiltFromCart(rhoMin + rand() % nbrRungs * Tilt_Sep);   // Get a new, independently random, tilt value (tilt2).
@@ -2394,7 +2432,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
                     beginRes[1] = res[1];
                 }
 #ifdef GHOST
-                snprintf(debugMsg, DEBUG_MSG_LENGTH, "sr: %d, ind: %d, endX: %d, endY: %d, bX: %d, bY: %d>", startRung, ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
+                snprintf(debugMsg, DEBUG_MSG_LENGTH, "rn:%d,sr:%d,ind:%d,endX:%d,endY:%d,bX:%d,bY:%d", RndNbr, startRung, ind, endRes[0], endRes[1], beginRes[0], beginRes[1]);
                 uartPrint(debugMsg);
 #endif
             }
@@ -2429,7 +2467,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
     static int LastY = 0;
     if ((X != LastX || Y != LastY) && printPos)
     {
-#ifdef GHOST
+#ifdef xGHOST
         snprintf(debugMsg, DEBUG_MSG_LENGTH, "ind %d, seg %d, SegPt %d, X: %d, Y: %d", ind, seg, segPt, X, Y);
         uartPrint(debugMsg);
 #endif
@@ -2439,6 +2477,7 @@ bool getXY(uint8_t pat, uint8_t zn, uint8_t &ind, bool newPatt, uint8_t rhoMin, 
         AbsX = X;
         AbsY = Y;
 #endif
+        // printToBT(33, DAC.getValue());
         printToBT(34, AbsX);
         printToBT(35, AbsY);
         LastX = X;
@@ -3028,7 +3067,7 @@ void HomeAxis()
     IsHome = 1;
 }
 
-uint8_t maxZone() // Determine
+uint8_t maxZone() // Determine highest populated zone.
 {
     if (ActiveMapZones == 0)
     {
@@ -3066,7 +3105,7 @@ void RunSweep(uint8_t zn)
     sendProperty(currentZoneRunning, zn + 1);
     getExtremeTilt(MapCount[0][zn], minTilt, maxTilt);
     uint16_t nbrRungs = getNbrRungs(maxTilt, minTilt, rhoMin); // rhoMin is set by this function
-#ifdef GHOST
+#ifdef xGHOST
     snprintf(debugMsg, DEBUG_MSG_LENGTH, "minTilt: %d, maxTilt: %d, rhoMin: %d", minTilt, maxTilt, rhoMin);
     uartPrint(debugMsg);
 #endif
@@ -3345,6 +3384,12 @@ void OperationModeSetup(int OperationMode)
 
 void DoHouseKeeping()
 {
+    // Process laser ramping first for responsiveness
+    if (LaserRampTick && LaserRampActive)
+    {
+        LaserRampTick = false;
+        ProcessLaserRamp();
+    }
     CheckBlueTooth();
     ReadAccelerometer();
     DecodeAccelerometer();

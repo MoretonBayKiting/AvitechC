@@ -36,8 +36,8 @@
 #define PAN_NEUTRAL -4000         // Could be -4000 to move bad spot to 270° which is the pole.
 #define PAN_MAX 3750
 #define PAN_MIN -11750
-#define MAX_RANGE 400 // Maximum range from laser to target.
-#define MIN_RANGE 20  // 20250212: 30   // Minimum range from laser to target.
+#define MAX_RANGE 1400 // 20250729.  Changed from 400 to 1400. May need to be removed. Maximum range from laser to target.
+#define MIN_RANGE 10   // 20250729.  Changed from 20 to 10. May need to be removed.  20250212: 30   // Minimum range from laser to target.
 
 #define MID_PT_SEPARATION 20 // Get the approximate number of mid points to insert between vertices as (x1 - x0)/MID_PT_SEPARATION
 
@@ -125,8 +125,8 @@
 #define PAN_SEP 100                  // 20241219: Pan separation (steps) between interpolated points on rungs.
 #define WIGGLY_MIN 0
 #define WIGGLY_MAX 4
-#define LASER_HT_MIN 0 // Decimetres.  ie 40 decimetres = 4m
-#define LASER_HT_MAX 100
+#define LASER_HT_MIN 0   // Decimetres.  ie 40 decimetres = 4m
+#define LASER_HT_MAX 100 // Decimetres.  So 100 limits laser height to 10m.
 
 #define FST_STORE_PT_INDEX 128
 #define REPORT_VERTICES_DELAY 20

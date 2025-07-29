@@ -9,7 +9,8 @@
 #include <avr/eeprom.h>
 #ifndef SHARED_VARS_H
 #define SHARED_VARS_H
-// #define GHOST
+#define GHOST
+// #define USE_RANGE_LIMITS
 #define WATCHDOG // Use this if watchdog is being tested
 // #define TEST_LASER_POWER // Only use this with ISOLATED_BOARD
 

@@ -18,6 +18,9 @@
 *.pyc
 *.hex
 *.py
+*.xl*
+*.dxf
+*.bin
 
 # Ignore debug and venv folders
 debug/
